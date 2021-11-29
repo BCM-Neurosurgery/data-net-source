@@ -6,12 +6,17 @@ import subprocess
 from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
 
 
+VIDEO_SRC = '/media/DATA/video'
+POSE_2D_SRC = '/media/DATA/pose_2d'
+
+
 class UploadError(Exception):
     pass
 
 
 def preprocess():
     """"""
+
 
 def upload_raw(folder):
     """Spool up an independent process to upload the 'raw' videos to Wasabi"""
@@ -49,6 +54,7 @@ def verify_pose_upload(folder):
         f'/media/DATA/pose_2d/{folder}',
         f'secret_sauce:/rcs07/pose_2d/{folder}'
     ) # and verify_rclone_upload(<3d pose equivalent>)
+
 
 def verify_rclone_upload(check_name, source, destination):
     """
@@ -111,6 +117,11 @@ def cleanup(source_folder, uploader, pose_manager):
     if not verify_pose_upload(source_folder):
         logging.error(f'Failed to upload raw video to remote storage!')
         raise UploadError('Remote video integrity check failed. Stopping cleanup')
+
+    # Only reached if all the above checks succeeded.
+    # Remove now un-needed raw input data
+    os.remove(os.path.join(VIDEO_SRC, source_folder))
+    os.remove(os.path.join(POSE_2D_SRC, source_folder))
 
 
 def handle_new_videos(source_folder):
