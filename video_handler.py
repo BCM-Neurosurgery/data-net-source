@@ -124,6 +124,10 @@ def cleanup(source_folder, uploader, pose_manager):
     os.remove(os.path.join(POSE_2D_SRC, source_folder))
 
 
+def notify_server():
+    """Either socket or ray magic to let the server know video has been uploaded"""
+
+
 def handle_new_videos(source_folder):
     """Top level function to handle all new videos in a given directory"""
     preprocess()
@@ -138,5 +142,8 @@ def handle_new_videos(source_folder):
     # Verify that everything has succeeded and un-necessary raw video
     cleanup(source_folder, raw_uploader, pose_uploader)
 
+    notify_server()
+
 
 if __name__ == "__main__":
+    handle_new_videos('test_source')
