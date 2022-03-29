@@ -32,16 +32,14 @@
 #
 
 ###############################
-#check for wasabi being mounted
+# check for wasabi being mounted
+# things get weird if you try
+# to mount when it's already
+# mounted; best to do this
+# separately from this script
 if [ ! -d "/media/DATA/wasabi_mount" ]
 then
-    echo "mounting Wasabi..."
-    ~/./mount_wasabi.sh
-fi
-#confirm mount success
-if [ ! -d "/media/DATA/wasabi_mount" ]
-then
-    echo "mounting Wasabi failed!"
+    echo "please mount Wasabi before proceeding!"
     exit 9999 # die with error code 9999
 fi
 echo "wasabi mounted"
@@ -74,7 +72,7 @@ echo "Searching path:" $wasabi_path
 # in which case script will terminate
 if [ ! -d $wasabi_path ]
 then
-    echo "recordings from yesterday not found on Wasabi, nothing new to process."
+    echo "recordings not found on Wasabi, nothing new to process."
     exit 9999 # die with error code 9999
 fi
 
@@ -86,11 +84,29 @@ fi
 # files in a directory called
 # pose_output; ideally this will
 # later be updated to a csv format
+#
+# Start directory name variable
+json_dir="/media/DATA/"$patient_ID"/pose_2d/"$date"/jsons/"
+
+
 for dir in "$wasabi_path"*/;do
   echo "searching for videos in:" $dir
+
+
   for file in $dir*.avi ;do
+      readarray -d / -t strarr <<<"$file" #split a string based on the delimiter '/'
+      readarray -d _ -t strarr <<<"${strarr[8]}" #split a string based on the delimiter '_'
+      cam_name="${strarr[0]}"
+      vid_name="${strarr[1]}"
+      readarray -d . -t strarr <<<"${vid_name}" #split a string based on the delimiter '.'
+
+      full_path=$json_dir$cam_name"/${strarr[0]}"
+      if [ ! -d "$full_path" ]
+      then mkdir -p "$full_path"
+      fi
+
       [ -f "$file" ] && echo "Processing pose for '$file'"
-      time ./build/examples/openpose/openpose.bin --video $file --hand --write_json pose_output/ --display 0 --render_pose 0 --net_resolution -1x336
+      time ./build/examples/openpose/openpose.bin --video $file --hand --face --write_json $full_path --display 0 --render_pose 0
   done
 done
 
