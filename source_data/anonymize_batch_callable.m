@@ -17,7 +17,7 @@ dataset_dir = input_dir;
 date_list = dir(dataset_dir);
 date_list = date_list(~ismember({date_list.name},{'.','..','.DS_Store'}));
 
-new_dataset_dir = [dataset_dir(1:end-8), 'anonymized_json'];
+new_dataset_dir = [dataset_dir(1:end-7), 'anonymized_json'];
 mkdir(new_dataset_dir)
 
 for date = 1:length(date_list)
