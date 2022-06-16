@@ -41,7 +41,9 @@ class RCSParser(ParserCommon):
         return None
 
     def check_for_new_uploads(self):
-
+        # Check wasabi for most recent data folder.
+        # Then check the ucsf server for any folders above that date.
+        # if new folders save their names to download?
         return None
 
     def pull_data(self):
@@ -95,5 +97,5 @@ class RCSParser(ParserCommon):
         return None
 
     def clean_directory(self):
-
+        # delete non anyonimized contents
         return None
