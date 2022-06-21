@@ -1,4 +1,4 @@
-function success = anonymize_batch_callable(input_dir)
+function failures = anonymize_batch_callable(input_dir)
 
 % anonymize all .json files in a directory, with directory structure:
 % chosen_directory, must be titled 'original'
@@ -16,7 +16,7 @@ function success = anonymize_batch_callable(input_dir)
 dataset_dir = input_dir;
 date_list = dir(dataset_dir);
 date_list = date_list(~ismember({date_list.name},{'.','..','.DS_Store'}));
-
+failures = {};
 new_dataset_dir = [dataset_dir(1:end-7), 'anonymized_json'];
 mkdir(new_dataset_dir)
 
@@ -27,6 +27,7 @@ for date = 1:length(date_list)
     session_list = session_list(~ismember({session_list.name},{'.','..','.DS_Store'}));
     
     for session = 1:length(session_list)
+        
         session_dir = fullfile(session_list(session).folder,...
                              session_list(session).name);
         session_subdir = dir(session_dir);
@@ -43,20 +44,24 @@ for date = 1:length(date_list)
                                'RawDataAccel', 'RawDataFFT',...
                                'RawDataPower', 'RawDataTD', 'StimLog',...
                                'TimeSync'};
-        for json_file_name = required_json_files
-            if ~any(strcmp(json_list,[json_file_name{1},'.json']))
-                error([json_file_name{1}, ' is missing.'])
+        try  
+            
+            for json_file_name = required_json_files
+                if ~any(strcmp(json_list,[json_file_name{1},'.json']))
+                    error([json_file_name{1}, ' is missing.'])
+                end
             end
-        end
-        
-        % anonymize and rename anonymized file
-        rcs_anonymize(session_subdir);
-        movefile(fullfile(session_dir,'DeviceNPC_Anonymized'),...
-                 fullfile(new_dataset_dir, date_list(date).name, ...
-                          [session_list(session).name, '_Anonymized']))
-                  
-    end
-    success = true;
-end
 
+            % anonymize and rename anonymized file
+            rcs_anonymize(session_subdir);
+            movefile(fullfile(session_dir,'DeviceNPC_Anonymized'),...
+                     fullfile(new_dataset_dir, date_list(date).name, ...
+                              [session_list(session).name, '_Anonymized']))       
+        catch
+            failures{end+1} = session_dir;
+        end
+    end
+    
+end
+failures
 end

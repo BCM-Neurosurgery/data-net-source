@@ -5,7 +5,7 @@ import shutil
 from common.utils.time import unix_to_timestamps
 from common.utils.ingest import storage_format_date
 from common.utils.rclone import copy, list_remote
-from subprocess import call
+from common.utils.rune import get_bilateral_watch_data, make_df_from_rune_accessor, get_client
 
 
 class ParserCommon:
@@ -23,7 +23,7 @@ class ParserCommon:
         return None
 
     @staticmethod
-    def upload_to_wasabi(self,path_to_source, path_to_destination):
+    def upload_to_wasabi(self, path_to_source, path_to_destination):
         # Generic function upload to wasabi
         # copy(path_to_source, path_to_destination)
         return None
@@ -51,7 +51,7 @@ class RCSParser(ParserCommon):
         # add code that copies RCS data from UCSF server and saves to input_path
 
         # uncomment below line (and add UCSF server info) to add secure copy of files from server
-        #call('scp remote_username@10.10.0.2:/remote/directory DEST_HOST:local/destination')
+        # call('scp remote_username@10.10.0.2:/remote/directory DEST_HOST:local/destination')
         return None
 
     def aggregate_data_sessions(self):
@@ -103,8 +103,28 @@ class RCSParser(ParserCommon):
 
 
 class RuneParser(ParserCommon):
-    def __init__(self, input_folder):
-        ParserCommon.__init__(self, input_folder)
+
+    def __init__(self, input_folder, time_range):
+        ParserCommon.__init__(self, input_folder, time_range)
+        myclient = get_client()
+        wrist_params = {
+            'patient_id': 'rcs07',
+            'left_watch_id': '8QuY9OFb',
+            'right_watch_id': 'RElEtNme',
+            'time_range': time_range
+        }
+        right_watch_params = {
+            'patient_id': 'rcs07',
+            'device_id': 'RElEtNme',
+            'start_time': time_range[0],
+            'end_time': time_range[1]
+        }
+        left_watch_params = {
+            'patient_id': 'rcs07',
+            'device_id': '8QuY9OFb',
+            'start_time': time_range[0],
+            'end_time': time_range[1]
+        }
 
     def full_parse(self):
         # self.pull_data() Skip for now until UCSF server is sorted out
@@ -122,14 +142,48 @@ class RuneParser(ParserCommon):
 
     def pull_data(self):
         # add code that copies RCS data from UCSF server and saves to input_path
+        my_accel = get_bilateral_watch_data(self.myclient, 'accel', **self.wrist_params)
+        my_rotation = get_bilateral_watch_data(self.myclient, 'rotation', **self.wrist_params)
+        my_heart_rate = (make_df_from_rune_accessor(self.myclient.HeartRate(**self.eft_watch_params)),
+                         (make_df_from_rune_accessor(self.myclient.HeartRate(**self.right_watch_params))))
+        my_tremor = (
+        make_df_from_rune_accessor(self.myclient.ProbabilitySymptom(symptom='tremor', **self.left_watch_params)),
+        (make_df_from_rune_accessor(self.myclient.ProbabilitySymptom(symptom='tremor', **self.right_watch_params))))
+        my_tremor_severity = (
+            make_df_from_rune_accessor(
+                self.myclient.ProbabilitySymptom(symptom='tremor', severity='*', **self.left_watch_params)),
+            (make_df_from_rune_accessor(
+                self.myclient.ProbabilitySymptom(symptom='tremor', severity='*', **self.right_watch_params))))
+        my_dyskinesia = (
+            make_df_from_rune_accessor(
+                self.myclient.ProbabilitySymptom(symptom='dyskinesia', **self.left_watch_params)),
+            (make_df_from_rune_accessor(
+                self.myclient.ProbabilitySymptom(symptom='dyskinesia', **self.right_watch_params))))
+        self.save_all_as_csv(my_accel, my_rotation, my_heart_rate, my_tremor, my_tremor_severity, my_dyskinesia)
+        return None
 
-        # uncomment below line (and add UCSF server info) to add secure copy of files from server
-        #call('scp remote_username@10.10.0.2:/remote/directory DEST_HOST:local/destination')
+    def save_all_as_csv(self, accel, rotation, bpm, tremor, tremor_severity, dyskinesia):
+        # Save Left Side Data
+        accel[0].to_csv('temp/20220526/rune_left_1653586110087_1653610016309/accel.csv')
+        rotation[0].to_csv('temp/20220526/rune_left_1653586110087_1653610016309/rotation.csv')
+        bpm[0].to_csv('temp/20220526/rune_left_1653586110087_1653610016309/bpm.csv')
+        tremor[0].to_csv('temp/20220526/rune_left_1653586110087_1653610016309/tremor.csv')
+        tremor_severity[0].to_csv('temp/20220526/rune_left_1653586110087_1653610016309/tremor_severity.csv')
+        dyskinesia[0].to_csv('temp/20220526/rune_left_1653586110087_1653610016309/dyskinesia.csv')
+
+        # Save Right Side Data
+        accel[1].to_csv('temp/20220526/rune_right_1653586110087_1653610016309/accel.csv')
+        rotation[1].to_csv('temp/20220526/rune_right_1653586110087_1653610016309/rotation.csv')
+        bpm[1].to_csv('temp/20220526/rune_right_1653586110087_1653610016309/bpm.csv')
+        tremor[1].to_csv('temp/20220526/rune_right_1653586110087_1653610016309/tremor.csv')
+        tremor_severity[1].to_csv('temp/20220526/rune_right_1653586110087_1653610016309/tremor_severity.csv')
+        dyskinesia[1].to_csv('temp/20220526/rune_right_1653586110087_1653610016309/dyskinesia.csv')
+
         return None
 
     def upload_to_wasabi(self):
         # Run aggregate data session code
-        #copy(path/to/rune_save_data)
+        # copy(path/to/rune_save_data)
         return None
 
     def clean_directory(self):
