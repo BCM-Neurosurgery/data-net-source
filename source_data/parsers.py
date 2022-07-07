@@ -5,7 +5,7 @@ import shutil
 from common.utils.time import unix_to_timestamps
 from common.utils.ingest import storage_format_date
 from common.utils.rclone import copy, list_remote
-from common.utils.rune import get_bilateral_watch_data, make_df_from_rune_accessor, get_client
+from common.utils.rune import get_watch_data, make_df_from_rune_accessor, get_client
 import pandas as pd
 
 class ParserCommon:
@@ -56,7 +56,7 @@ class RCSParser(ParserCommon):
         return None
 
     def aggregate_data_sessions(self):
-        # Orginizes the session folders into date folders
+        # Organizes the session folders into date folders
         directory = self.input_path
         unix_regex = 'Session([0-9]*)'
         new_directory = directory[0:-8] + r'by_date'
@@ -125,15 +125,13 @@ class RuneParser(ParserCommon):
                 session_dir.remove('.DS_Store')
             for j in session_dir:
                 my_timestamps = self.get_timestamps(folder_path + 'rcs/combined_anonymized_json_csv/' + i + '/' + j)
-
-                self.output_to_csv(folder_path, i, j, *self.timestamps_to_rune_data(my_timestamps))
-
+                self.output_to_csv(folder_path, i, j, *self.timestamps_to_rune_data(my_timestamps, j))
     def check_for_new_uploads(self):
         # Check wasabi RCS for most recent data folder.
         # Then use the timestamps from those folders to get rune data
         return None
 
-    def get_timestamps(self,path_to_folder):
+    def get_timestamps(self, path_to_folder):
         # Get first and last timestamp from rcs data
         neural_time_domain = pd.read_csv(path_to_folder + '/NeuralTimeDomain.csv')
         start = str(neural_time_domain["timestamp"].iloc[0])
@@ -141,68 +139,79 @@ class RuneParser(ParserCommon):
         time_range = [start[0:-4], end[0:-4]]
         return time_range
 
-    def timestamps_to_rune_data(self,time_range):
-        # pull rune data based on the time_range given. This time range is determined above and matches
-        # the time ranges of the rcs data.
+    def get_side(self, folder_name):
+        if 'left' in folder_name:
+            return True
+        if 'right' in folder_name:
+            return False
+
+    def get_params(self, side, dual_sided_params):
+        if side:
+            return {
+                'patient_id': dual_sided_params['patient_id'],
+                'device_id': dual_sided_params['left_watch_id'],
+                'start_time': dual_sided_params['time_range'][0],
+                'end_time': dual_sided_params['time_range'][1]}
+        else:
+            return {
+                'patient_id': dual_sided_params['patient_id'],
+                'device_id': dual_sided_params['right_watch_id'],
+                'start_time': dual_sided_params['time_range'][0],
+                'end_time': dual_sided_params['time_range'][1]}
+
+    def timestamps_to_rune_data(self,timestamps, folder_name):
+
         wrist_params = {
             'patient_id': 'rcs07',
             'left_watch_id': '8QuY9OFb',
             'right_watch_id': 'RElEtNme',
-            'time_range': time_range
+            'time_range': timestamps
         }
         rcs_params = {
             'patient_id': 'rcs07',
             'left_watch_id': 'NPC700419H',
             'right_watch_id': 'NPC700403H',
-            'time_range': time_range
+            'time_range': timestamps
         }
 
-        my_accel = get_bilateral_watch_data(self.myclient, 'accel', **wrist_params)
-        my_rotation = get_bilateral_watch_data(self.myclient, 'rotation', **wrist_params)
-        my_heart_rate = get_bilateral_watch_data(self.myclient, 'heart rate', **wrist_params)
-        my_tremor = get_bilateral_watch_data(self.myclient, 'tremor', **wrist_params)
-        my_tremor_severity = get_bilateral_watch_data(self.myclient, 'tremor severity', **wrist_params)
-        my_dyskinesia = get_bilateral_watch_data(self.myclient, 'dyskinesia', **wrist_params)
-        my_lfp = get_bilateral_watch_data(self.myclient, 'lfp', **wrist_params)
-        my_band_power = get_bilateral_watch_data(self.myclient, 'band power', **wrist_params)
+        my_accel = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), wrist_params), 'accel').set_index(
+            'timestamp')
+        my_rotation = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), wrist_params), 'rotation').set_index(
+            'timestamp')
+        my_heart_rate = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), wrist_params),
+                                       'heart rate').set_index('timestamp')
+        my_tremor = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), wrist_params), 'tremor').set_index(
+            'timestamp')
+        my_tremor_severity = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), wrist_params),
+                                            'tremor severity').set_index('timestamp')
+        my_dyskinesia = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), wrist_params),
+                                       'dyskinesia').set_index('timestamp')
+        my_lfp = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), rcs_params), 'lfp').set_index('timestamp')
+        my_band_power = get_watch_data(self.myclient, self.get_params(self.get_side(folder_name), rcs_params), 'band power').set_index(
+            'timestamp')
 
         return my_accel, my_rotation, my_heart_rate, my_tremor, my_tremor_severity, my_dyskinesia, my_lfp, my_band_power
 
     def output_to_csv(self, path, date, folder, my_accel, my_rotation, my_heart_rate, my_tremor, my_tremor_severity,
                       my_dyskinesia, my_lfp, my_band_power):
-        #output all data to csv. Uses parallel path structure as the rcs data≥
-        check_folder_left = os.path.isdir(path + 'rune/' + date + '/rune_left_' + folder[-27:-1])
-        check_folder_right = os.path.isdir(path + 'rune/' + date + '/rune_right_' + folder[-27:-1])
+
+        if self.get_side(folder):
+            full_path = path + 'rune/' + date + '/rune_left_' + folder[-27:]
+        else:
+            full_path = path + 'rune/' + date + '/rune_right_' + folder[-27:]
 
         # If folder doesn't exist, then create it.
-        if not check_folder_left:
-            os.makedirs(path + 'rune/' + date + '/rune_left_' + folder[-27:-1])
-        if not check_folder_right:
-            os.makedirs(path + 'rune/' + date + '/rune_right_' + folder[-27:-1])
+        if not os.path.isdir(full_path):
+            os.makedirs(full_path)
 
-        my_accel[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/accel.csv')
-        my_accel[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/accel.csv')
-
-        my_rotation[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/rotation.csv')
-        my_rotation[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/rotation.csv')
-
-        my_heart_rate[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/heart_rate.csv')
-        my_heart_rate[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/heart_rate.csv')
-
-        my_tremor[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/tremor.csv')
-        my_tremor[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/tremor.csv')
-
-        my_tremor_severity[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/tremor_severity.csv')
-        my_tremor_severity[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/tremor_severity.csv')
-
-        my_dyskinesia[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/dyskinesia.csv')
-        my_dyskinesia[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/dyskinesia.csv')
-
-        my_lfp[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/lfp.csv')
-        my_lfp[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/lfp.csv')
-
-        my_band_power[0].to_csv(path + 'rune/' + date + '/rune_left_' + folder[-27:-1] + '/band_power.csv')
-        my_band_power[1].to_csv(path + 'rune/' + date + '/rune_right_' + folder[-27:-1] + '/band_power.csv')
+        my_accel.to_csv(full_path + '/accel.csv')
+        my_rotation.to_csv(full_path + '/rotation.csv')
+        my_heart_rate.to_csv(full_path + '/heart_rate.csv')
+        my_tremor.to_csv(full_path + '/tremor.csv')
+        my_tremor_severity.to_csv(full_path + '/tremor_severity.csv')
+        my_dyskinesia.to_csv(full_path + '/dyskinesia.csv')
+        my_lfp.to_csv(full_path + '/lfp.csv')
+        my_band_power.to_csv(full_path + '/band_power.csv')
 
     def upload_to_wasabi(self):
         #Copy the csv files to wasabi
