@@ -41,11 +41,7 @@ class RCSParser(ParserCommon):
     def full_parse(self):
         print('START')
         for i in ['L', 'R']:
-            ucsf_all_files = subprocess.check_output(["ssh", "rbechto2@10.37.129.11", "ls",
-                                                      "/media/dropbox_hdd/Starr\ Lab\ Dropbox/RC+S\ Patient\ Un-Synced\ Data/RCS07\ Un-Synced\ Data/SummitData/SummitContinuousBilateralStreaming/RCS07" + i]).decode(
-                "utf-8")
-            ucsf_session_names = [i for i in ucsf_all_files.split() if 'Session' in i]
-            self.download_session_data(i, self.get_new_session_names(np.asarray(ucsf_session_names)))
+            self.download_session_data(i, self.get_new_session_names(i))
 
         print('Aggregate')
         self.aggregate_data_sessions()
@@ -53,38 +49,38 @@ class RCSParser(ParserCommon):
         self.anonymize_batch()
         print('To csv')
         self.convert_json_to_csv()
-        # self.upload_to_wasabi() # uncomment when ready
-        # self.clean_directory() # uncomment when ready
+        self.upload_to_wasabi()
+        # self.clean_directory()
         return None
 
-    def get_new_session_names(self, ucsf_session_names):
+    def get_new_session_names(self, side):
         # returns a list of new session folder names
         # compares current ucsf server session dates to current wasabi dates
         # and returns session on dates that are on ucsf server, but not wasabi
 
-        current_dates = list_remote('rcs07/rcs_v2/')
-        if '.DS_Store\n' in current_dates:
-            current_dates.remove('.DS_Store\n')
+        current_session_on_wasabi = pd.read_csv('./saved_session_logs/processed_sessions_' + side + '.csv').to_numpy()[:, 1]
 
-        current_dates = current_dates[0:-3]
-        current_dates = max([int(i[0:-2]) for i in current_dates])
+        ucsf_all_files = subprocess.check_output(["ssh", "rbechto2@10.37.129.11", "ls",
+                                                  "/media/dropbox_hdd/Starr\ Lab\ Dropbox/RC+S\ Patient\ Un-Synced\ Data/RCS07\ Un-Synced\ Data/SummitData/SummitContinuousBilateralStreaming/RCS07" + side]).decode(
+            "utf-8")
+        ucsf_session_names = [i for i in ucsf_all_files.split() if 'Session' in i]
 
-        session_unix_times = [int(i[7:]) for i in ucsf_session_names]
-        ucsf_session_dates = np.asarray([unix_to_timestamps(i).strftime('%Y%m%d') for i in session_unix_times])
-        new_sessions_mask = np.asarray(ucsf_session_dates, dtype=int) > current_dates
+        new_session_folders = list(set(ucsf_session_names) - set(current_session_on_wasabi))
 
-        new_session_names = ucsf_session_names[new_sessions_mask]
-        return new_session_names
+        updated_ucsf_session_names = ucsf_session_names + new_session_folders
+
+        # removed _update from file name once done building the code
+        pd.Series(updated_ucsf_session_names).to_frame().to_csv(
+            './saved_session_logs/processed_sessions_' + side + '_updated.csv')
+
+        return np.array(new_session_folders)
 
     def download_session_data(self, side, session_folder_names):
         # Make a list of session date directory paths for the scp command to use
-        session_paths = [
-            "rbechto2@10.37.129.11:'/media/dropbox_hdd/Starr Lab Dropbox/RC+S Patient Un-Synced Data/RCS07 Un-Synced Data/SummitData/SummitContinuousBilateralStreaming/RCS07" + side + f"/{i}'"
-            for i in session_folder_names]
-        p = subprocess.Popen(["scp", "-r", *session_paths, "./temp/combined_original/"])
+        session_paths = ["rbechto2@10.37.129.11:'/media/dropbox_hdd/Starr Lab Dropbox/RC+S Patient Un-Synced Data/RCS07 Un-Synced Data/SummitData/SummitContinuousBilateralStreaming/RCS07" + side + f"/{i}'" for i in session_folder_names]
+        p = subprocess.Popen(["scp", "-r" ,*session_paths, "./temp/combined_original/"])
         # TODO: change to p.communicate and get the output and error message
         p.wait(1800)
-        return None
 
     def aggregate_data_sessions(self):
         # Organizes the session folders into date folders
@@ -109,7 +105,7 @@ class RCSParser(ParserCommon):
         # Run matlab anonymize_batch.m code
         eng = self.start_matlab()
         eng.addpath(r'./', nargout=0)  # Path to matlab functions
-        my_path = r'./combined_by_date'
+        my_path = r'./temp/combined_by_date'
         eng.anonymize_batch_callable(my_path)
         return None
 
@@ -117,7 +113,7 @@ class RCSParser(ParserCommon):
         # Run matlab convert_json_batch.m
         eng = self.start_matlab()
         eng.addpath(r'./', nargout=0)  # Path to data_analysis/openmind_processing folder
-        my_path = r'combined_anonymized_json'
+        my_path = r'./temp/combined_anonymized_json'
         eng.convert_json_batch_callable(my_path)
         return None
 
