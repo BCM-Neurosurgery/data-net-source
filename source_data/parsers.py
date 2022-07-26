@@ -142,7 +142,7 @@ class RuneParser(ParserCommon):
         self.myclient = get_client()
 
     def parse_rune_from_rcs_timestamps(self):
-        folder_path = self.input_path  # '/Users/raphaelb/Documents/UW/Research/gridlab/optimal/data/rcs07/'
+        folder_path = self.input_path
         # TODO: change this to reflect wasabi not local directories
         date_dir = os.listdir(folder_path + 'rcs/combined_anonymized_json_csv/')
 
