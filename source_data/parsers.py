@@ -49,8 +49,10 @@ class RCSParser(ParserCommon):
         self.anonymize_batch()
         print('To csv')
         self.convert_json_to_csv()
+        print('Uploading to Wasabi')
         self.upload_to_wasabi()
-        # self.clean_directory()
+        print('clear temp directory after upload')
+        self.clean_directory()
         return None
 
     def get_new_session_names(self, side):
@@ -71,14 +73,14 @@ class RCSParser(ParserCommon):
 
         # removed _update from file name once done building the code
         pd.Series(updated_ucsf_session_names).to_frame().to_csv(
-            './saved_session_logs/processed_sessions_' + side + '_updated.csv')
+            './saved_session_logs/processed_sessions_' + side + '.csv')
 
         return np.array(new_session_folders)
 
     def download_session_data(self, side, session_folder_names):
         # Make a list of session date directory paths for the scp command to use
         session_paths = ["rbechto2@10.37.129.11:'/media/dropbox_hdd/Starr Lab Dropbox/RC+S Patient Un-Synced Data/RCS07 Un-Synced Data/SummitData/SummitContinuousBilateralStreaming/RCS07" + side + f"/{i}'" for i in session_folder_names]
-        p = subprocess.Popen(["scp", "-r" ,*session_paths, "./temp/combined_original/"])
+        p = subprocess.Popen(["scp", "-r", *session_paths, "./temp/combined_original/"])
         # TODO: change to p.communicate and get the output and error message
         p.wait(1800)
 
@@ -120,13 +122,15 @@ class RCSParser(ParserCommon):
     def upload_to_wasabi(self):
         # Upload folders to wasabi.
         # copys all data in final processed date folder and copies to wasabi
-        copy('./temp/combined_anonymized_json_csv/.', 'secret_sauce:/rcs07/rcs_v2/')
+        p = subprocess.Popen('rclone copy ./temp/combined_anonymized_json_csv/. secret_sauce:/rcs07/rcs_v2/')
+        # TODO: change to p.communicate and get the output and error message
+        p.wait(1800)
         return None
 
     def clean_directory(self):
         # Delete all data from local machine (use after upload_to_wasabi)
         shutil.rmtree('./temp/')
-        os.mkdir('./temp')
+        os.mkdir('./temp/combined_original')
         return None
 
 
