@@ -42,7 +42,7 @@ for date = 1:length(date_list)
         try
             save_session_as_csv(session_dir, save_location)
         catch
-            failures{end+1} = session_dir;
+            failures{end+1} = session_dir(end-30:end-11);
         end
     end
 
@@ -77,11 +77,15 @@ switch metaData.INSimplantLocation
     case 'Right chest'
         hemisphere = {'right'};
 end
-rec_start = num2str(unifiedDerivedTimes(1));
-rec_end = num2str(unifiedDerivedTimes(end));
+if ~isempty(timeDomainData)
+    rec_start = num2str(unifiedDerivedTimes(1));
+    rec_end = num2str(unifiedDerivedTimes(end));
+else 
+    rec_start = '';
+    rec_end = '';
+end
 recordingFolder = ['rcs_', hemisphere{1}, '_', rec_start, '_', rec_end];
 mkdir(save_location, recordingFolder)
-
 % Prepare  and write the neural time domain data
 if ~isempty(timeDomainData)
     readyNeural = removevars(timeDomainData, {'localTime', 'samplerate'});
@@ -174,11 +178,58 @@ if ~isempty(eventLogTable)
 end
 
 % Prepare and write the settings json
-TDsource = timeDomainSettings.TDsettings;
-PDsource = powerSettings.powerBands;
-FFTsource = powerSettings.fftConfig;
+row_nums = [height(timeDomainSettings), height(powerSettings)];
+row_diff = diff(row_nums);
+
+TDsource_base  = struct('Empty_Field',[]);
+PDsource_base  = struct('powerBandsInHz',NaN,'powerBinsInHz',NaN,'lowerBound',NaN,'upperBound',NaN,'fftSize',NaN,'fftBins',NaN,'indices_BandStart_BandStop',NaN,'binWidth',NaN,'TDsampleRate',NaN);
+FFTsource_base = struct('bandFormationConfig',NaN,'config',NaN,'interval',NaN,'size',NaN,'streamOffsetBins',NaN,'streamSizeBins',NaN,'windowLoad',NaN);
+TDsource  = TDsource_base;
+PDsource  = PDsource_base;
+FFTsource = FFTsource_base;
+
+if max(row_nums) ~= 0
+    padd_size = max(row_nums)-row_nums(2);
+    if row_diff == 0
+        TDsource = timeDomainSettings.TDsettings;
+        PDsource = powerSettings.powerBands;
+        FFTsource = powerSettings.fftConfig;
+
+    elseif row_diff < 0
+        TDsource = timeDomainSettings.TDsettings;
+        if row_nums(2) ~=0 %if pdsetttings are not empty
+            PDsource = powerSettings.powerBands;
+            FFTsource = powerSettings.fftConfig;
+            
+            FFTsource(end+1:end+padd_size) = repmat(FFTsource_base,padd_size,1);
+            PDsource(end+1:end+padd_size) = repmat(PDsource_base,padd_size,1);
+        else
+            
+            FFTsource = repmat(FFTsource_base,padd_size,1);
+            PDsource = repmat(PDsource_base,padd_size,1);
+        end
+
+    elseif row_diff > 0 
+        FFTsource = powerSettings.fftConfig;
+        PDsource = powerSettings.powerBands;
+        if row_nums(1) ~=0
+            TDsource = timeDomainSettings.TDsettings;            
+            TDsource(end+1:end+padd_size) = repmat(TDsource_base,padd_size,1);
+
+        else
+           TDsource = repmat(TDsource_base,padd_size,1);
+
+        end
+        
+    end
+
+end
+
 rec_setting_list = cell(length(TDsource),1);
 for rec = 1:length(TDsource)
+    if isequal(TDsource,TDsource_base)
+       break 
+    end
     rec_data = TDsource{rec,1};
     ch_list = cell(4,1);
     for channel = 1:4
@@ -191,6 +242,7 @@ for rec = 1:length(TDsource)
             );
         ch_list{channel} = ch_settings;
     end
+
     rec_settings = struct(...
         'start', num2str(timeDomainSettings.timeStart(rec)), ...
         'end', num2str(timeDomainSettings.timeStop(rec)), ...
@@ -201,6 +253,9 @@ for rec = 1:length(TDsource)
     );
     rec_setting_list{rec} = rec_settings;
 end
+     
+    
+
 detect_settings = struct( ...
     'LD0', DetectorSettings.Ld0, ...
     'LD1', DetectorSettings.Ld1 ...
@@ -219,5 +274,3 @@ fprintf(fid, clean_json);
 fclose(fid);
 
 end
-
-

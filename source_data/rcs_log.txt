@@ -1,0 +1,18 @@
+
+failures =
+
+  0x0 empty cell array
+
+
+failures =
+
+  0x0 empty cell array
+
+START
+[]
+[]
+Aggregate
+Anonymize
+To csv
+Uploading to Wasabi
+Clear Temp Directory After Upload
