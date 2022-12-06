@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 import subprocess
 
-from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
+#from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
 
 
 VIDEO_SRC = '/media/DATA/video'
@@ -54,6 +54,41 @@ def verify_pose_upload(folder):
         f'/media/DATA/pose_2d/{folder}',
         f'secret_sauce:/rcs07/pose_2d/{folder}'
     ) # and verify_rclone_upload(<3d pose equivalent>)
+
+def all_here(directory):
+    return [f for f in os.listdir(directory)]
+def verify_video_file_names(video_path, modulo_even_flag=True):
+    """
+    check for odd/even-numbered video file names.
+    This sometimes occurs when weird bugs are going on;
+    we want to quickly detect when this happens and alert
+    the team to avoid recording corrupt data
+
+    :param video_path: type string, directory of video
+    files to check
+    :param modulo_even_flag: type boolean, if True then
+    minutes of each file name modulo 2 should be 0
+    else should be != 0
+
+    :return: type boolean, True if all file names are
+    as expected; False if something fishy is detected
+    """
+
+    files = all_here(video_path)
+
+    for file_idx, file_name in enumerate(files):
+        minute = file_name.split("-")[4]  # minutes
+        if modulo_even_flag == True:
+            if int(minute) % 2 != 0:
+                return False
+        else:
+            if int(minute) % 2 == 0:
+                return False
+    return True
+
+
+
+
 
 
 def verify_rclone_upload(check_name, source, destination):
@@ -146,4 +181,6 @@ def handle_new_videos(source_folder):
 
 
 if __name__ == "__main__":
-    handle_new_videos('test_source')
+    #handle_new_videos('test_source')
+    corrupt_file_name_check = verify_video_file_names("/media/DATA/rcs07/raw_videos/20211119/", False)
+    print("Check for valid file names:", corrupt_file_name_check)
