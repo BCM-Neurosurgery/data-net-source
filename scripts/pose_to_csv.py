@@ -1,10 +1,6 @@
 # Script to process csvs from jsons
 # containing OpenPose keypoints
 #
-# Admittedly redundant code, pulling from
-# Tomek's json-to-csv code to quickly convert
-# pose on latest GPU setup
-#
 # Gets called by process_csvs.sh in this same directory
 
 
@@ -14,6 +10,7 @@ import os, re, json, sys
 
 import numpy as np
 import pandas as pd
+from common.utils.pose import json_to_csv
 
 ##############################
 # basic pose vars
@@ -184,61 +181,6 @@ def expand_names(base_names, n_coords=N_COORDS):
     for name in base_names:
         expanded_names.extend([name]*n_coords)
     return expanded_names
-
-def json_to_csv(source_dir, save_path):
-    """
-    Covert a collection of JSON pose estimate keyframe files to a DataFrame representation
-
-    Current implementation assumes the BODY_25 output from OpenPose
-    """
-    video_name = os.path.basename(os.path.normpath(save_path)) + "_" + source_dir.split("/")[-1]
-    out_name = os.path.join(os.path.dirname(save_path), f'pose_{video_name}.csv')
-
-    files = [f for f in os.listdir(source_dir) if '.json' in f]
-    files.sort(key=natural_keys)
-    n_frames = len(files)
-    all_pose = np.zeros((n_frames, N_POINTS*N_COORDS))
-    all_ids = []
-
-    for i, f in enumerate(files):
-        with open(os.path.join(source_dir, f)) as datafile:
-            json_data = json.load(datafile)
-
-        # Extract the frame id from the file name
-        id = int(re.search('_([0-9]{12})_keypoints', f).group(1))
-        all_ids.append(id)
-
-        # Collect all keypoints into a single long list
-        if json_data['people']:
-            pose_data = json_data['people'][0]
-            if pose_data[DEFAULT_KEYPOINTS['body']]:
-                all_pose[i, BODY_RANGE] = pose_data[DEFAULT_KEYPOINTS['body']]
-
-            if pose_data[DEFAULT_KEYPOINTS['left_hand']]:
-                all_pose[i, L_HAND_RANGE] = pose_data[DEFAULT_KEYPOINTS['left_hand']]
-
-            if pose_data[DEFAULT_KEYPOINTS['right_hand']]:
-                all_pose[i, R_HAND_RANGE] = pose_data[DEFAULT_KEYPOINTS['right_hand']]
-
-            if pose_data[DEFAULT_KEYPOINTS['face']]:
-                all_pose[i, FACE_RANGE] = pose_data[DEFAULT_KEYPOINTS['face']]
-
-    # Wrap the numpy array into a dataframe with a multiindex
-    pose_df = pd.DataFrame.from_records(all_pose)
-
-    coord_names = ['x', 'y', 'c'] * N_POINTS
-    all_point_names = expand_names(ALL_POINT_NAMES)
-    body_part_names = expand_names(ALL_COMPONENTS)
-    pose_sets = expand_names(POSE_SETS)
-    big_index = pd.MultiIndex.from_tuples(
-        zip(pose_sets, body_part_names, all_point_names, coord_names),
-        names=['Pose Set', 'Body Part', 'Point', 'Coordinate']
-    )
-    pose_df.columns = big_index
-
-    out_name = os.path.join(os.path.dirname(save_path), f'pose_{video_name}.csv')
-    print("csv name:", out_name)
-    pose_df.to_csv(out_name)
 
 
 if __name__ == '__main__':

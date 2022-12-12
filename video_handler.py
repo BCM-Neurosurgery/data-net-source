@@ -1,9 +1,11 @@
-import os
+import os, sys
 from datetime import datetime
 import logging
 import subprocess
 
 from common.utils.files import all_here
+
+from pose_estimation import do_2d_pose, upload_pose
 
 # from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
 
@@ -71,21 +73,23 @@ def verify_video_file_names(video_path, modulo_even_flag=True):
     minutes of each file name modulo 2 should be 0
     else should be != 0
 
-    :return: type boolean, True if all file names are
-    as expected; False if something fishy is detected
+    :return: type string, informing whether something
+    fishy is detected
     """
-
+    print("Checking for valid file names in", video_path)
     files = all_here(video_path)
+    if len(files) == 0:
+        return "No videos found in directory: " + video_path
 
     for file_idx, file_name in enumerate(files):
         minute = file_name.split("-")[4]  # minutes
         if modulo_even_flag == True:
             if int(minute) % 2 != 0:
-                return False
+                return "Unexpected file name detected!"
         else:
             if int(minute) % 2 == 0:
-                return False
-    return True
+                return "Unexpected file name detected!"
+    return "All files named as expected."
 
 
 def verify_rclone_upload(check_name, source, destination):
@@ -178,5 +182,4 @@ def handle_new_videos(source_folder):
 
 if __name__ == "__main__":
     # handle_new_videos('test_source')
-    corrupt_file_name_check = verify_video_file_names("/media/DATA/rcs07/raw_videos/20211119/", False)
-    print("Check for valid file names:", corrupt_file_name_check)
+    print(verify_video_file_names(sys.argv[1], True))
