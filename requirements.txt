@@ -1,0 +1,7 @@
+## General dependencies
+numpy
+pandas
+
+
+## Data-net dependencies
+common @ git+ssh://git@github.com/Weill-Neurohub-OPTiMaL/data-net-common.git@main

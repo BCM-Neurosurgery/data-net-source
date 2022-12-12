@@ -3,7 +3,9 @@ from datetime import datetime
 import logging
 import subprocess
 
-#from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
+from common.utils.files import all_here
+
+# from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
 
 
 VIDEO_SRC = '/media/DATA/video'
@@ -53,10 +55,9 @@ def verify_pose_upload(folder):
         'pose_result_upload',
         f'/media/DATA/pose_2d/{folder}',
         f'secret_sauce:/rcs07/pose_2d/{folder}'
-    ) # and verify_rclone_upload(<3d pose equivalent>)
+    )  # and verify_rclone_upload(<3d pose equivalent>)
 
-def all_here(directory):
-    return [f for f in os.listdir(directory)]
+
 def verify_video_file_names(video_path, modulo_even_flag=True):
     """
     check for odd/even-numbered video file names.
@@ -85,10 +86,6 @@ def verify_video_file_names(video_path, modulo_even_flag=True):
             if int(minute) % 2 == 0:
                 return False
     return True
-
-
-
-
 
 
 def verify_rclone_upload(check_name, source, destination):
@@ -131,13 +128,12 @@ def pose_estimation(source_folder):
 
 
 def cleanup(source_folder, uploader, pose_manager):
-
     # Wait for these processes to complete
     upload_result = uploader.wait()
     pose_result = pose_manager.wait()
 
     # Verify successful completion
-    if upload_result or pose_result:    # If a non-zero exit code is returned anywhere assume something failed
+    if upload_result or pose_result:  # If a non-zero exit code is returned anywhere assume something failed
         logging.error(f'Received a non-zero video handler exit code!\n'
                       f'  Raw Video Uploader Returned: {upload_result}\n'
                       f'  Pose Estimation Returned: {pose_result}')
@@ -181,6 +177,6 @@ def handle_new_videos(source_folder):
 
 
 if __name__ == "__main__":
-    #handle_new_videos('test_source')
+    # handle_new_videos('test_source')
     corrupt_file_name_check = verify_video_file_names("/media/DATA/rcs07/raw_videos/20211119/", False)
     print("Check for valid file names:", corrupt_file_name_check)
