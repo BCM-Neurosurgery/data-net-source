@@ -55,6 +55,7 @@ csv_path="/media/DATA/"$patient_ID"/pose_2d/"$date"/csvs/"
 if [ ! -d $json_path ]
 then
     echo "jsons not found in "$json_path", can't process csvs."
+    # shellcheck disable=SC2242
     exit 9999 # die with error code 9999
 fi
 

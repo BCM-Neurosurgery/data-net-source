@@ -1,9 +1,13 @@
-import os
+import os, sys
 from datetime import datetime
 import logging
 import subprocess
 
-from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
+from common.utils.files import all_here
+
+from pose_estimation import do_2d_pose, upload_pose
+
+# from .pose_estimation import do_2d_pose, do_3d_pose, upload_pose
 
 
 VIDEO_SRC = '/media/DATA/video'
@@ -53,7 +57,39 @@ def verify_pose_upload(folder):
         'pose_result_upload',
         f'/media/DATA/pose_2d/{folder}',
         f'secret_sauce:/rcs07/pose_2d/{folder}'
-    ) # and verify_rclone_upload(<3d pose equivalent>)
+    )  # and verify_rclone_upload(<3d pose equivalent>)
+
+
+def verify_video_file_names(video_path, modulo_even_flag=True):
+    """
+    check for odd/even-numbered video file names.
+    This sometimes occurs when weird bugs are going on;
+    we want to quickly detect when this happens and alert
+    the team to avoid recording corrupt data
+
+    :param video_path: type string, directory of video
+    files to check
+    :param modulo_even_flag: type boolean, if True then
+    minutes of each file name modulo 2 should be 0
+    else should be != 0
+
+    :return: type string, informing whether something
+    fishy is detected
+    """
+    print("Checking for valid file names in", video_path)
+    files = all_here(video_path)
+    if len(files) == 0:
+        return "No videos found in directory: " + video_path
+
+    for file_idx, file_name in enumerate(files):
+        minute = file_name.split("-")[4]  # minutes
+        if modulo_even_flag == True:
+            if int(minute) % 2 != 0:
+                return "Unexpected file name detected!"
+        else:
+            if int(minute) % 2 == 0:
+                return "Unexpected file name detected!"
+    return "All files named as expected."
 
 
 def verify_rclone_upload(check_name, source, destination):
@@ -96,13 +132,12 @@ def pose_estimation(source_folder):
 
 
 def cleanup(source_folder, uploader, pose_manager):
-
     # Wait for these processes to complete
     upload_result = uploader.wait()
     pose_result = pose_manager.wait()
 
     # Verify successful completion
-    if upload_result or pose_result:    # If a non-zero exit code is returned anywhere assume something failed
+    if upload_result or pose_result:  # If a non-zero exit code is returned anywhere assume something failed
         logging.error(f'Received a non-zero video handler exit code!\n'
                       f'  Raw Video Uploader Returned: {upload_result}\n'
                       f'  Pose Estimation Returned: {pose_result}')
@@ -146,4 +181,5 @@ def handle_new_videos(source_folder):
 
 
 if __name__ == "__main__":
-    handle_new_videos('test_source')
+    # handle_new_videos('test_source')
+    print(verify_video_file_names(sys.argv[1], True))
