@@ -176,7 +176,8 @@ class RuneParser(ParserCommon):
         if '.DS_Store' in data_date:
             data_date.remove('.DS_Store')
         start_of_day_unix_timestamp = pd.Timestamp(year=int(data_date[0:4]), month=int(data_date[4:6]),
-                                                   day=int(data_date[6:]), tz='Etc/GMT+8')
+                                                   day=int(data_date[6:]))
+        start_of_day_unix_timestamp.tz_localize(tz='America/Los_Angeles')
         end_of_day_unix_timestamp = start_of_day_unix_timestamp + timedelta(days=1)
         time_range = timestamp_to_unix([start_of_day_unix_timestamp, end_of_day_unix_timestamp])
         return time_range
