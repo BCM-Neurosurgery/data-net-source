@@ -13,6 +13,12 @@ def load_success_log(log_location):
 class BaseChecker(ABC):
     """Base class for all checkers that defines the interface"""
 
+    @property
+    @abstractmethod
+    def checker_name(self):
+        """Replace with a simple attribute naming the mixin class for later reference"""
+        return "BaseChecker"
+
     @abstractmethod
     def check(self, source_dir):
         """"""
@@ -23,6 +29,8 @@ class DirectoryCheckerMixin(BaseChecker):
     """
     Mixin to a parser that checks whether an entire directory has already been uploaded or not
     """
+
+    checker_name = "DirectoryCheckerMixin"
 
     def check(self, source_dir):
         dirs_here = [
