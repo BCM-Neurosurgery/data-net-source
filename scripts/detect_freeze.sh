@@ -1,6 +1,6 @@
 #!/bin/bash
-
-# Script to process pose on raw videos
+#
+# Script to detect freezes in raw videos
 #
 # 2022 Gabrielle Strandquist
 #
@@ -9,28 +9,20 @@
 # videos on a given date, either user-provided or
 # else defaulting to yesterday's date
 #
-# Can also process a single camera only, if given the
-# name of the camera. Otherwise assumes all cameras
-# should be processed
-#
-# Each video is passed to the installed OpenPose code
-# to estimate joint positions.
-#
-# Pose is currently written in OpenPose's example format
-# as individual json files per each frame processed.
-# Ideally in future this will be updated to a more
-# efficient format
+# Can also process videos from a single camera only,
+# if given the  name of the camera. Otherwise assumes
+# all cameras should be processed
 #
 # To run this script:
 # 1) Choose a patient ID, such as 07
 # 2) Optionally choose a desired date in an 8-digit format, such as 20211117
 #    and optionally can choose to process only a single camera.
 # 3) If entering a specific date, run:
-#       ./process_pose.sh 07 20211117
+#       ./detect_freeze.sh 07 20211117
 #    or for a specfic date + specific camera:
-#       ./process_pose.sh 07 20211117 video8
+#       ./detect_freeze.sh 07 20211117 video8
 #   otherwise run:
-#       ./process_pose.sh 07
+#       ./detect_freeze.sh 07
 #
 
 ###############################
@@ -61,13 +53,12 @@ patient_ID="rcs"$1
 #defaults to yesterday's date if no specific date is given
 yesterday_date=$(date --date="yesterday" +"%Y%m%d")
 date=${2:-$yesterday_date}
-echo "Looking for videos to process for patient" $patient_ID "on" $date
+echo "Looking for videos for patient" $patient_ID "on" $date
 
 
 ###############################
 # Build base path
 wasabi_path="/media/DATA/wasabi_mount/"$patient_ID"/video/"$date"/"
-
 
 ###############################
 # Check if recordings were made/uploaded
@@ -82,23 +73,29 @@ then
 fi
 
 ###############################
-# Loop through the appropriate
-# path and run OpenPose on each
-# video.
-# Currently pose is written to json
-# files in a directory called
-# pose_output; ideally this will
-# later be updated to a csv format
-#
-# Start directory name variable
-json_dir="/media/DATA/"$patient_ID"/pose_2d/"$date"/jsons/"
-
-###############################
 #allow the option of processing only one camera at a time
 single_camera=$3
 
+
+###############################
+# Loop through the appropriate
+# path and run a freeze detection
+# on each video.
+# The output is written to a
+# separate txt file/video, and
+# if the txt file size is 0,
+# no freezes have been detected
+# I'll find some way to check
+# this in a shell script,
+# to get the relavent sections
+# where freezes where found
+
+
 for dir in "$wasabi_path"*/;do
     if [[ "$dir" == *"$single_camera"* ]]; then
+      # make dir for detected freezes txt files
+      mkdir detected_freezes
+
       for file in $dir*.avi ;do
           readarray -d / -t strarr <<<"$file" #split a string based on the delimiter '/'
           readarray -d _ -t strarr <<<"${strarr[8]}" #split a string based on the delimiter '_'
@@ -111,12 +108,18 @@ for dir in "$wasabi_path"*/;do
           then mkdir -p "$full_path"
           fi
 
-          [ -f "$file" ] && echo "Processing pose for '$file'"
-          time ./build/examples/openpose/openpose.bin --video $file --hand --face --write_json $full_path --display 0 --render_pose 0
+          [ -f "$file" ] && echo "detecting freezes in '$file'"
+          #make txt file name
+
+          ffmpeg -i "$file" -vf "freezedetect=n=-60dB:d=2, metadata=mode=print:file=freeze_$file.txt" -map 0:v:0 -f null -;
       done
     echo "Pose for all recordings on $date processed!"
 
   else
     echo "no videos found for camera" $single_camera "on" $date "in path" $dir
   fi
+done
+
+for i in *.mkv; do
+  ffmpeg -i "$i" -vf "freezedetect=n=-60dB:d=2, metadata=mode=print:file=freeze_$i.txt" -map 0:v:0 -f null -;
 done
