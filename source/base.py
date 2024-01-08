@@ -12,8 +12,17 @@ class ParserCommon(ABC):
     Each parser may also include any of the following:
         - A logger: which
     """
-    def __init__(self):
-        self.folder_path = '/home/weill2/Documents/data-net-subject/source_data/temp'
+    def __init__(self, source, middle, target):
+        """
+        Generic creation for all parsers.
+
+        :param source: location to check for new data to be processed
+        :param middle: potentially temporary location to store intermediate processed data
+        :param target: final location for the parser to leave the ready data
+        """
+        self.source_location = source
+        self.middle_location = middle
+        self.target_location = target
 
     def process(self):
         to_do = self.check()
