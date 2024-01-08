@@ -1,10 +1,44 @@
 {
+  "comment": "All entries in a log should be of the same type, as they all should correspond to the results of a single parser. Here we show several examples",
   "success": [
     {
       "type": "file",
-      "checked": "",
-      "uploaded": "",
-      "message": "Upload complete"
+      "checked": "/path/to/directory/checked/",
+      "uploaded": "/file_that_was_uploaded.csv",
+      "status": {
+        "exit code": 0,
+        "message": "Upload complete"
+      },
+      "parser": {
+        "git": "769a927",
+        "base": "ParserName",
+        "checker": "FileCheckerMixin",
+        "transformer": "NullTransformerMixin",
+        "uploader": "BucketUploaderMixin"
+      },
+      "timestamp": 	1704769401
+    },
+    {
+      "type": "directory",
+      "checked": "/path/to/directory/checked/",
+      "uploaded": "folder_that_was_uploaded/",
+      "status": {
+        "exit code": 0,
+        "message": "Upload complete",
+        "files": [
+          "file_in_directory.csv",
+          "another_file.csv",
+          "some_nested/file.csv"
+        ]
+      },
+      "parser": {
+        "git": "769a927",
+        "base": "ParserName",
+        "checker": "DirectoryCheckerMixin",
+        "transformer": "NullTransformerMixin",
+        "uploader": "BucketUploaderMixin"
+      },
+      "timestamp": 	1702091001
     }
   ]
 }
