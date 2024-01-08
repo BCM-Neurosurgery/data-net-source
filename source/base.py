@@ -36,7 +36,7 @@ class ParserCommon(ABC):
         return []  # Return a list of files that need to be processed
 
     @abstractmethod
-    def transform(self, to_do):
+    def transform(self, tasks):
         """Convert the raw data files into a form that is ready for upload"""
         return []  # Return a list of files that are ready for upload
 
