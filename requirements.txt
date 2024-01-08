@@ -1,7 +1,10 @@
-## General dependencies
-numpy
 pandas
+numpy
 
 
 ## Data-net dependencies
-common @ git+ssh://git@github.com/Weill-Neurohub-OPTiMaL/data-net-common.git@main
+# common @ git+ssh://git@github.com/Weill-Neurohub-OPTiMaL/data-net-common.git@main
+# If you're developing locally you can use this version of the install, just change the path
+-f file://D:/Work/DataNet/data-net-common
+
+
