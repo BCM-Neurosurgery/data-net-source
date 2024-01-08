@@ -1,7 +1,16 @@
 from copy import copy
+from abc import ABC, abstractmethod
 
 
-class NullTransformer:
+class BaseTransformer(ABC):
+
+    @abstractmethod
+    def transform(self, todo):
+        """"""
+        return {}  # Return dict containing information on the location of the transformed files
+
+
+class NullTransformerMixin(BaseTransformer):
     """The null transformation that does nothing"""
 
     def transform(self, todo):
@@ -9,7 +18,7 @@ class NullTransformer:
         return copy(todo)
 
 
-class OpenMindTransformerMixin:
+class OpenMindTransformerMixin(BaseTransformer):
 
     def transform(self, todo):
         """

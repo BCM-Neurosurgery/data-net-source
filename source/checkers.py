@@ -1,5 +1,6 @@
 import json
 import os
+from abc import ABC, abstractmethod
 
 
 def load_success_log(log_location):
@@ -9,7 +10,16 @@ def load_success_log(log_location):
     return uploaded
 
 
-class WholeDirCheckerMixin:
+class BaseChecker(ABC):
+    """Base class for all checkers that defines the interface"""
+
+    @abstractmethod
+    def check(self, source_dir):
+        """"""
+        return {}  # Return a dict describing the data that needs to be uploaded
+
+
+class DirectoryCheckerMixin(BaseChecker):
     """
     Mixin to a parser that checks whether an entire directory has already been uploaded or not
     """
