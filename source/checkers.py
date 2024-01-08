@@ -20,7 +20,7 @@ class BaseChecker(ABC):
         return "BaseChecker"
 
     @abstractmethod
-    def check(self, source_dir):
+    def check(self):
         """"""
         return {}  # Return a dict describing the data that needs to be uploaded
 
@@ -30,9 +30,14 @@ class DirectoryCheckerMixin(BaseChecker):
     Mixin to a parser that checks whether an entire directory has already been uploaded or not
     """
 
-    checker_name = "DirectoryCheckerMixin"
+    checker_name = "DirectoryChecker"
 
-    def check(self, source_dir):
+    def check(self):
+        """
+        Compare the files in a directory to find which still need to be uploaded
+        :return:
+        """
+        source_dir = self.source_location  # Defined in ParserBase
         dirs_here = [
             directory for directory in os.listdir(source_dir)
             if os.path.isdir(os.path.join(source_dir, directory))
@@ -50,4 +55,17 @@ class DirectoryCheckerMixin(BaseChecker):
 
     def save(self, completed):
         # TODO: Implement a save
+        pass
+
+
+class RuneAPICheckerMixin(BaseChecker):
+
+    checker_name = "RuneAPIChecker"
+
+    def check(self):
+        """Search for new periods from the RUNE API"""
+        pass
+
+    def save(self, completed):
+        """Log which new time periods of RUNE data have been uploaded"""
         pass

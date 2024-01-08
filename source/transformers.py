@@ -37,3 +37,26 @@ class OpenMindTransformerMixin(BaseTransformer):
         """
         # TODO: move all of Raph's code here
 
+
+class APIFetchTransformerMixin(BaseTransformer):
+
+    transformer_name = "APIFetchTransformer"
+
+    def transform(self, todo):
+        """
+        Fetch the data from the RUNE API and save it to csvs
+        :param todo:
+        :return:
+        """
+
+
+class OpenPoseTransformerMixin(BaseTransformer):
+
+    transformer_name = "OpenPoseTransformer"
+
+    def transform(self, todo):
+        """
+        Use OpenPose to process video into pose data
+        :param todo:
+        :return:
+        """
