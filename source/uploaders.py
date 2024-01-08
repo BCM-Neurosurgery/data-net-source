@@ -5,7 +5,7 @@ class BaseUploader(ABC):
 
     @abstractmethod
     def upload(self, ):
-        return []  # Should return a dict describing successful uploads and failures
+        return {}  # Should return a dict describing successful uploads and failures
 
 
 class BucketUploaderMixin(BaseUploader):

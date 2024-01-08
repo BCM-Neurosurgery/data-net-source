@@ -31,7 +31,8 @@ class DirectoryCheckerMixin(BaseChecker):
         ]
 
         # TODO: the log will need to be parsed somehow, not sure what other info we will save here
-        already_uploaded = load_success_log(os.path.join(source_dir, 'upload_log.json'))
+        successes = load_success_log(os.path.join(source_dir, 'upload_log.json'))
+        already_uploaded = [os.path.join(obj['checked'], obj['uploaded']) for obj in successes]
 
         to_upload = [
             directory for directory in dirs_here
@@ -39,7 +40,6 @@ class DirectoryCheckerMixin(BaseChecker):
         ]
         return to_upload
 
-    def save(self):
+    def save(self, completed):
         # TODO: Implement a save
         pass
-
