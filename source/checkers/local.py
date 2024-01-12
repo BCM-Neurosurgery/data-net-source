@@ -1,43 +1,8 @@
 import json
 import os
 from datetime import datetime
-from abc import ABC, abstractmethod
 
-
-def load_success_log(log_location):
-    with open(log_location) as f:
-        log = json.load(f)
-    uploaded = log['success']
-    return uploaded
-
-
-class BaseChecker(ABC):
-    """Base class for all checkers that defines the interface"""
-    log_filename = 'upload_log.json'
-
-    @property
-    @abstractmethod
-    def checker_name(self):
-        """Replace with a simple attribute naming the mixin class for later reference"""
-        return "BaseChecker"
-
-    @abstractmethod
-    def check(self):
-        """"""
-        return {}  # Return a dict describing the data that needs to be uploaded
-
-    @abstractmethod
-    def save(self, completed):
-        """"""
-
-    def describe_parser(self):
-        return {
-            "git commit": "commitHash",  # TODO: implement commit hashing
-            "base": str(type(self)),
-            "checker": self.checker_name,
-            "transformer": self.transformer_name,  # Defined in the TransformerMixin
-            "uploader": self.uploader_name  # Defined in the UploaderMixin
-        }
+from source.checkers.base import BaseChecker, load_success_log
 
 
 class DirectoryCheckerMixin(BaseChecker):
@@ -116,16 +81,3 @@ class FileCheckerMixin(BaseChecker):
 
         with open(os.path.join(self.source_location, self.log_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
-
-
-class RuneAPICheckerMixin(BaseChecker):
-
-    checker_name = "RuneAPIChecker"
-
-    def check(self):
-        """Search for new periods from the RUNE API"""
-        pass
-
-    def save(self, completed):
-        """Log which new time periods of RUNE data have been uploaded"""
-        pass
