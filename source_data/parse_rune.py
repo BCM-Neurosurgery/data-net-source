@@ -1,4 +1,9 @@
-import parsers
+from parsers.WatchParser import WatchParser
 
-myRuneParser = parsers.RuneParser()
-myRuneParser.full_parse()
+test = WatchParser(
+    source=None,
+    middle=r'D:\Work\DataNet\TestData\parsers\rune_parser',
+    target=r'D:\Work\DataNet\TestData\lake\rune'
+)
+
+test.check()
