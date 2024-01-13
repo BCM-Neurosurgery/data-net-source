@@ -70,8 +70,7 @@ class FileCheckerMixin(BaseChecker):
 
     def save(self, completed):
         """Log the files the that have been uploaded, along with all errors"""
-        with open(os.path.join(self.source_location, self.log_filename)) as log:
-            logged_data = json.load(log)
+        logged_data = self.load_log()
 
         new_success = [self.build_log_entry(success) for success in completed['success']]
         logged_data['success'].extend(new_success)
