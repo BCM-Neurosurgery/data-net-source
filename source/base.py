@@ -26,8 +26,11 @@ class ParserCommon(ABC):
 
     def process(self):
         to_do = self.check()
-        ready = self.transform(to_do)
-        complete = self.upload(ready)
+        if to_do:
+            ready = self.transform(to_do)
+            complete = self.upload(ready)
+        else:
+            complete = None
         self.save(complete)
 
     @abstractmethod
