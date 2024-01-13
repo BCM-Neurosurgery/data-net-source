@@ -8,7 +8,7 @@ class BaseChecker(ABC):
     log_filename = 'upload_log.json'
 
     def load_log(self):
-        with open(self.middle_location) as f:
+        with open(os.path.join(self.middle_location, self.log_filename)) as f:
             log = json.load(f)
         return log
 

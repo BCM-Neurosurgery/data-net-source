@@ -16,11 +16,18 @@ class RuneAPICheckerMixin(BaseChecker):
     def check_device(self, device, device_log):
         device_streams = rune_metadata.get_patient_stream_metadata(device.patient_id, device.id)
         device_meta = device_streams.to_dataframe()
-        device_end = max(device_meta['max_time'])
+        try:
+            device_end = max(device_meta['max_time'])
+        except KeyError as e:
+            if device_meta.empty:
+                print(f'No info available for {device.id}: {device.name}')
+                return {}
+            else:
+                raise e
 
-        logged_end = device_log[-1]['max_time']
+        logged_end = device_log[-1]['max_time'] if device_log else 0
 
-        if logged_end > device_end:
+        if device_end > logged_end:
             new_streams = []
             for i, stream_data in device_meta.iterrows():
                 stream_end = stream_data['max_time']
@@ -31,6 +38,7 @@ class RuneAPICheckerMixin(BaseChecker):
                     })
             device_todo = {
                 'time_range': [logged_end, device_end],
+                'name': device.name,
                 'streams': new_streams
             }
 
@@ -50,7 +58,7 @@ class RuneAPICheckerMixin(BaseChecker):
 
         log = self.load_log()
 
-        active_devices = [d for d in all_devices if d not in log['deactivated_devices']]
+        active_devices = [d for d in all_devices if d.id not in log['deactivated_devices']]
 
         if not active_devices:
             return {}   # No active devices therefore there is no new data to return
@@ -61,7 +69,8 @@ class RuneAPICheckerMixin(BaseChecker):
             for device in active_devices:
                 device_log = successes[device.id] if device.id in successes else {}
                 device_todo = self.check_device(device, device_log)
-                rune_todo[device.id] = device_todo
+                if device_todo:
+                    rune_todo[device.id] = device_todo
             return rune_todo
 
 
