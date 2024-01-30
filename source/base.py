@@ -51,3 +51,14 @@ class ParserCommon(ABC):
     @abstractmethod
     def save(self, completed):
         """Save the completed files to a log so that they are not re-uploaded"""
+
+    def metadata(self):
+        """
+        Get the metadata about the data being parsed as a dictionary
+
+        Uploaders should override this method to add additional metadata, and include the contents here
+        :return:
+        """
+        meta = {}
+        # TODO: Add some basic common metadata
+        return meta
