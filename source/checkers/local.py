@@ -99,14 +99,55 @@ class FileCheckerMixin(BaseChecker):
             json.dump(logged_data, log, indent=2)
 
 
-class StreamedFileChecker(BaseChecker):
+class StreamedFileCheckerMixin(FileCheckerMixin):
     """Checker to load files from a directory that is being actively streamed to"""
 
     def __init__(self):
-        initialize_files = ['*.ccf', '*.csr', '*.sif', '*.toc']
-        streamed_files = ['*.nev', '*.ns3', '*.ns5']
-        file_duration = None
+        self.initialize_files = ['.ccf', '.csr', '.sif', '.toc']
+        self.streamed_files = ['.nev', '.ns3', '.ns5']
+        self.stream_rate = None
+        self.reliability_factor = 2.0
+        super(StreamedFileCheckerMixin, self).__init__()
 
+    def is_init_file(self, filename):
+        """Check if the given file is an initialization file, that is not streamed"""
+        for ending in self.initialize_files:
+            if filename.endswith(ending):
+                return True
+        else:
+            return False
 
+    def is_streamed_file(self, filename):
+        """Check if the given file is a streamed file that is written to incrementally"""
+        for ending in self.streamed_files:
+            if filename.endswith(ending):
+                return True
+        else:
+            return False
 
+    def check(self, source_dir=None):
+        """
+        Same as in the FileCheckerMixin, but additionally ensure that they have finished being written
+
+        Essentially, we do not want to upload files while data is still being written to them. This is useful for
+        situations where data is streamed directly to chunked files, and we want to start gathering data before the
+        data stream is complete. To do this, we need to know approx how often the file is written to, and only include
+        files that haven't been written to in at least that long
+        """
+
+        all_new_files = super(StreamedFileCheckerMixin, self).check(source_dir=source_dir)
+
+        to_upload = []
+        for filepath in all_new_files:
+
+            # Streamed files should only be included if they're old enough
+            if self.is_streamed_file(filepath):
+                last_modified = os.path.getmtime(filepath)
+                secs_since_mod = datetime.now().timestamp() - last_modified
+                if secs_since_mod > self.stream_rate * self.reliability_factor:
+                    to_upload.append(filepath)
+
+            # Init files can be written right away
+            elif self.is_init_file(filepath):
+                to_upload.append(filepath)
 
