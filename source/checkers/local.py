@@ -101,12 +101,10 @@ class FileCheckerMixin(BaseChecker):
 class StreamedFileCheckerMixin(FileCheckerMixin):
     """Checker to load files from a directory that is being actively streamed to"""
 
-    def __init__(self):
-        self.initialize_files = ['.ccf', '.csr', '.sif', '.toc']
-        self.streamed_files = ['.nev', '.ns3', '.ns5']
-        self.stream_rate = None
-        self.reliability_factor = 2.0
-        super(StreamedFileCheckerMixin, self).__init__()
+    initialize_files = ['.ccf', '.csr', '.sif', '.toc']
+    streamed_files = ['.nev', '.ns3', '.ns5']
+    stream_rate = 240.0
+    reliability_factor = 2.0
 
     def is_init_file(self, filename):
         """Check if the given file is an initialization file, that is not streamed"""
@@ -135,6 +133,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         """
 
         all_new_files = super(StreamedFileCheckerMixin, self).check(source_dir=source_dir)
+        min_time_unmodified = self.stream_rate * self.reliability_factor
 
         to_upload = []
         for filepath in all_new_files:
@@ -143,10 +142,16 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
             if self.is_streamed_file(filepath):
                 last_modified = os.path.getmtime(filepath)
                 secs_since_mod = datetime.now().timestamp() - last_modified
-                if secs_since_mod > self.stream_rate * self.reliability_factor:
+                if secs_since_mod > min_time_unmodified:
                     to_upload.append(filepath)
+                else:
+                    print(f'You need to be at least {min_time_unmodified} tall to ride this ride!\n'
+                          f'  This file was only {secs_since_mod} tall\n'
+                          f'  {filepath}')
 
             # Init files can be written right away
             elif self.is_init_file(filepath):
                 to_upload.append(filepath)
+
+        return to_upload
 
