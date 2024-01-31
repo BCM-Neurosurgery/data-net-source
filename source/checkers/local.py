@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 
-from source.checkers.base import BaseChecker, load_success_log
+from source.checkers.base import BaseChecker
 
 
 class DirectoryCheckerMixin(BaseChecker):
@@ -23,7 +23,7 @@ class DirectoryCheckerMixin(BaseChecker):
         ]
 
         # TODO: the log will need to be parsed somehow, not sure what other info we will save here
-        successes = load_success_log(os.path.join(source_dir, self.log_filename))
+        successes = self.load_success_log()
         already_uploaded = [os.path.join(obj['checked'], obj['uploaded']) for obj in successes]
 
         to_upload = [
@@ -51,9 +51,8 @@ class FileCheckerMixin(BaseChecker):
 
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location if source_dir is None else source_dir
-        log_dir = self.source_location  # Log is always saved at the top level
 
-        successes = load_success_log(os.path.join(log_dir, self.log_filename))
+        successes = self.load_success_log()
         uploaded_files = [success['uploaded'] for success in successes]
 
         # Determine which of the files here need to be uploaded
