@@ -41,6 +41,12 @@ class CopyUploaderMixin(BaseUploader):
             destination = 'Failed to determine!'
             try:
                 rel_filepath = os.path.relpath(filename, start=self.source_location)
+
+                # Make sure the destination folder exists
+                folder_path = os.path.join(self.target_location, os.path.dirname(rel_filepath))
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+
                 destination = os.path.join(self.target_location, rel_filepath)
                 shutil.copy(filename, destination)
             except Exception as e:
