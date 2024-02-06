@@ -102,10 +102,20 @@ class FileCheckerMixin(BaseChecker):
 class StreamedFileCheckerMixin(FileCheckerMixin):
     """Checker to load files from a directory that is being actively streamed to"""
 
-    initialize_files = ['.ccf', '.csr', '.sif', '.toc']
-    streamed_files = ['.nev', '.ns3', '.ns5']
-    stream_rate = 240.0
-    reliability_factor = 2.0
+    #: List of file endings that appear shortly after recording start, and can be uploaded right way
+    initialize_files = []
+
+    #: list of file endings that should be considered as streamed files, and should not be uploaded right away
+    streamed_files = []
+    
+    #: list of file endings that only appear when the recording has ended
+    termination_files = []
+
+    #: Time, in seconds, between file updates in the streamed files
+    stream_rate = None
+
+    #: Factor measuring how reliable the update rate is. Will wait this many times the stream_rate before including
+    reliability_factor = None
 
     def is_init_file(self, filename):
         """Check if the given file is an initialization file, that is not streamed"""

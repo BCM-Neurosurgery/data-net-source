@@ -1,0 +1,18 @@
+from source.base import ParserCommon
+from source.checkers.local import StreamedFileCheckerMixin
+from source.transformers import NullTransformerMixin
+from source.uploaders import CopyUploaderMixin
+
+
+class BlackrockChecker(StreamedFileCheckerMixin):
+    initialize_files = ['.ccf', '.csr', '.sif', '.toc']
+    streamed_files = ['.nev', '.ns3', '.ns5']
+    stream_rate = 240.0
+    reliability_factor = 2.0
+
+
+class BlackrockParser(BlackrockChecker, NullTransformerMixin, CopyUploaderMixin, ParserCommon):
+    """"""
+
+
+
