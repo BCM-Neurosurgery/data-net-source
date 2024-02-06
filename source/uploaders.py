@@ -14,7 +14,14 @@ class BaseUploader(ABC):
 
     @abstractmethod
     def upload(self, ready):
-        return {}  # Should return a dict describing successful uploads and failures
+        """
+        Send data to the data lake, implementation dependent on source and destination
+
+        :param ready: dict with a list of objects to upload and a list of known failures
+            Should be of the form {'to upload': [], 'failure': []}
+        :returns: a dict describing successful uploads and failures
+        """
+        return {'success': [], 'failure': []}
 
 
 class BucketUploaderMixin(BaseUploader):
@@ -34,8 +41,8 @@ class CopyUploaderMixin(BaseUploader):
 
     def upload(self, ready):
 
-        errors = []
-        successes = []
+        errors = ready['failure']
+        successes = ready['to upload']
 
         for filename in ready:
             destination = 'Failed to determine!'
@@ -66,7 +73,7 @@ class CopyUploaderMixin(BaseUploader):
                 })
 
         return {
-            'successes': successes, 'errors': errors
+            'success': successes, 'failure': errors
         }
 
 

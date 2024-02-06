@@ -35,18 +35,27 @@ class ParserCommon(ABC):
 
     @abstractmethod
     def check(self):
-        """Check should look for new data that needs to be uploaded"""
-        return []  # Return a list of files that need to be processed
+        """
+        Check should look for new data that needs to be uploaded
+        See source.checkers.base.BaseChecker for details
+        """
+        return {}
 
     @abstractmethod
     def transform(self, tasks):
-        """Convert the raw data files into a form that is ready for upload"""
-        return []  # Return a list of files that are ready for upload
+        """
+        Convert the raw data files into a form that is ready for upload
+        See source.transformers.base.BaseTransformer for details
+        """
+        return {}
 
     @abstractmethod
     def upload(self, ready):
-        """Upload the ready data files to the data lake with confirmation"""
-        return []  # Return a list of files that were successfully uploaded
+        """
+        Upload the ready data files to the data lake with confirmation
+        See source.uploaders.base.BaseUploader for details
+        """
+        return {}
 
     @abstractmethod
     def save(self, completed):

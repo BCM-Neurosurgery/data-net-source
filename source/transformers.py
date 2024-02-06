@@ -12,8 +12,15 @@ class BaseTransformer(ABC):
 
     @abstractmethod
     def transform(self, tasks):
-        """"""
-        return {}  # Return dict containing information on the location of the transformed files
+        """
+        Convert data from the raw form to a format suitable for upload to the data lake
+        This usually will involve reading data from the original source and saving a transformed version to the disk
+
+        :param tasks: dict with a list of objects to transform and a list of known failures
+            Should be of the form {'to do': [], 'failure': []}
+        :returns: a dict describing the data to upload and failures
+        """
+        return {'to upload': [], 'failure': []}
 
 
 class NullTransformerMixin(BaseTransformer):
@@ -23,7 +30,7 @@ class NullTransformerMixin(BaseTransformer):
 
     def transform(self, tasks):
         """Null transformation that does nothing, so just pass back the original files as ready for upload"""
-        return copy(tasks)
+        return {'to upload': tasks['to do'], 'failure': tasks['failure']}
 
 
 class OpenMindTransformerMixin(BaseTransformer):
@@ -38,9 +45,9 @@ class OpenMindTransformerMixin(BaseTransformer):
         # TODO: move all of Raph's code here
 
 
-class APIFetchTransformerMixin(BaseTransformer):
+class RuneFetchTransformerMixin(BaseTransformer):
 
-    transformer_name = "APIFetchTransformer"
+    transformer_name = "RuneFetchTransformer"
 
     def transform(self, tasks):
         """

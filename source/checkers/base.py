@@ -28,8 +28,12 @@ class BaseChecker(ABC):
 
     @abstractmethod
     def check(self):
-        """"""
-        return {}  # Return a dict describing the data that needs to be uploaded
+        """
+        Find new data that is ready to be parsed
+
+        :returns: a dict describing new data and failures
+        """
+        return {'to do': [], 'failure': []}
 
     @abstractmethod
     def save(self, completed):

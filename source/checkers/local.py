@@ -30,7 +30,7 @@ class DirectoryCheckerMixin(BaseChecker):
             directory for directory in dirs_here
             if directory not in already_uploaded
         ]
-        return to_upload
+        return {'to do': to_upload, 'failure': []}
 
     def save(self, completed):
         # TODO: Implement a save
@@ -72,7 +72,7 @@ class FileCheckerMixin(BaseChecker):
             elif os.path.isdir(full_path):
                 to_upload.extend(self.check(full_path))
 
-        return to_upload
+        return {'to do': to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
         return {
@@ -86,6 +86,7 @@ class FileCheckerMixin(BaseChecker):
 
     def save(self, completed):
         """Log the files the that have been uploaded, along with all errors"""
+        # TODO: make this work with the method of passing around dicts
         logged_data = self.load_log()
 
         new_success = [self.build_log_entry(success) for success in completed['success']]
@@ -136,7 +137,8 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         min_time_unmodified = self.stream_rate * self.reliability_factor
 
         to_upload = []
-        for filepath in all_new_files:
+        failure = all_new_files['failure']
+        for filepath in all_new_files['to do']:
 
             # Streamed files should only be included if they're old enough
             if self.is_streamed_file(filepath):
@@ -153,5 +155,4 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
             elif self.is_init_file(filepath):
                 to_upload.append(filepath)
 
-        return to_upload
-
+        return {'to do': to_upload, 'failure': failure}
