@@ -1,0 +1,11 @@
+{
+  "parser": {
+    "module": "blackrock",
+    "class": "BlackrockParser",
+    "init":{
+      "source": "",
+      "middle": "",
+      "target": ""
+    }
+  }
+}
