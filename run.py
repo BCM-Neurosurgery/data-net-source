@@ -5,7 +5,7 @@ Script to load and run a single parser based on a config json file
 import json
 import argparse
 import importlib
-from source.base import ParserCommon
+from source.common import ParserCommon
 from os import PathLike
 
 

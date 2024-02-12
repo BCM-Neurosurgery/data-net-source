@@ -1,8 +1,7 @@
-from source.base import ParserCommon
-from source.checkers import DirectoryCheckerMixin
-from source.transformers import NullTransformerMixin
-from source.uploaders import BucketUploaderMixin
+from source.common import ParserCommon
+from source.checkers.local import DirectoryCheckerMixin
+from source.uploaders.simple import BucketUploaderMixin
 
 
-class VideoParser(DirectoryCheckerMixin, NullTransformerMixin, BucketUploaderMixin, ParserCommon):
+class VideoParser(DirectoryCheckerMixin, BucketUploaderMixin, ParserCommon):
     """"""

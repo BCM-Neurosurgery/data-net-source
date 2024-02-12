@@ -1,6 +1,5 @@
-from source.base import ParserCommon
+from source.common import ParserCommon
 from source.checkers.local import StreamedFileCheckerMixin
-from source.transformers import NullTransformerMixin
 from source.uploaders import CopyUploaderMixin
 
 
@@ -11,7 +10,7 @@ class BlackrockChecker(StreamedFileCheckerMixin):
     reliability_factor = 2.0
 
 
-class BlackrockParser(BlackrockChecker, NullTransformerMixin, CopyUploaderMixin, ParserCommon):
+class BlackrockParser(BlackrockChecker, CopyUploaderMixin, ParserCommon):
     """"""
 
 
