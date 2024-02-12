@@ -39,11 +39,3 @@ class BaseChecker(ABC):
     def save(self, completed):
         """"""
 
-    def describe_parser(self):
-        return {
-            "git commit": "commitHash",  # TODO: implement commit hashing
-            "base": str(type(self)),
-            "checker": self.checker_name,
-            "transformer": self.transformer_name,  # Defined in the TransformerMixin
-            "uploader": self.uploader_name  # Defined in the UploaderMixin
-        }

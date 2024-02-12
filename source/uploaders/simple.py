@@ -1,27 +1,8 @@
 import os
 import shutil
 import sys
-from abc import abstractmethod, ABC
 
-
-class BaseUploader(ABC):
-
-    @property
-    @abstractmethod
-    def uploader_name(self):
-        """Replace with a simple attribute naming the mixin class for later reference"""
-        return "BaseUploader"
-
-    @abstractmethod
-    def upload(self, ready):
-        """
-        Send data to the data lake, implementation dependent on source and destination
-
-        :param ready: dict with a list of objects to upload and a list of known failures
-            Should be of the form {'to upload': [], 'failure': []}
-        :returns: a dict describing successful uploads and failures
-        """
-        return {'success': [], 'failure': []}
+from source.uploaders.base import BaseUploader
 
 
 class BucketUploaderMixin(BaseUploader):
@@ -75,5 +56,3 @@ class CopyUploaderMixin(BaseUploader):
         return {
             'success': successes, 'failure': errors
         }
-
-

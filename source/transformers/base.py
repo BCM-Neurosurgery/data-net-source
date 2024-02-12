@@ -1,4 +1,3 @@
-from copy import copy
 from abc import ABC, abstractmethod
 
 
@@ -33,37 +32,3 @@ class NullTransformerMixin(BaseTransformer):
         return {'to upload': tasks['to do'], 'failure': tasks['failure']}
 
 
-class OpenMindTransformerMixin(BaseTransformer):
-
-    transformer_name = "OpenMindTransformer"
-
-    def transform(self, tasks):
-        """
-        Convert the raw JSON files from the Medtronic summit RC+S API to anonymized CSV files using OpenMind code
-        https://github.com/openmind-consortium/Analysis-rcs-data
-        """
-        # TODO: move all of Raph's code here
-
-
-class RuneFetchTransformerMixin(BaseTransformer):
-
-    transformer_name = "RuneFetchTransformer"
-
-    def transform(self, tasks):
-        """
-        Fetch the data from the RUNE API and save it to csvs
-        :param tasks:
-        :return:
-        """
-
-
-class OpenPoseTransformerMixin(BaseTransformer):
-
-    transformer_name = "OpenPoseTransformer"
-
-    def transform(self, tasks):
-        """
-        Use OpenPose to process video into pose data
-        :param tasks:
-        :return:
-        """
