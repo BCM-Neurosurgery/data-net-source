@@ -12,6 +12,12 @@ class ParserCommon(ABC):
     Each parser may also include any of the following:
         - A logger: which
     """
+
+    checker_name = "NullChecker"
+    transformer_name = "NullTransformer"
+    uploader_name = "NullUploader"
+    notifier_name = "NullNotifier"
+
     def __init__(self, source, middle, target):
         """
         Generic creation for all parsers.
@@ -42,29 +48,32 @@ class ParserCommon(ABC):
             "uploader": self.uploader_name  # Defined in the UploaderMixin
         }
 
-    @abstractmethod
     def check(self):
         """
         Check should look for new data that needs to be uploaded
         See source.checkers.base.BaseChecker for details
-        """
-        return {}
 
-    @abstractmethod
+        Default is the null checker which does nothing.
+        """
+        return {'to do': [], 'failure': []}
+
     def transform(self, tasks):
         """
         Convert the raw data files into a form that is ready for upload
         See source.transformers.base.BaseTransformer for details
-        """
-        return {}
 
-    @abstractmethod
+        Default is null transformation that does nothing, so just pass back the original files as ready for upload
+        """
+        return {'to upload': tasks['to do'], 'failure': tasks['failure']}
+
     def upload(self, ready):
         """
         Upload the ready data files to the data lake with confirmation
         See source.uploaders.base.BaseUploader for details
+
+        Default is NullUploader, which does nothing.
         """
-        return {}
+        return {'success': ready['to upload'], 'failure': ready['failure']}
 
     @abstractmethod
     def save(self, completed):

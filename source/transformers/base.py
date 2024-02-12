@@ -22,13 +22,3 @@ class BaseTransformer(ABC):
         return {'to upload': [], 'failure': []}
 
 
-class NullTransformerMixin(BaseTransformer):
-    """The null transformation that does nothing"""
-
-    transformer_name = "NullTransformer"
-
-    def transform(self, tasks):
-        """Null transformation that does nothing, so just pass back the original files as ready for upload"""
-        return {'to upload': tasks['to do'], 'failure': tasks['failure']}
-
-
