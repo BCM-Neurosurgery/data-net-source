@@ -70,7 +70,8 @@ class FileCheckerMixin(BaseChecker):
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
-                to_upload.extend(self.check(full_path))
+                check_inside = self.check(full_path)
+                to_upload.extend(check_inside['to do'])
 
         return {'to do': to_upload, 'failure': []}
 
@@ -79,7 +80,7 @@ class FileCheckerMixin(BaseChecker):
             'type': 'file',
             'checked': self.source_location,
             'uploaded': entry_data['filename'],
-            'status': entry_data['status'],
+            'status': entry_data['type'],
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
@@ -95,7 +96,7 @@ class FileCheckerMixin(BaseChecker):
         new_failure = [self.build_log_entry(failure) for failure in completed['failure']]
         logged_data['failure'].extend(new_failure)
 
-        with open(os.path.join(self.source_location, self.log_filename), 'w') as log:
+        with open(os.path.join(self.middle_location, self.log_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
 
 
