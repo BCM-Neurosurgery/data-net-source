@@ -3,9 +3,9 @@
     "module": "blackrock",
     "class": "BlackrockParser",
     "init":{
-      "source": "",
-      "middle": "",
-      "target": ""
+      "source": "D:\\Work\\DataNet\\TestData\\sources\\blackrock",
+      "middle": "D:\\Work\\DataNet\\TestData\\parsers\\brk_test_parser",
+      "target": "D:\\Work\\DataNet\\TestData\\lake\\blackrock"
     }
   }
 }
