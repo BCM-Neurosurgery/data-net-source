@@ -1,6 +1,6 @@
 from source.common import ParserCommon
 from source.checkers.local import StreamedFileCheckerMixin
-from source.uploaders import CopyUploaderMixin
+from source.uploaders.simple import CopyUploaderMixin
 
 
 class BlackrockChecker(StreamedFileCheckerMixin):
