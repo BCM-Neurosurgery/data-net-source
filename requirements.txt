@@ -1,5 +1,7 @@
 pandas
 numpy
+scp
+paramiko>=2.11
 
 ## Data-net dependencies
 # common @ git+ssh://git@github.com/Weill-Neurohub-OPTiMaL/data-net-common.git@main
@@ -7,4 +9,3 @@ numpy
 -e file://D:/Work/DataNet/data-net-common#egg=common
 
 
-[matlab]
