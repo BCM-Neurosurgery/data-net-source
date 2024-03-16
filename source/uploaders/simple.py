@@ -2,6 +2,8 @@ import os
 import shutil
 import sys
 import pathlib
+import numpy as np
+from datetime import datetime
 from source.uploaders.base import BaseUploader
 
 
@@ -62,8 +64,11 @@ class CopyUploaderMixin(BaseUploader):
 
 class SCPUploaderMixin:
     """
-    This uploader expects a target location of the form
-    ['host', '/base/path/on/remote']
+    This uploader expects a target location of the form of a dict as below
+    {
+      "ssh-config": {dict passed to paramiko.SSHClient},
+      "path": /base/path/on/remote"
+    }
     """
 
     uploader_name = 'SCPUploader'
@@ -74,29 +79,40 @@ class SCPUploaderMixin:
         from scp import SCPClient
 
         errors = ready['failure']
-        successes = ready['to upload']
+        successes = []
 
         # Set up the ssh client and associated scp transport
+        print('Connecting to remote host...')
         ssh = SSHClient()
         ssh.load_system_host_keys()
-        ssh.connect(self.target_location[0])
+        ssh.connect(**self.target_location['ssh-config'])
         scp = SCPClient(ssh.get_transport())
+        print('Established connection')
 
-        remote_target = self.target_location[1]
+        remote_target = self.target_location['path']
+        all_rates = []
 
-        for filename in ready:
+        for filename in ready['to upload']:
             destination = 'Failed to determine!'
             try:
+                print(f'Uploading {filename}')
                 rel_filepath = os.path.relpath(filename, start=self.source_location)
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
                 # This solution is a bit hacky, likely executes a lot more commands than necessary
-                folder_path = pathlib.PosixPath(remote_target, os.path.dirname(rel_filepath))
-                outputs = ssh.exec_command(f'mkdir -p {folder_path}')
+                folder_path = pathlib.Path(remote_target, os.path.dirname(rel_filepath))
+                outputs = ssh.exec_command(f'mkdir -p {folder_path.as_posix()}')
 
                 # Actually do the file copy
-                destination = pathlib.PosixPath(remote_target, rel_filepath)
-                scp.put(filename, destination)
+                size = os.path.getsize(filename) / 1024**2  # File size in MB
+                destination = pathlib.Path(remote_target, rel_filepath)
+                transfer_start = datetime.now()
+                scp.put(filename, destination.as_posix())
+                transfer_end = datetime.now()
+                duration = transfer_end - transfer_start
+                rate = size / duration
+                print(f'   Upload complete. {rate} MB/s')
+                all_rates.append(rate)
             except Exception as e:
                 errors.append({
                     'type': 'upload failure',
@@ -111,11 +127,13 @@ class SCPUploaderMixin:
                     'type': 'upload success',
                     'filename': filename,
                     'destination': destination,
+                    'transfer rate': rate
                 })
 
         # Make sure we close the transports
         scp.close()
         ssh.close()
+        print(f'Average transfer rate {np.mean(all_rates)} MB/s')
 
         return {
             'success': successes, 'failure': errors
