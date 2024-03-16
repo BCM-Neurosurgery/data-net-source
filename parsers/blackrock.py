@@ -1,6 +1,6 @@
 from source.common import ParserCommon
 from source.checkers.local import StreamedFileCheckerMixin
-from source.uploaders.simple import CopyUploaderMixin
+from source.uploaders.simple import CopyUploaderMixin, SCPUploaderMixin
 
 
 class BlackrockChecker(StreamedFileCheckerMixin):
@@ -10,8 +10,14 @@ class BlackrockChecker(StreamedFileCheckerMixin):
     reliability_factor = 1.1  # File durations are quite reliable, approx 1 min buffer in case of rounding error
 
 
-class BlackrockParser(BlackrockChecker, CopyUploaderMixin, ParserCommon):
-    """"""
+class BlackrockRemoteParser(BlackrockChecker, SCPUploaderMixin, ParserCommon):
+    """Parser for uploading new blackrock data to the remote server"""
+
+
+class BlackrockLocalParser(BlackrockChecker, CopyUploaderMixin, ParserCommon):
+    """Parser for copying new blackrock data to the local backup"""
+
+
 
 
 
