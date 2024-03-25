@@ -38,8 +38,8 @@ class CopyUploaderMixin(BaseUploader):
                     os.makedirs(folder_path)
 
                 # Perform the file copy
-                print(f'  Copying to {destination}')
                 destination = os.path.join(self.target_location, rel_filepath)
+                print(f'  Copying to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
                 print(f'  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
