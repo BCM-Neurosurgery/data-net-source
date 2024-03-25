@@ -38,9 +38,9 @@ class CopyUploaderMixin(BaseUploader):
                     os.makedirs(folder_path)
 
                 destination = os.path.join(self.target_location, rel_filepath)
-                print(f'Copying to {destination}')
-                shutil.copy(filename, destination)
-                print(f'  Done')
+                print(f'  Copying to {destination}')
+                rate = self.time_upload(shutil.copy, filename, destination)
+                print(f'  Done. ({rate} MB/s)')
             except Exception as e:
                 errors.append({
                     'type': 'upload failure',
@@ -73,14 +73,10 @@ class SCPUploaderMixin:
 
     uploader_name = 'SCPUploader'
 
-    def upload(self, ready):
+    def get_ssh_transport(self):
         # Local imports used only here
         from paramiko import SSHClient
         from scp import SCPClient
-
-        errors = ready['failure']
-        successes = []
-
         # Set up the ssh client and associated scp transport
         print('Connecting to remote host...')
         ssh = SSHClient()
@@ -88,14 +84,21 @@ class SCPUploaderMixin:
         ssh.connect(**self.target_location['ssh-config'])
         scp = SCPClient(ssh.get_transport())
         print('Established connection')
+        return scp
 
+    def upload(self, ready):
+
+        errors = ready['failure']
+        successes = []
         remote_target = self.target_location['path']
         all_rates = []
+
+        ssh, scp = self.get_ssh_transport()
 
         for filename in ready['to upload']:
             destination = 'Failed to determine!'
             try:
-                print(f'Uploading {filename}')
+                print(f'  Uploading {filename}')
                 rel_filepath = os.path.relpath(filename, start=self.source_location)
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
@@ -104,14 +107,9 @@ class SCPUploaderMixin:
                 outputs = ssh.exec_command(f'mkdir -p {folder_path.as_posix()}')
 
                 # Actually do the file copy
-                size = os.path.getsize(filename) / 1024**2  # File size in MB
                 destination = pathlib.Path(remote_target, rel_filepath)
-                transfer_start = datetime.now()
-                scp.put(filename, destination.as_posix())
-                transfer_end = datetime.now()
-                duration = transfer_end - transfer_start
-                rate = size / duration
-                print(f'   Upload complete. {rate} MB/s')
+                rate = self.time_upload(scp.put, filename, destination.as_posix())
+                print(f'  Upload complete. {rate} MB/s')
                 all_rates.append(rate)
             except Exception as e:
                 errors.append({

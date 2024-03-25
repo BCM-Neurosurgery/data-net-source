@@ -1,4 +1,6 @@
+import os
 import json
+from datetime import datetime
 from abc import abstractmethod, ABC
 
 
@@ -20,6 +22,25 @@ class BaseUploader(ABC):
         :returns: a dict describing successful uploads and failures
         """
         return {'success': [], 'failure': []}
+
+    @staticmethod
+    def time_upload(upload_func, filename, *args, **kwargs):
+        """
+        Simple wrapper function to get the upload rate for a file
+
+        :param upload_func: function responsible for performing the file upload.
+            This function must take a filename as the first argument, all returned values ignored
+        :param filename: full path to the file on the local system, used to determine the file size
+        :param args: any arguments that need to be passed to the uploader function
+        :param kwargs: any keyword arguments that need to be passed to the uploader function
+        """
+        size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
+        transfer_start = datetime.now()
+        upload_func(filename, *args, **kwargs)
+        transfer_end = datetime.now()
+        duration = (transfer_end - transfer_start).total_seconds()
+        rate = size / duration
+        return rate
 
     def append_metadata(self, file_list):
         """
