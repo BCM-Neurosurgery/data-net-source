@@ -97,6 +97,18 @@ class ParserCommon(ABC):
         for logger in self.loggers:
             logger.log(message, level=level)
 
+    def debug(self, message):
+        self.log(message, level=logging.DEBUG)
+
+    def info(self, message):
+        self.log(message, level=logging.INFO)
+
+    def warning(self, message):
+        self.log(message, level=logging.WARN)
+
+    def error(self, message):
+        self.log(message, level=logging.ERROR)
+
     def make_loggers(self, log_config: dict):
         """Prepare the python loggers to manage user notifications and log messages"""
         logging.basicConfig(level=logging.DEBUG)
