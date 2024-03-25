@@ -20,7 +20,7 @@ class RuneAPICheckerMixin(BaseChecker):
             device_end = max(device_meta['max_time'])
         except KeyError as e:
             if device_meta.empty:
-                print(f'No info available for {device.id}: {device.name}')
+                self.info(f'No info available for {device.id}: {device.name}')
                 return {}
             else:
                 raise e

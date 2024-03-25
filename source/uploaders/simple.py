@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import sys
@@ -39,23 +40,26 @@ class CopyUploaderMixin(BaseUploader):
 
                 # Perform the file copy
                 destination = os.path.join(self.target_location, rel_filepath)
-                print(f'Copying to {destination}')
+                self.info(f'Copying to {destination}', )
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
-                print(f'  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
+                self.info(f'  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
 
                 if size > 1.0:
                     all_rates.append(rate)
 
             except Exception as e:
-                errors.append({
+                error_dict = {
                     'type': 'upload failure',
                     'location': 'CopyUploaderMixin.upload',
                     'filename': filename,
                     'destination': destination,
                     'error': str(e),
                     'trace': sys.exc_info()
-                })
+                }
+                errors.append(error_dict)
+                self.warning('An upload failed!')
+                self.warning(json.dumps(error_dict, indent=2))
             else:
                 successes.append({
                     'type': 'upload success',
@@ -63,7 +67,7 @@ class CopyUploaderMixin(BaseUploader):
                     'destination': destination,
                 })
 
-        print(f'Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s')
+        self.info(f'Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s')
         return {
             'success': successes, 'failure': errors
         }
@@ -85,12 +89,12 @@ class SCPUploaderMixin:
         from paramiko import SSHClient
         from scp import SCPClient
         # Set up the ssh client and associated scp transport
-        print('Connecting to remote host...')
+        self.info('Connecting to remote host...')
         ssh = SSHClient()
         ssh.load_system_host_keys()
         ssh.connect(**self.target_location['ssh-config'])
         scp = SCPClient(ssh.get_transport())
-        print('Established connection')
+        self.info('Established connection')
         return scp
 
     def upload(self, ready):
@@ -105,7 +109,7 @@ class SCPUploaderMixin:
         for filename in ready['to upload']:
             destination = 'Failed to determine!'
             try:
-                print(f'Uploading {filename}')
+                self.info(f'Uploading {filename}')
                 rel_filepath = os.path.relpath(filename, start=self.source_location)
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
@@ -115,21 +119,24 @@ class SCPUploaderMixin:
 
                 # Actually do the file copy
                 destination = pathlib.Path(remote_target, rel_filepath)
-                print(f'  Moving to {destination}')
+                self.info(f'  Moving to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, scp.put, filename, destination.as_posix())
-                print(f'  Upload complete. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
+                self.info(f'  Upload complete. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
                 if size > 1.0:
                     all_rates.append(rate)
             except Exception as e:
-                errors.append({
+                error_dict = {
                     'type': 'upload failure',
                     'location': 'SCPUploaderMixin.upload',
                     'filename': filename,
                     'destination': destination,
                     'error': str(e),
                     'trace': sys.exc_info()
-                })
+                }
+                errors.append(error_dict)
+                self.warning('An upload failed!')
+                self.warning(json.dumps(error_dict, indent=2))
             else:
                 successes.append({
                     'type': 'upload success',
@@ -141,7 +148,7 @@ class SCPUploaderMixin:
         # Make sure we close the transports
         scp.close()
         ssh.close()
-        print(f'Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s')
+        self.info(f'Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s')
 
         return {
             'success': successes, 'failure': errors
