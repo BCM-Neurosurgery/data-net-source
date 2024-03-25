@@ -95,7 +95,7 @@ class ParserCommon(ABC):
     def log(self, message, level=logging.INFO):
         """Generic method to forward logging to all loggers saved for parser"""
         for logger in self.loggers:
-            logger.log(message, level=level)
+            logger.log(level, message)
 
     def debug(self, message):
         self.log(message, level=logging.DEBUG)

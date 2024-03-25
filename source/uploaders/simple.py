@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import sys
+import traceback
 import pathlib
 import numpy as np
 from source.uploaders.base import BaseUploader
@@ -55,11 +56,10 @@ class CopyUploaderMixin(BaseUploader):
                     'filename': filename,
                     'destination': destination,
                     'error': str(e),
-                    'trace': sys.exc_info()
+                    'trace': traceback.format_exception(*sys.exc_info())
                 }
                 errors.append(error_dict)
-                self.warning('An upload failed!')
-                self.warning(json.dumps(error_dict, indent=2))
+                self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
             else:
                 successes.append({
                     'type': 'upload success',
