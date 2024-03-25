@@ -158,9 +158,9 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
                 if secs_since_mod > min_time_unmodified:
                     to_upload.append(filepath)
                 else:
-                    print(f'You need to be at least {min_time_unmodified} tall to ride this ride!\n'
-                          f'  This file was only {secs_since_mod} tall\n'
-                          f'  {filepath}')
+                    print(f'You need to be at least {round(min_time_unmodified, 2) } seconds old ride this ride!\n'
+                          f'  This file was only {round(secs_since_mod, 2)} seconds old\n'
+                          f'  Skipped: {filepath}')
 
             # Init files can be written right away
             elif self.is_init_file(filepath):
