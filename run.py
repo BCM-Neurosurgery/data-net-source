@@ -36,5 +36,7 @@ if __name__ == '__main__':
 
     config = load_config(args.config_file)
     parser = load_parser(config['parser'])
+    if 'logging' in config:
+        parser.make_loggers(config['logging'])
 
     parser.process()
