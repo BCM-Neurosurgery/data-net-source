@@ -113,7 +113,7 @@ class ParserCommon(ABC):
 
     def make_loggers(self, log_config: dict):
         """Prepare the python loggers to manage user notifications and log messages"""
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG, )
 
         if 'file' in log_config:
             from logging.handlers import RotatingFileHandler
@@ -123,6 +123,12 @@ class ParserCommon(ABC):
                 log_config['file']['filepath'],
                 maxBytes=log_config['file']['max_size'],
                 backupCount=log_config['file']['max_files']
+            )
+            handler.setFormatter(
+                logging.Formatter(
+                    fmt='%(asctime)s %(levelname)-8s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S'
+                )
             )
             file_logger.addHandler(handler)
             self.loggers.append(file_logger)
