@@ -1,11 +1,25 @@
 {
   "parser": {
     "module": "blackrock",
-    "class": "BlackrockParser",
+    "class": "BlackrockLocalParser",
     "init":{
       "source": "D:\\Work\\DataNet\\TestData\\sources\\blackrock",
       "middle": "D:\\Work\\DataNet\\TestData\\parsers\\brk_test_parser",
-      "target": "D:\\Work\\DataNet\\TestData\\lake\\blackrock"
+      "target": {
+        "ssh-config": {
+          "hostname": "10.18.7.74",
+          "username": "auto",
+          "key_filename": "C:/Users/Tomek/.ssh/auto-elias-key"
+        },
+        "path": "/mnt/datalake/data/emu/blackrock/"
+      }
+    }
+  },
+  "logging": {
+    "sentry": {
+      "dsn": "https://6ccb17cc74f60b9945d10fc1d55e7df1@o4506973712023552.ingest.us.sentry.io/4506973714251776",
+      "level": 10,
+      "event_level": 30
     }
   }
 }
