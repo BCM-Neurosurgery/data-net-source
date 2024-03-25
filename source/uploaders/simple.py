@@ -39,7 +39,7 @@ class CopyUploaderMixin(BaseUploader):
 
                 # Perform the file copy
                 destination = os.path.join(self.target_location, rel_filepath)
-                print(f'  Copying to {destination}')
+                print(f'Copying to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
                 print(f'  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
@@ -105,7 +105,7 @@ class SCPUploaderMixin:
         for filename in ready['to upload']:
             destination = 'Failed to determine!'
             try:
-                print(f'  Uploading {filename}')
+                print(f'Uploading {filename}')
                 rel_filepath = os.path.relpath(filename, start=self.source_location)
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
@@ -115,6 +115,7 @@ class SCPUploaderMixin:
 
                 # Actually do the file copy
                 destination = pathlib.Path(remote_target, rel_filepath)
+                print(f'  Moving to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, scp.put, filename, destination.as_posix())
                 print(f'  Upload complete. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
