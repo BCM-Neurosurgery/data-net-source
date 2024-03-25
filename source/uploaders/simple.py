@@ -63,7 +63,7 @@ class CopyUploaderMixin(BaseUploader):
                     'destination': destination,
                 })
 
-        print(f'Average transfer rate {np.nanmean(all_rates)} MB/s')
+        print(f'Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s')
         return {
             'success': successes, 'failure': errors
         }
@@ -140,7 +140,7 @@ class SCPUploaderMixin:
         # Make sure we close the transports
         scp.close()
         ssh.close()
-        print(f'Average transfer rate {np.nanmean(all_rates)} MB/s')
+        print(f'Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s')
 
         return {
             'success': successes, 'failure': errors
