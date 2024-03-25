@@ -3,7 +3,6 @@ import shutil
 import sys
 import pathlib
 import numpy as np
-from datetime import datetime
 from source.uploaders.base import BaseUploader
 
 
@@ -20,7 +19,7 @@ class BucketUploaderMixin(BaseUploader):
 
 class CopyUploaderMixin(BaseUploader):
 
-    uploader_name = "SimpleCopyMixin"
+    uploader_name = "CopyUploaderMixin"
 
     def upload(self, ready):
 
@@ -66,7 +65,7 @@ class SCPUploaderMixin:
     """
     This uploader expects a target location of the form of a dict as below
     {
-      "ssh-config": {dict passed to paramiko.SSHClient},
+      "ssh-config": {dict of kwargs passed to paramiko.SSHClient},
       "path": /base/path/on/remote"
     }
     """
@@ -114,7 +113,7 @@ class SCPUploaderMixin:
             except Exception as e:
                 errors.append({
                     'type': 'upload failure',
-                    'location': 'CopyUploaderMixin.upload',
+                    'location': 'SCPUploaderMixin.upload',
                     'filename': filename,
                     'destination': destination,
                     'error': str(e),
