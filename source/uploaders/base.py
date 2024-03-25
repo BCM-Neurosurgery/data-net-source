@@ -24,17 +24,17 @@ class BaseUploader(ABC):
         return {'success': [], 'failure': []}
 
     @staticmethod
-    def time_upload(upload_func, filename, *args, **kwargs):
+    def time_upload(upload_size, upload_func, filename, *args, **kwargs):
         """
         Simple wrapper function to get the upload rate for a file
 
+        :param upload_size: size, in MB, of the data to upload
         :param upload_func: function responsible for performing the file upload.
             This function must take a filename as the first argument, all returned values ignored
         :param filename: full path to the file on the local system, used to determine the file size
         :param args: any arguments that need to be passed to the uploader function
         :param kwargs: any keyword arguments that need to be passed to the uploader function
         """
-        size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
         transfer_start = datetime.now()
         upload_func(filename, *args, **kwargs)
         transfer_end = datetime.now()

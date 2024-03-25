@@ -25,6 +25,7 @@ class CopyUploaderMixin(BaseUploader):
 
         errors = ready['failure']
         successes = []
+        all_rates = []
 
         for filename in ready['to upload']:
             destination = 'Failed to determine!'
@@ -36,10 +37,16 @@ class CopyUploaderMixin(BaseUploader):
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
 
-                destination = os.path.join(self.target_location, rel_filepath)
+                # Perform the file copy
                 print(f'  Copying to {destination}')
-                rate = self.time_upload(shutil.copy, filename, destination)
-                print(f'  Done. ({rate} MB/s)')
+                destination = os.path.join(self.target_location, rel_filepath)
+                size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
+                rate = self.time_upload(size, shutil.copy, filename, destination)
+                print(f'  Done. ({round(size, 2)} MB at {round(rate, 2)} MB/s)')
+
+                if size > 1.0:
+                    all_rates.append(rate)
+
             except Exception as e:
                 errors.append({
                     'type': 'upload failure',
@@ -56,6 +63,7 @@ class CopyUploaderMixin(BaseUploader):
                     'destination': destination,
                 })
 
+        print(f'Average transfer rate {np.mean(all_rates)} MB/s')
         return {
             'success': successes, 'failure': errors
         }
@@ -89,9 +97,9 @@ class SCPUploaderMixin:
 
         errors = ready['failure']
         successes = []
-        remote_target = self.target_location['path']
         all_rates = []
 
+        remote_target = self.target_location['path']
         ssh, scp = self.get_ssh_transport()
 
         for filename in ready['to upload']:
@@ -107,9 +115,11 @@ class SCPUploaderMixin:
 
                 # Actually do the file copy
                 destination = pathlib.Path(remote_target, rel_filepath)
-                rate = self.time_upload(scp.put, filename, destination.as_posix())
-                print(f'  Upload complete. {rate} MB/s')
-                all_rates.append(rate)
+                size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
+                rate = self.time_upload(size, scp.put, filename, destination.as_posix())
+                print(f'  Upload complete. ({round(size, 2)} MB at {round(rate, 2)} MB/s)')
+                if size > 1.0:
+                    all_rates.append(rate)
             except Exception as e:
                 errors.append({
                     'type': 'upload failure',
