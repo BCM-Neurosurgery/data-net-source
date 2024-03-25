@@ -33,6 +33,7 @@ class ParserCommon(ABC):
         self.loggers = []
 
     def process(self):
+        self.info("STARTING PARSER")
         to_do = self.check()
         if to_do:
             ready = self.transform(to_do)
@@ -40,6 +41,7 @@ class ParserCommon(ABC):
         else:
             complete = None
         self.save(complete)
+        self.info("FINISHED\n")
 
     def describe_parser(self):
         return {
