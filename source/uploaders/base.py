@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 from abc import abstractmethod, ABC
 
+import numpy as np
+
 
 class BaseUploader(ABC):
 
@@ -39,7 +41,10 @@ class BaseUploader(ABC):
         upload_func(filename, *args, **kwargs)
         transfer_end = datetime.now()
         duration = (transfer_end - transfer_start).total_seconds()
-        rate = size / duration
+        if duration > 0:
+            rate = upload_size / duration
+        else:
+            rate = np.nan
         return rate
 
     def append_metadata(self, file_list):

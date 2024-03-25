@@ -42,7 +42,7 @@ class CopyUploaderMixin(BaseUploader):
                 destination = os.path.join(self.target_location, rel_filepath)
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
-                print(f'  Done. ({round(size, 2)} MB at {round(rate, 2)} MB/s)')
+                print(f'  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
 
                 if size > 1.0:
                     all_rates.append(rate)
@@ -63,7 +63,7 @@ class CopyUploaderMixin(BaseUploader):
                     'destination': destination,
                 })
 
-        print(f'Average transfer rate {np.mean(all_rates)} MB/s')
+        print(f'Average transfer rate {np.nanmean(all_rates)} MB/s')
         return {
             'success': successes, 'failure': errors
         }
@@ -117,7 +117,7 @@ class SCPUploaderMixin:
                 destination = pathlib.Path(remote_target, rel_filepath)
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, scp.put, filename, destination.as_posix())
-                print(f'  Upload complete. ({round(size, 2)} MB at {round(rate, 2)} MB/s)')
+                print(f'  Upload complete. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
                 if size > 1.0:
                     all_rates.append(rate)
             except Exception as e:
@@ -140,7 +140,7 @@ class SCPUploaderMixin:
         # Make sure we close the transports
         scp.close()
         ssh.close()
-        print(f'Average transfer rate {np.mean(all_rates)} MB/s')
+        print(f'Average transfer rate {np.nanmean(all_rates)} MB/s')
 
         return {
             'success': successes, 'failure': errors
