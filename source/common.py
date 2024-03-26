@@ -145,6 +145,7 @@ class ParserCommon(ABC):
                         event_level=log_config['sentry']['event_level']  # Send records as events
                     ),
                 ],
+                release=log_config['sentry']['release']
             )
             self.loggers.append(logging.getLogger('sentry_sdk.errors'))
             self.loggers.append(logging.getLogger('sentry_sdk'))
