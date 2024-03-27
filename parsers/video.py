@@ -1,7 +1,15 @@
 from source.common import ParserCommon
-from source.checkers.local import DirectoryCheckerMixin
+from source.checkers.local import StreamedFileCheckerMixin
 from source.uploaders.simple import CopyUploaderMixin, SCPUploaderMixin
 
 
-class VideoParser(DirectoryCheckerMixin, CopyUploaderMixin, ParserCommon):
+class StreamedVideoCheckerMixin(StreamedFileCheckerMixin):
+    """Streamed file checker specifically for video files"""
+    initialize_files = ['.json']
+    streamed_files = ['.mp4']
+    stream_rate = 60*10  # New file every 10 minutes
+    reliability_factor = 1.1  # File durations are quite reliable, approx 1 min buffer in case of rounding error
+
+
+class VideoParser(StreamedVideoCheckerMixin, CopyUploaderMixin, ParserCommon):
     """"""
