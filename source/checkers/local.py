@@ -142,15 +142,19 @@ class FileCheckerMixin(BaseChecker):
         kept_success = []
         now = datetime.now().timestamp()
         for uploaded in successes:
-            age = uploaded['timestamp'] - now
-            if age > self.delete_age:
+            age = now - uploaded['timestamp']
+            if age > self.delete_age > 0:
                 self.info(f'Deleting {uploaded["uploaded"]}')
                 try:
-                    pass # os.remove(uploaded['uploaded'])
+                    os.remove(uploaded['uploaded'])
                 except FileNotFoundError:
                     self.warning(f'File was already deleted!')
             else:
                 kept_success.append(uploaded)
+
+        new_log = {'success': kept_success, 'failure': most_recent_errors}
+        with open(os.path.join(self.middle_location, self.log_filename), 'w') as log:
+            json.dump(new_log, log, indent=2)
 
 
 class StreamedFileCheckerMixin(FileCheckerMixin):
