@@ -26,8 +26,8 @@ def load_parser(parser_config: dict) -> ParserCommon:
     parser_class = pointer.__dict__[parser_config["class"]]
     source_parser = parser_class(**parser_config["init"])
     if 'settings' in parser_config:
-        for name, value in parser_config['settings']:
-            source_parser.setattr(source_parser, name, value)
+        for name, value in parser_config['settings'].items():
+            setattr(source_parser, name, value)
     return source_parser
 
 
