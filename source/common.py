@@ -41,6 +41,7 @@ class ParserCommon(ABC):
         else:
             complete = None
         self.save(complete)
+        self.clean()
         self.info("FINISHED\n")
 
     def describe_parser(self):
@@ -93,6 +94,10 @@ class ParserCommon(ABC):
         meta = {}
         # TODO: Add some basic common metadata
         return meta
+
+    @abstractmethod
+    def clean(self):
+        """Do cleanup actions"""
 
     def log(self, message, level=logging.INFO):
         """Generic method to forward logging to all loggers saved for parser"""
