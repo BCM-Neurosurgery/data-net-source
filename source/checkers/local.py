@@ -142,8 +142,8 @@ class FileCheckerMixin(BaseChecker):
         kept_success = []
         now = datetime.now().timestamp()
         for uploaded in successes:
-            age = now - uploaded['timestamp']
-            if age > self.delete_age > 0:
+            age = (now - uploaded['timestamp']) / (60 * 60)  # Time since upload in hours
+            if age > self.delete_age_hours >= 0:
                 self.info(f'Deleting {uploaded["uploaded"]}')
                 try:
                     os.remove(uploaded['uploaded'])
