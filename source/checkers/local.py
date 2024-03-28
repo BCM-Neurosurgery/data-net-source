@@ -146,7 +146,7 @@ class FileCheckerMixin(BaseChecker):
             if age > self.delete_age:
                 self.info(f'Deleting {uploaded["uploaded"]}')
                 try:
-                    os.remove(uploaded['uploaded'])
+                    pass # os.remove(uploaded['uploaded'])
                 except FileNotFoundError:
                     self.warning(f'File was already deleted!')
             else:
