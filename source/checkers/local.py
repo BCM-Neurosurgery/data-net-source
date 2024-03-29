@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from datetime import datetime
 
 from source.checkers.base import BaseChecker
@@ -98,6 +99,62 @@ class FileCheckerMixin(BaseChecker):
 
         with open(os.path.join(self.middle_location, self.log_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
+
+    def clean(self):
+        """Delete local copies of files that have already been uploaded"""
+        upload_log = self.load_log()
+
+        successes = upload_log['success']
+        errors = upload_log['failure']
+
+        # Remove errors that were later replaced by successes
+        unfixed_failures = []
+        for error in errors:
+            for success in successes:
+                if success['uploaded'] == error['uploaded'] and success['timestamp'] > error['timestamp']:
+                    self.info(f'File was uploaded later successfully {error["uploaded"]}')
+                    break
+            else:
+                self.info(f'File never uploaded {error["uploaded"]}')
+                unfixed_failures.append(error)
+
+        # Remove all but the most recent error for every file
+        most_recent_errors = []
+        checked_files = []
+        for error in unfixed_failures:
+            if error['uploaded'] in checked_files:
+                pass  # The most recent error for this file was already selected
+            else:
+                # Get and save only the most recent error out of all errors for this file
+                all_matching = [err for err in unfixed_failures if err['uploaded'] == error['uploaded']]
+                youngest = error
+                for match in all_matching:
+                    if match['timestamp'] < youngest['timestamp']:
+                        youngest = match
+                if len(all_matching) > 1:
+                    self.info(f'Trimmed {len(all_matching)-1} errors for {error["uploaded"]}')
+                most_recent_errors.append(youngest)
+
+                # We won't check errors for this file again
+                checked_files.append(error['uploaded'])
+
+        # Delete files that have been successfully uploaded long enough ago
+        kept_success = []
+        now = datetime.now().timestamp()
+        for uploaded in successes:
+            age = (now - uploaded['timestamp']) / (60 * 60)  # Time since upload in hours
+            if age > self.delete_age_hours >= 0:
+                self.info(f'Deleting {uploaded["uploaded"]}')
+                try:
+                    os.remove(uploaded['uploaded'])
+                except FileNotFoundError:
+                    self.warning(f'File was already deleted!')
+            else:
+                kept_success.append(uploaded)
+
+        new_log = {'success': kept_success, 'failure': most_recent_errors}
+        with open(os.path.join(self.middle_location, self.log_filename), 'w') as log:
+            json.dump(new_log, log, indent=2)
 
 
 class StreamedFileCheckerMixin(FileCheckerMixin):
