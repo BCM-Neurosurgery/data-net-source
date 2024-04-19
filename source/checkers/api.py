@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import requests
 
 import runeq
 from runeq.resources import patient as rune_patient
@@ -76,4 +77,55 @@ class RuneAPICheckerMixin(BaseChecker):
 
     def save(self, completed):
         """Log which new time periods of RUNE data have been uploaded"""
+        pass
+
+
+class OuraAPIChecker(BaseChecker):
+
+    checker_name = "OuraAPIChecker"
+    api_url = 'https://api.ouraring.com/v2/usercollection/'
+
+    #: Names of the data types to download from Oura
+    collections = []
+
+    #: Dict of patient IDs and the API keys for each patient
+    patient_meta = {
+        'patient_id': [
+            'timestamp',   # Start: Date when patient data was first collected.
+            'timestamp',   # End: Date when the patients data stopped being collected. Leave None to use today
+            'LONGAPIKEY',  # APIKEY: Key set by Oura to access this patients data through the API
+        ]
+    }
+
+    def check(self):
+        all_patients = {}
+        for patient, (start, end, token) in self.patient_meta:
+            headers = {'Authorization': f'Bearer {token}'}
+
+            end = pd.Timestamp.today() if end is None else end
+            date_range = pd.date_range(start=start, end=end, freq='7D')
+
+            all_collections = {}
+            for collection in self.collections:
+
+                all_docs = []
+                collection_url = f'https://api.ouraring.com/v2/usercollection/{collection}'
+                for i in range(len(date_range)-1):
+
+                    params = {
+                        'start_datetime': date_range[i].strftime('%Y-%m-%dT%H:%M:%S%z'),
+                        'end_datetime': date_range[i+1].strftime('%Y-%m-%dT%H:%M:%S%z'),
+                    }
+                    response = requests.request('GET', collection_url, headers=headers, params=params)
+
+                    doc_ids = [documents['id'] for documents in response.json()['data']]
+                    all_docs.extend(doc_ids)
+
+                all_collections[collection] = all_docs
+            all_patients[patient] = all_collections
+
+    def save(self, completed):
+        pass
+
+    def clean(self):
         pass
