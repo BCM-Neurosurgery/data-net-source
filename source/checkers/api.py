@@ -1,7 +1,9 @@
+import os.path
+
 import pandas as pd
 import numpy as np
 import requests
-
+import json
 import runeq
 from runeq.resources import patient as rune_patient
 from runeq.resources import stream_metadata as rune_metadata
@@ -80,7 +82,12 @@ class RuneAPICheckerMixin(BaseChecker):
         pass
 
 
-class OuraAPIChecker(BaseChecker):
+class OuraAPIDocumentChecker(BaseChecker):
+    """
+    This class is only compatible with data stored by the API as 'documents'.
+
+    Datatypes that are not stored like this have to be handled by a separate parser.
+    """
 
     checker_name = "OuraAPIChecker"
     api_url = 'https://api.ouraring.com/v2/usercollection/'
@@ -97,32 +104,42 @@ class OuraAPIChecker(BaseChecker):
         ]
     }
 
+    def fetch_collection_data(self, patient, collection, date_range, headers):
+        """Find and download all the JSON data for a single collection of a single patient"""
+        collection_url = f'https://api.ouraring.com/v2/usercollection/{collection}'
+        all_out_paths = []
+
+        # Iterate over the date ranges to get all documents for this collection, saving these data batches
+        for i in range(len(date_range) - 1):
+            start_date = date_range[i].strftime('%Y-%m-%d')
+            params = {
+                'start_datetime': start_date,
+                'end_datetime': date_range[i + 1].strftime('%Y-%m-%d'),
+            }
+            response = requests.request('GET', collection_url, headers=headers, params=params)
+
+            # Save the data we just downloaded to the local disk for parsing into usable JSONS
+            out_path = os.path.join(self.middle_location, patient, collection, start_date)
+            with open(out_path) as json_out:
+                json.dump(response.json(), json_out)
+            all_out_paths.append(out_path)
+
+        return all_out_paths
+
     def check(self):
-        all_patients = {}
-        for patient, (start, end, token) in self.patient_meta:
+        """
+        Oura does not support a good way for querying new data. So we need to download the data and parse it locally
+        """
+        for patient, (start, end, token) in self.patient_meta.items():
             headers = {'Authorization': f'Bearer {token}'}
 
-            end = pd.Timestamp.today() if end is None else end
-            date_range = pd.date_range(start=start, end=end, freq='7D')
+            # We will get documents in large batches to reduce the number of API requests
+            start = pd.Timestamp(start)
+            end = pd.Timestamp.today() if end is None else pd.Timestamp(end)
+            date_range = pd.date_range(start=start, end=end, freq='20D')
 
-            all_collections = {}
             for collection in self.collections:
-
-                all_docs = []
-                collection_url = f'https://api.ouraring.com/v2/usercollection/{collection}'
-                for i in range(len(date_range)-1):
-
-                    params = {
-                        'start_datetime': date_range[i].strftime('%Y-%m-%dT%H:%M:%S%z'),
-                        'end_datetime': date_range[i+1].strftime('%Y-%m-%dT%H:%M:%S%z'),
-                    }
-                    response = requests.request('GET', collection_url, headers=headers, params=params)
-
-                    doc_ids = [documents['id'] for documents in response.json()['data']]
-                    all_docs.extend(doc_ids)
-
-                all_collections[collection] = all_docs
-            all_patients[patient] = all_collections
+                self.fetch_collection_data(patient, collection, date_range, headers)
 
     def save(self, completed):
         pass
