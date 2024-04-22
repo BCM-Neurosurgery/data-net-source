@@ -119,7 +119,7 @@ class OuraAPIDocumentChecker(BaseChecker):
             response = requests.request('GET', collection_url, headers=headers, params=params)
 
             # Save the data we just downloaded to the local disk for parsing into usable JSONS
-            out_path = os.path.join(self.middle_location, patient, collection, f'{start_date}.json')
+            out_path = os.path.join(self.middle_location, 'download', patient, f'{collection}_{start_date}.json')
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
             with open(out_path, 'w') as json_out:
                 json.dump(response.json(), json_out)

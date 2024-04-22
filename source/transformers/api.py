@@ -29,10 +29,11 @@ class OuraDocTransformer(BaseTransformer):
         with open(os.path.join(self.middle_location, 'upload_state.json')) as state_file:
             upload_state = json.load(state_file)
 
-        for (patient, collection), filenames in tasks['todo'].items():
+        for (patient, collection), filenames in tasks['to do'].items():
             collection_docs = []
-            for filename in tasks['todo']:
-                collection_docs.extend(json.load(filename)['data'])
+            for filename in filenames:
+                with open(filename) as source:
+                    collection_docs.extend(json.load(source)['data'])
 
             # Organize the documents for this collection by day
             date_organized = {}
@@ -81,5 +82,5 @@ class OuraDocTransformer(BaseTransformer):
             # Save each day that contains new data as a separate document
             for day, day_data in new_data.items():
                 new_filename = f'{patient}_{day}_{collection}.json'
-                with open(self.middle_location, new_filename) as new_out:
+                with open(self.middle_location, 'parsed', new_filename) as new_out:
                     json.dump(day, new_out)
