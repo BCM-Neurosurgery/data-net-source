@@ -10,3 +10,7 @@ sentry-sdk
 -e file://D:/Work/DataNet/data-net-common#egg=common
 
 
+# Datajoint
+emu24schema @ git+ssh://git@github.com/BCM-Neurosurgery/EMU24Schema.git
+
+
