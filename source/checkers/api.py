@@ -138,8 +138,12 @@ class OuraAPIDocumentChecker(BaseChecker):
             end = pd.Timestamp.today() if end is None else pd.Timestamp(end)
             date_range = pd.date_range(start=start, end=end, freq='20D')
 
+            all_paths = {}
             for collection in self.collections:
-                self.fetch_collection_data(patient, collection, date_range, headers)
+                saved = self.fetch_collection_data(patient, collection, date_range, headers)
+                all_paths[(patient, collection)] = saved
+
+        return {'to do': all_paths, 'failure': []}
 
     def save(self, completed):
         pass
