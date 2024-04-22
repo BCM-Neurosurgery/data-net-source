@@ -26,7 +26,6 @@ class OuraDocTransformer(BaseTransformer):
         :return:
         """
 
-        time_keys = ['day', 'timestamp', 'start_datetime', 'end_datetime', '']
         with open(os.path.join(self.middle_location, 'upload_state.json')) as state_file:
             upload_state = json.load(state_file)
 
