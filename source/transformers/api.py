@@ -1,4 +1,5 @@
 import json
+import os.path
 
 from source.transformers.base import BaseTransformer
 
@@ -26,6 +27,8 @@ class OuraDocTransformer(BaseTransformer):
         """
 
         time_keys = ['day', 'timestamp', 'start_datetime', 'end_datetime', '']
+        with open(os.path.join(self.middle_location, 'upload_state.json')) as state_file:
+            upload_state = json.load(state_file)
 
         for (patient, collection), filenames in tasks['todo'].items():
             collection_docs = []
@@ -43,8 +46,38 @@ class OuraDocTransformer(BaseTransformer):
 
             # Cross check these documents with the list of saved documents
             new_data = {}
+            for date, day_data in date_organized.items():
+                uploaded = [
+                    upload for upload in upload_state
+                    if upload['patient'] == patient and upload['collection'] == collection and upload['date'] == date
+                ]
+                # We found no matching data for this day, so upload by default
+                if not uploaded:
+                    new_data[date] = day_data
+                    break
 
+                # Get all the previously uploaded document ids for this day
+                uploaded_docs = []
+                for upload in uploaded:
+                    uploaded_docs.extend(upload['documents'])
 
+                # There are more documents for this day than we uploaded before
+                if len(uploaded_docs) < len(day_data):
+                    new_data[date] = day_data
+                    break
+
+                # Check all the doc ids individually
+                found_new = False
+                for doc in day_data:
+                    if doc['id'] not in uploaded_docs:
+                        new_data[date] = day_data
+                        found_new = True
+                        break
+                if found_new:
+                    break
+
+                # We only reach this point if there is nothing new to upload
+                self.notify(f'No new data to upload for {date}')
 
             # Save each day that contains new data as a separate document
             for day, day_data in new_data.items():
