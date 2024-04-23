@@ -185,10 +185,10 @@ class OuraAPIDocumentChecker(BaseChecker):
         Oura does not support a good way for querying new data. So we need to download the data and parse it locally
         """
 
+        all_paths = []
         for patient, token in self.source_location['patients'].items():
             headers = {'Authorization': f'Bearer {token}'}
 
-            all_paths = {}
             for collection in self.source_location['collections']:
                 all_oura_data = self.fetch_collection_data(collection, headers)
                 new_data = self.cross_check(patient, collection, all_oura_data)
@@ -197,6 +197,7 @@ class OuraAPIDocumentChecker(BaseChecker):
                     filepath = os.path.join(self.middle_location, patient, f'')
                     with open(filepath, 'w') as day_json:
                         json.dump(day_data, day_json)
+                    all_paths.append(filepath)
 
         return {'to do': all_paths, 'failure': []}
 
