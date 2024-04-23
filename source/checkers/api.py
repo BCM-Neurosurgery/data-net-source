@@ -90,18 +90,18 @@ class OuraAPIDocumentChecker(BaseChecker):
     """
 
     checker_name = "OuraAPIChecker"
+
     api_url = 'https://api.ouraring.com/v2/usercollection/'
 
-    #: Names of the data types to download from Oura
-    collections = []
+    source_location = {
+        #: Names of the data types to download from Oura
+        'collections': [],
 
-    #: Dict of patient IDs and the API keys for each patient
-    patient_meta = {
-        'patient_id': [
-            'timestamp',   # Start: Date when patient data was first collected.
-            'timestamp',   # End: Date when the patients data stopped being collected. Leave None to use today
-            'LONGAPIKEY',  # APIKEY: Key set by Oura to access this patients data through the API
-        ]
+        # Dict of patient IDs and the API keys for each patient
+        'patients': {
+            'patient_id': 'LONGAPIKEY',
+        },
+        'interim': 'location/to/store/downloaded/data'
     }
 
     def fetch_collection_data(self, patient, collection, date_range, headers):
