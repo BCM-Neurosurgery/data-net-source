@@ -104,45 +104,99 @@ class OuraAPIDocumentChecker(BaseChecker):
         'interim': 'location/to/store/downloaded/data'
     }
 
-    def fetch_collection_data(self, patient, collection, date_range, headers):
+    look_back_duration = '14D'
+    today = pd.Timestamp.today()
+
+    def fetch_collection_data(self, collection, headers):
         """Find and download all the JSON data for a single collection of a single patient"""
         collection_url = f'https://api.ouraring.com/v2/usercollection/{collection}'
         all_out_paths = []
 
-        # Iterate over the date ranges to get all documents for this collection, saving these data batches
-        for i in range(len(date_range) - 1):
-            start_date = date_range[i].strftime('%Y-%m-%d')
-            params = {
-                'start_datetime': start_date,
-                'end_datetime': date_range[i + 1].strftime('%Y-%m-%d'),
-            }
-            response = requests.request('GET', collection_url, headers=headers, params=params)
+        # Get all documents for this collection between now and the look back duration
+        start_date = self.today - pd.Timedelta(self.look_back_duration)
+        today = self.today.strftime('%Y-%m-%d')
+        params = {
+            'start_datetime': start_date.strftime('%Y-%m-%d'),
+            'end_datetime': today,
+        }
+        response = requests.request('GET', collection_url, headers=headers, params=params)
 
-            # Save the data we just downloaded to the local disk for parsing into usable JSONS
-            out_path = os.path.join(self.middle_location, 'download', patient, f'{collection}_{start_date}.json')
-            os.makedirs(os.path.dirname(out_path), exist_ok=True)
-            with open(out_path, 'w') as json_out:
-                json.dump(response.json(), json_out)
-            all_out_paths.append(out_path)
+        if response.status_code != 200:
+            # Per Oura ring docs any response code besides 200 should be an error
+            self.error(f'Oura returned an error code ({response.status_code})')
+            return {}
 
         return all_out_paths
+
+    def cross_check(self, patient, collection, found_data):
+        """Check the found data against the saved log of data to find any newly uploaded data"""
+
+        with open(os.path.join(self.middle_location, 'upload_state.json')) as state_file:
+            upload_state = json.load(state_file)
+
+        # Organize the documents for this collection by day
+        date_organized = {}
+        for doc in found_data:
+            doc_date = doc['day']
+            if doc_date not in date_organized:
+                date_organized[doc_date] = [doc]
+            else:
+                date_organized[doc_date].append(doc)
+
+        # Compare document ids with the list of saved document ids, day by day
+        new_data = {}
+        for date, day_data in date_organized.items():
+            uploaded = [
+                upload for upload in upload_state
+                if upload['patient'] == patient and upload['collection'] == collection and upload['date'] == date
+            ]
+            # We found no matching data for this day, so upload by default
+            if not uploaded:
+                new_data[date] = day_data
+                break
+
+            # Get all the previously uploaded document ids for this day
+            uploaded_docs = []
+            for upload in uploaded:
+                uploaded_docs.extend(upload['documents'])
+
+            # There are more documents for this day than we uploaded before
+            if len(uploaded_docs) < len(day_data):
+                new_data[date] = day_data
+                break
+
+            # Check all the doc ids individually
+            found_new = False
+            for doc in day_data:
+                if doc['id'] not in uploaded_docs:
+                    new_data[date] = day_data
+                    found_new = True
+                    break
+            if found_new:
+                break
+
+            # We only reach this point if there is nothing new to upload
+            self.notify(f'No new data to upload for {date}')
+
+        return new_data
 
     def check(self):
         """
         Oura does not support a good way for querying new data. So we need to download the data and parse it locally
         """
-        for patient, (start, end, token) in self.patient_meta.items():
+
+        for patient, token in self.source_location['patients'].items():
             headers = {'Authorization': f'Bearer {token}'}
 
-            # We will get documents in large batches to reduce the number of API requests
-            start = pd.Timestamp(start)
-            end = pd.Timestamp.today() if end is None else pd.Timestamp(end)
-            date_range = pd.date_range(start=start, end=end, freq='20D')
-
             all_paths = {}
-            for collection in self.collections:
-                saved = self.fetch_collection_data(patient, collection, date_range, headers)
-                all_paths[(patient, collection)] = saved
+            for collection in self.source_location['collections']:
+                all_oura_data = self.fetch_collection_data(collection, headers)
+                new_data = self.cross_check(patient, collection, all_oura_data)
+
+                for day, day_data in new_data.items():
+                    filepath = os.path.join(self.middle_location, patient, f'')
+                    with open(filepath, 'w') as day_json:
+                        json.dump(day_data, day_json)
 
         return {'to do': all_paths, 'failure': []}
 
