@@ -18,7 +18,7 @@ class DataJointUploader(BaseUploader, ABC):
 
 class EMUBlackrockDJUploader(DataJointUploader):
 
-    import EMU24 as emu_schema
+    from emu24 import EMU24 as emu_schema
 
     uploader_name = 'EMUNSPDataJointUploader'
     schema = emu_schema
@@ -36,11 +36,11 @@ class EMUBlackrockDJUploader(DataJointUploader):
             admission_id = admission.split('Admission')[-1]
 
             filetype = filename.split('.')[-1]
-            file_table = getattr(self.schema, f'{filetype.capitalize}Table')
+            file_table = getattr(self.schema, f'{filetype.capitalize()}Chunks')
             file_table.insert({
                 'patient': patient_id,
                 'admission': admission_id,
-                'file_path': filename,
+                f'{filetype.lower()}_path': filename,
             })
 
 
