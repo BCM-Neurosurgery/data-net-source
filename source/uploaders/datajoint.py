@@ -9,12 +9,6 @@ from source.uploaders.base import BaseUploader
 class DataJointUploader(BaseUploader, ABC):
     """Parent Uploader for inserting data into custom DataJoint schemas"""
 
-    @property
-    @abstractmethod
-    def schema(self):
-        """Get the schema definition used for this uploader"""
-        return NotImplementedError()
-
 
 class EMUBlackrockDJUploader(DataJointUploader):
 
