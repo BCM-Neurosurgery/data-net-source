@@ -29,18 +29,34 @@ class EMUBlackrockDJUploader(DataJointUploader):
         """Connect to the SQL database using the info in the configuration"""
         sql_config = self.target_location['sql-config']
 
+        print('\n')
+        print('PRE CONFIG:')
+        print('Datajoint')
+        print(self.dj)
+        print('\n\n')
+        print('DJ Config')
+        print(self.dj.config)
+        print('\n')
+
         # Replace 'username', 'password', and 'database_name' with your actual database credentials
         self.dj.config['database.host'] = sql_config['host']
         self.dj.config['database.user'] = sql_config['username']
         self.dj.config['database.password'] = sql_config['password']
         self.dj.config['database.port'] = sql_config['port']
 
+        print('\n')
+        print('POST CONFIG:')
+        print('Datajoint')
+        print(self.dj)
+        print('\n\n')
+        print('DJ Config')
+        print(self.dj.config)
+        print('\n')
+
         # Connect to the database
         self.dj.conn()
 
-
     def upload(self, ready):
-
         for filename in ready['to upload']:
 
             # We know what the path will be of the form ...preamble/emu/patientDatafile/modality/otherbits...
