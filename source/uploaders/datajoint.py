@@ -55,7 +55,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 admission_id = admission.split('Admission')[-1]
 
                 filetype = filename.split('.')[-1]
-                file_table = getattr(schema, f'{filetype.capitalize()}Chunks')
+                file_table = getattr(schema, f'{filetype.upper()}Chunks')
                 file_table.insert({
                     'patient': patient_id,
                     'admission': admission_id,
@@ -82,4 +82,3 @@ class EMUBlackrockDJUploader(DataJointUploader):
         return {
             'success': successes, 'failure': errors
         }
-
