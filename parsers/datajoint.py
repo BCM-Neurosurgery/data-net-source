@@ -1,7 +1,7 @@
 from source.common import ParserCommon
-from source.checkers.local import FileCheckerMixin
+from parsers.blackrock import BlackrockChecker
 from source.uploaders.datajoint import EMUBlackrockDJUploader
 
 
-class DataLakeBRKParser(FileCheckerMixin, EMUBlackrockDJUploader, ParserCommon):
+class DataLakeBRKParser(BlackrockChecker, EMUBlackrockDJUploader, ParserCommon):
     """Parser for inserting new BRK data that arrives in the data lake into DataJoint"""
