@@ -83,7 +83,7 @@ class BaseUploader(ABC):
 
     def rebuild_filepath(self, old_file_path):
         """
-        Restructure the path
+        Restructure the path of a file before upload
 
         For this to work the target location config must have an element named 'rebuild_filepath' of the form:
         {

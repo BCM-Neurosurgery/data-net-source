@@ -40,7 +40,8 @@ class CopyUploaderMixin(BaseUploader):
                     os.makedirs(folder_path)
 
                 # Perform the file copy
-                destination = os.path.join(self.target_location, rel_filepath)
+                new_rel_path = self.rebuild_filepath(rel_filepath)
+                destination = os.path.join(self.target_location, new_rel_path)
                 self.info(f'Copying to {destination}', )
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
@@ -73,7 +74,7 @@ class CopyUploaderMixin(BaseUploader):
         }
 
 
-class SCPUploaderMixin:
+class SCPUploaderMixin(BaseUploader):
     """
     This uploader expects a target location of the form of a dict as below
     {
@@ -111,14 +112,15 @@ class SCPUploaderMixin:
             try:
                 self.info(f'Uploading {filename}')
                 rel_filepath = os.path.relpath(filename, start=self.source_location)
+                new_rel_path = self.rebuild_filepath(rel_filepath)
+                destination = pathlib.Path(self.target_location, new_rel_path)
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
                 # This solution is a bit hacky, likely executes a lot more commands than necessary
-                folder_path = pathlib.Path(remote_target, os.path.dirname(rel_filepath))
+                folder_path = pathlib.Path(remote_target, os.path.dirname(new_rel_path))
                 outputs = ssh.exec_command(f'mkdir -p {folder_path.as_posix()}')
 
                 # Actually do the file copy
-                destination = pathlib.Path(remote_target, rel_filepath)
                 self.info(f'  Moving to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, scp.put, filename, destination.as_posix())
