@@ -130,7 +130,7 @@ class OuraAPIDocumentChecker(BaseChecker):
     def cross_check(self, patient, collection, found_data):
         """Check the found data against the saved log of data to find any newly uploaded data"""
 
-        with open(os.path.join(self.middle_location, 'upload_state.json')) as state_file:
+        with open(os.path.join(self.middle_location['path'], 'upload_state.json')) as state_file:
             upload_state = json.load(state_file)
 
         # Organize the documents for this collection by day
@@ -193,7 +193,7 @@ class OuraAPIDocumentChecker(BaseChecker):
                 new_data = self.cross_check(patient, collection, all_oura_data)
 
                 for day, day_data in new_data.items():
-                    out_dir = os.path.join(self.middle_location, patient)
+                    out_dir = os.path.join(self.middle_location['path'], patient)
                     os.makedirs(out_dir, exist_ok=True)
                     filepath = os.path.join(out_dir, f'{collection}_{day}.json')
                     with open(filepath, 'w') as day_json:
