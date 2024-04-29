@@ -91,7 +91,7 @@ class OuraAPIDocumentChecker(BaseChecker):
 
     checker_name = "OuraAPIChecker"
 
-    api_url = 'https://api.ouraring.com/v2/usercollection/'
+    api_url = 'https://api.ouraring.com/v2/usercollection'
 
     source_location = {
         #: Names of the data types to download from Oura
@@ -105,19 +105,18 @@ class OuraAPIDocumentChecker(BaseChecker):
     }
 
     look_back_duration = '14D'
-    today = pd.Timestamp.today()
+    today = pd.Timestamp('2023-07-05 00:00:00')
 
     def fetch_collection_data(self, collection, headers):
         """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f'https://api.ouraring.com/v2/usercollection/{collection}'
-        all_out_paths = []
+        collection_url = f'{self.api_url}/{collection}'
 
         # Get all documents for this collection between now and the look back duration
         start_date = self.today - pd.Timedelta(self.look_back_duration)
         today = self.today.strftime('%Y-%m-%d')
         params = {
-            'start_datetime': start_date.strftime('%Y-%m-%d'),
-            'end_datetime': today,
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': today,
         }
         response = requests.request('GET', collection_url, headers=headers, params=params)
 
@@ -126,7 +125,7 @@ class OuraAPIDocumentChecker(BaseChecker):
             self.error(f'Oura returned an error code ({response.status_code})')
             return {}
 
-        return all_out_paths
+        return response.json()['data']
 
     def cross_check(self, patient, collection, found_data):
         """Check the found data against the saved log of data to find any newly uploaded data"""
@@ -147,13 +146,13 @@ class OuraAPIDocumentChecker(BaseChecker):
         new_data = {}
         for date, day_data in date_organized.items():
             uploaded = [
-                upload for upload in upload_state
+                upload for upload in upload_state['success']
                 if upload['patient'] == patient and upload['collection'] == collection and upload['date'] == date
             ]
             # We found no matching data for this day, so upload by default
             if not uploaded:
                 new_data[date] = day_data
-                break
+                continue
 
             # Get all the previously uploaded document ids for this day
             uploaded_docs = []
@@ -163,7 +162,7 @@ class OuraAPIDocumentChecker(BaseChecker):
             # There are more documents for this day than we uploaded before
             if len(uploaded_docs) < len(day_data):
                 new_data[date] = day_data
-                break
+                continue
 
             # Check all the doc ids individually
             found_new = False
@@ -173,7 +172,7 @@ class OuraAPIDocumentChecker(BaseChecker):
                     found_new = True
                     break
             if found_new:
-                break
+                continue
 
             # We only reach this point if there is nothing new to upload
             self.notify(f'No new data to upload for {date}')
@@ -194,7 +193,9 @@ class OuraAPIDocumentChecker(BaseChecker):
                 new_data = self.cross_check(patient, collection, all_oura_data)
 
                 for day, day_data in new_data.items():
-                    filepath = os.path.join(self.middle_location, patient, f'')
+                    out_dir = os.path.join(self.middle_location, patient)
+                    os.makedirs(out_dir, exist_ok=True)
+                    filepath = os.path.join(out_dir, f'{collection}_{day}.json')
                     with open(filepath, 'w') as day_json:
                         json.dump(day_data, day_json)
                     all_paths.append(filepath)
