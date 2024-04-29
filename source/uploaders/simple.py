@@ -32,16 +32,16 @@ class CopyUploaderMixin(BaseUploader):
         for filename in ready['to upload']:
             destination = 'Failed to determine!'
             try:
-                rel_filepath = os.path.relpath(filename, start=self.source_location)
+                rel_filepath = os.path.relpath(filename, start=self.middle_location['path'])
 
                 # Make sure the destination folder exists
-                folder_path = os.path.join(self.target_location, os.path.dirname(rel_filepath))
+                folder_path = os.path.join(self.target_location['path'], os.path.dirname(rel_filepath))
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
 
                 # Perform the file copy
                 new_rel_path = self.rebuild_filepath(rel_filepath)
-                destination = os.path.join(self.target_location, new_rel_path)
+                destination = os.path.join(self.target_location['path'], new_rel_path)
                 self.info(f'Copying to {destination}', )
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
@@ -111,9 +111,9 @@ class SCPUploaderMixin(BaseUploader):
             destination = 'Failed to determine!'
             try:
                 self.info(f'Uploading {filename}')
-                rel_filepath = os.path.relpath(filename, start=self.source_location)
+                rel_filepath = os.path.relpath(filename, start=self.middle_location['path'])
                 new_rel_path = self.rebuild_filepath(rel_filepath)
-                destination = pathlib.Path(self.target_location, new_rel_path)
+                destination = pathlib.Path(self.target_location['path'], new_rel_path)
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
                 # This solution is a bit hacky, likely executes a lot more commands than necessary
