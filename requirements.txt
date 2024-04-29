@@ -11,6 +11,6 @@ sentry-sdk
 -e file://D:/Work/BCM/EMU24Schema#egg=emu24
 
 # Datajoint
-# emu24schema @ git+ssh://git@github.com/BCM-Neurosurgery/EMU24Schema.git
+-e file://D:/Work/BCM/EMU24Schema#egg=emu24
 
 
