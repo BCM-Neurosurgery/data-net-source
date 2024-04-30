@@ -10,7 +10,4 @@ sentry-sdk
 -e file://D:/Work/DataNet/data-net-common#egg=common
 -e file://D:/Work/BCM/EMU24Schema#egg=emu24
 
-# Datajoint
--e file://D:/Work/BCM/EMU24Schema#egg=emu24
-
 
