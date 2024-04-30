@@ -18,16 +18,11 @@ class EMUBlackrockDJUploader(DataJointUploader):
     uploader_name = 'EMUNSPDataJointUploader'
     destination = None
 
-    @staticmethod
-    def get_or_add(dj_table, pk_name, search, add_data, new_pk=None):
-        """Lookup the primary key of an entry in a table, adding a new entry if no matching entries exist"""
+    def lookup(self, dj_table, primary_keys, search):
+        """"""
         query = dj_table & search
-        primary_key = query.fetch1(pk_name)
-        if primary_key is None:
-            new_pk = len(dj_table) if new_pk is None else new_pk
-            dj_table.insert1({pk_name: new_pk, **add_data})
-            primary_key = new_pk
-        return primary_key
+        pks = query.fetch1(*primary_keys)
+        return pks
 
     def connect_to_database(self):
         """Connect to the SQL database using the info in the configuration"""
@@ -58,44 +53,52 @@ class EMUBlackrockDJUploader(DataJointUploader):
         for filename in ready['to upload']:
 
             try:
-                # We know what the path will be of the form ...preamble/emu/patientDatafile/modality/otherbits...
-                path_elements = filename.split('/emu/')[-1].split('/')
-
-                admission = path_elements[1]  # Decide where admission info should be stored
-
                 # Get the patient ID in the database based on the EMU patient ID
-                patient = re.search('([A-Z]{3})Datafile', filename)  # Patient name decoded from the file path
-                patient_id = self.get_or_add(
+                patient = re.search(r'([A-Z]{3})Datafile', filename).group(1)  # Patient name decoded from the file path
+                patient_id = self.lookup(
                     schema.Patient(),
-                    'patient_id',
-                    f'emu_id={patient}',
-                    {'emu_id': patient, 'dob': None}
+                    ['patient_id'],
+                    f'emu_id={patient}'
                 )
 
-                # TODO: add admission
+                # Assume that we want the id of most recent admission
+                admission_id = self.lookup(
+                    schema.Admission(),
+                    ['admission_id'],
+                    f'patient_id={patient_id} ORDER BY admission_date DSC'
+                )
 
                 # TODO: refactor into TOC Instance
-                recording = re.search('Datafile/DATA/([0-9-]*)/', filename)
-                recording_id = self.get_or_add(
-                    schema.Recording,
-                    'recording_id',
-                    f'recording_name={recording} and patient={}',
-                    {'recording_name': recording},
+                toc_name = re.search(r'Datafile/DATA/([0-9-]*)/', filename).group(1)
+                toc_id = self.lookup(
+                    schema.TOCInstance(),
+                    ['toc_id'],
+                    f'patient_id={patient_id} AND admission_id={admission_id} AND base_file={toc_name}'
                 )
+                if toc_id is None:
+                    new_toc_id = len(schema.TOCInstance())
+                    schema.TOCInstance().insert1({
+                        'patient_id': patient,
+                        'admission_id': admission_id,
+                        'toc_id': new_toc_id,
+                        'base_file': toc_name
+                    })
+                    toc_id = new_toc_id
 
-                schema.TOCInstance.insert1({
-                    'patient_id': patient_id,
-                    'admission_id': admission_id,
-                    'toc_id': toc_id,
-                    ''
-                })
+                # Get the NSP and Chunk IDs from the filename
+                chunk_data = re.search(r'NSP([12])-[0-9-]*-([0-9]{3})\.[nsev0-9]{3}', filename)
+                nsp_id = chunk_data.group(1)
+                chunk_id = chunk_data.group(2)
 
-                # Assume there is only one admission for now
+                # Insert into the appropriate table based on the file type
                 filetype = filename.split('.')[-1]
                 file_table = getattr(schema, f'{filetype.upper()}Chunks')
                 file_table.insert1({
-                    'patient': patient_id,
-                    'admission': admission_id,
+                    'patient_id': patient_id,
+                    'admission_id': admission_id,
+                    'toc_id': toc_id,
+                    'nsp_id': nsp_id,
+                    'chunk_id': chunk_id,
                     f'{filetype.lower()}_path': filename,
                 })
 
