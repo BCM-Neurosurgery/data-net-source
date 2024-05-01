@@ -18,8 +18,9 @@ class EMUBlackrockDJUploader(DataJointUploader):
     uploader_name = 'EMUNSPDataJointUploader'
     destination = None
 
-    def lookup(self, dj_table, primary_keys, search):
-        """"""
+    @staticmethod
+    def lookup(dj_table, primary_keys, search):
+        """Search for and return the primary keys for one entry in a table"""
         query = dj_table & search
         pks = query.fetch1(*primary_keys)
         return pks
@@ -58,22 +59,22 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 patient_id = self.lookup(
                     schema.Patient(),
                     ['patient_id'],
-                    f'emu_id={patient}'
+                    f"emu_id='{patient}'"
                 )
 
                 # Assume that we want the id of most recent admission
                 admission_id = self.lookup(
                     schema.Admission(),
                     ['admission_id'],
-                    f'patient_id={patient_id} ORDER BY admission_date DSC'
+                    f"patient_id='{patient_id}' ORDER BY admission_date DSC"
                 )
 
-                # TODO: refactor into TOC Instance
+                # Get the ID of this toc instance, or make a new one if necessary
                 toc_name = re.search(r'Datafile/DATA/([0-9-]*)/', filename).group(1)
                 toc_id = self.lookup(
                     schema.TOCInstance(),
                     ['toc_id'],
-                    f'patient_id={patient_id} AND admission_id={admission_id} AND base_file={toc_name}'
+                    f"patient_id='{patient_id}' AND admission_id='{admission_id}' AND base_file='{toc_name}'"
                 )
                 if toc_id is None:
                     new_toc_id = len(schema.TOCInstance())
