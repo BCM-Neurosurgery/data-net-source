@@ -6,6 +6,7 @@ import re
 import json
 import sys, traceback
 from abc import ABC, abstractmethod
+from datajoint.errors import DataJointError
 from source.uploaders.base import BaseUploader
 
 
@@ -16,6 +17,7 @@ class DataJointUploader(BaseUploader, ABC):
 class EMUBlackrockDJUploader(DataJointUploader):
 
     uploader_name = 'EMUNSPDataJointUploader'
+    parsed_filetypes = ['nev', 'ns3', 'ns3']
     destination = None
 
     @staticmethod
@@ -53,6 +55,11 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
         for filename in ready['to upload']:
 
+            filetype = filename.split('.')[-1]
+            if filetype not in self.parsed_filetypes:
+                # Skip file types that are not listed as parsable
+                continue
+
             try:
                 # Get the patient ID in the database based on the EMU patient ID
                 patient = re.search(r'([A-Z]{3})Datafile', filename).group(1)  # Patient name decoded from the file path
@@ -63,23 +70,24 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 )
 
                 # Assume that we want the id of most recent admission
-                admission_id = self.lookup(
-                    schema.Admission(),
-                    ['admission_id'],
-                    f"patient_id='{patient_id}' ORDER BY admission_date DSC"
-                )
+                query = schema.Admission() & f"patient_id='{patient_id}'"
+                admissions = query.fetch()
+                sort_ready = [(date, id) for (_, id, date) in admissions]
+                by_date = [id for (date, id) in sorted(sort_ready, key=lambda pair: pair[0])]
+                admission_id = by_date[-1]
 
                 # Get the ID of this toc instance, or make a new one if necessary
                 toc_name = re.search(r'Datafile/DATA/([0-9-]*)/', filename).group(1)
-                toc_id = self.lookup(
-                    schema.TOCInstance(),
-                    ['toc_id'],
-                    f"patient_id='{patient_id}' AND admission_id='{admission_id}' AND base_file='{toc_name}'"
-                )
-                if toc_id is None:
+                try:
+                    toc_id = self.lookup(
+                        schema.TOCInstance(),
+                        ['toc_id'],
+                        f"patient_id='{patient_id}' AND admission_id='{admission_id}' AND base_file='{toc_name}'"
+                    )
+                except DataJointError:
                     new_toc_id = len(schema.TOCInstance())
                     schema.TOCInstance().insert1({
-                        'patient_id': patient,
+                        'patient_id': patient_id,
                         'admission_id': admission_id,
                         'toc_id': new_toc_id,
                         'base_file': toc_name
@@ -92,7 +100,6 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 chunk_id = chunk_data.group(2)
 
                 # Insert into the appropriate table based on the file type
-                filetype = filename.split('.')[-1]
                 file_table = getattr(schema, f'{filetype.upper()}Chunks')
                 file_table.insert1({
                     'patient_id': patient_id,
@@ -100,7 +107,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                     'toc_id': toc_id,
                     'nsp_id': nsp_id,
                     'chunk_id': chunk_id,
-                    f'{filetype.lower()}_path': filename,
+                    f'{filetype.lower()}_file': filename,
                 })
 
             except Exception as e:
