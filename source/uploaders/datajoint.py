@@ -122,6 +122,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 errors.append(error_dict)
                 self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
             else:
+                self.info(f'Added {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
                 successes.append({
                     'type': 'upload success',
                     'filename': filename,
