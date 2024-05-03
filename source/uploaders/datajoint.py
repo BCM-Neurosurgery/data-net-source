@@ -6,7 +6,7 @@ import re
 import json
 import sys, traceback
 from abc import ABC, abstractmethod
-from datajoint.errors import DataJointError
+from datajoint.errors import DataJointError, DuplicateError
 from source.uploaders.base import BaseUploader
 
 
@@ -101,14 +101,17 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
                 # Insert into the appropriate table based on the file type
                 file_table = getattr(schema, f'{filetype.upper()}Chunks')
-                file_table.insert1({
-                    'patient_id': patient_id,
-                    'admission_id': admission_id,
-                    'toc_id': toc_id,
-                    'nsp_id': nsp_id,
-                    'chunk_id': chunk_id,
-                    f'{filetype.lower()}_file': filename,
-                })
+                try:
+                    file_table.insert1({
+                        'patient_id': patient_id,
+                        'admission_id': admission_id,
+                        'toc_id': toc_id,
+                        'nsp_id': nsp_id,
+                        'chunk_id': chunk_id,
+                        f'{filetype.lower()}_file': filename,
+                    })
+                except DuplicateError:
+                    self.info(f'Already in DB: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
 
             except Exception as e:
                 error_dict = {
@@ -122,7 +125,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 errors.append(error_dict)
                 self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
             else:
-                self.info(f'Added {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
+                self.info(f'Added: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
                 successes.append({
                     'type': 'upload success',
                     'filename': filename,
