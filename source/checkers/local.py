@@ -141,9 +141,10 @@ class FileCheckerMixin(BaseChecker):
         # Delete files that have been successfully uploaded long enough ago
         kept_success = []
         now = datetime.now().timestamp()
+        has_delete = hasattr(self, 'delete_age_hours')
         for uploaded in successes:
             age = (now - uploaded['timestamp']) / (60 * 60)  # Time since upload in hours
-            if age > self.delete_age_hours >= 0:
+            if has_delete and age > self.delete_age_hours >= 0:
                 self.info(f'Deleting {uploaded["uploaded"]}')
                 try:
                     os.remove(uploaded['uploaded'])
