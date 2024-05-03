@@ -17,7 +17,7 @@ class DataJointUploader(BaseUploader, ABC):
 class EMUBlackrockDJUploader(DataJointUploader):
 
     uploader_name = 'EMUNSPDataJointUploader'
-    parsed_filetypes = ['nev', 'ns3', 'ns3']
+    parsed_filetypes = ['nev', 'ns3', 'ns5']
     destination = None
 
     @staticmethod
