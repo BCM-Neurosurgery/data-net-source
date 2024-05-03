@@ -110,6 +110,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                         'chunk_id': chunk_id,
                         f'{filetype.lower()}_file': filename,
                     })
+                    self.info(f'Added: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
                 except DuplicateError:
                     self.info(f'Already in DB: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
 
@@ -125,7 +126,6 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 errors.append(error_dict)
                 self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
             else:
-                self.info(f'Added: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
                 successes.append({
                     'type': 'upload success',
                     'filename': filename,
