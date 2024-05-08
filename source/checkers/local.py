@@ -47,7 +47,7 @@ class FileCheckerMixin(BaseChecker):
 
     checker_name = "FileChecker"
 
-    def check(self, source_dir=None):
+    def check(self, source_dir=None, level=0):
         """Check only the individual files in a directory if they have been uploaded or not"""
 
         # Draw the source location from the class settings if not passed explicitly under recursion
@@ -71,9 +71,11 @@ class FileCheckerMixin(BaseChecker):
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
-                check_inside = self.check(full_path)
+                check_inside = self.check(full_path, level=level+1)
                 to_upload.extend(check_inside['to do'])
 
+        if level < 2:
+            self.info(f'Checked everything in {source_dir}')
         return {'to do': to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
@@ -192,7 +194,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         else:
             return False
 
-    def check(self, source_dir=None):
+    def check(self, source_dir=None, level=0):
         """
         Same as in the FileCheckerMixin, but additionally ensure that they have finished being written
 
