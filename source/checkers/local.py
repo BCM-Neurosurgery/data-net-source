@@ -44,7 +44,7 @@ class FileCheckerMixin(BaseChecker):
 
 
     """
-
+    verbose_level = 3
     checker_name = "FileChecker"
 
     def check(self, source_dir=None, level=0):
@@ -74,7 +74,7 @@ class FileCheckerMixin(BaseChecker):
                 check_inside = self.check(full_path, level=level+1)
                 to_upload.extend(check_inside['to do'])
 
-        if level < 2:
+        if level < self.verbose_level:
             self.info(f'Checked everything in {source_dir}')
         return {'to do': to_upload, 'failure': []}
 
