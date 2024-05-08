@@ -62,7 +62,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
             try:
                 # Get the patient ID in the database based on the EMU patient ID
-                patient = re.search(r'([A-Z]{3})Datafile', filename).group(1)  # Patient name decoded from the file path
+                patient = re.search(r'([A-Z]*)Datafile', filename).group(1)  # Patient name decoded from the file path
                 patient_id = self.lookup(
                     schema.Patient(),
                     ['patient_id'],
