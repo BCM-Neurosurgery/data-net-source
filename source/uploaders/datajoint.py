@@ -55,6 +55,10 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
         for filename in ready['to upload']:
 
+            # TODO: move these to checkers after we merge with oura-updates and config file improvements
+            # Skip files that are not in a DATA directory
+            if 'DATA' not in filename:
+                continue
             filetype = filename.split('.')[-1]
             if filetype not in self.parsed_filetypes:
                 # Skip file types that are not listed as parsable
