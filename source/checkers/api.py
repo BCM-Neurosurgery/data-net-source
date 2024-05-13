@@ -4,9 +4,7 @@ import pandas as pd
 import numpy as np
 import requests
 import json
-import runeq
-from runeq.resources import patient as rune_patient
-from runeq.resources import stream_metadata as rune_metadata
+
 
 from source.checkers.base import BaseChecker
 
