@@ -9,8 +9,10 @@ import pandas as pd
 from paramiko import SSHClient
 from scp import SCPClient
 
+from source.uploaders.base import BaseUploader
 
-class SCPUploaderMixin:
+
+class SCPUploaderMixin(BaseUploader):
     """
     This uploader expects a target location of the form of a dict as below
     {
