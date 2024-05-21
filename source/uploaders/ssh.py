@@ -28,7 +28,7 @@ class SCPUploaderMixin:
         ssh.connect(**self.target_location['ssh-config'])
         scp = SCPClient(ssh.get_transport())
         self.info('Established connection')
-        return scp
+        return ssh, scp
 
     def upload(self, ready):
 
