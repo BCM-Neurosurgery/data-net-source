@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import pathlib
+import traceback
 import numpy as np
 import pandas as pd
 
@@ -65,7 +66,7 @@ class SCPUploaderMixin:
                     'filename': str(filename),
                     'destination': str(destination),
                     'error': str(e),
-                    'trace': sys.exc_info()
+                    'trace': traceback.format_exception(*sys.exc_info())
                 }
                 errors.append(error_dict)
                 self.warning('An upload failed!')
