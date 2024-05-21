@@ -47,7 +47,10 @@ class FileCheckerMixin(BaseChecker):
     verbose_level = 3
     checker_name = "FileChecker"
 
-    def check(self, source_dir=None, level=0):
+    
+    #: Time to wait after upload before deleting the source version of a file
+    delete_age_hours = -1  # Do not delete ever by default
+
         """Check only the individual files in a directory if they have been uploaded or not"""
 
         # Draw the source location from the class settings if not passed explicitly under recursion
