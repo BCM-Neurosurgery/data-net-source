@@ -62,8 +62,8 @@ class SCPUploaderMixin:
                 error_dict = {
                     'type': 'upload failure',
                     'location': 'SCPUploaderMixin.upload',
-                    'filename': filename,
-                    'destination': destination,
+                    'filename': str(filename),
+                    'destination': str(destination),
                     'error': str(e),
                     'trace': sys.exc_info()
                 }
