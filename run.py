@@ -30,7 +30,7 @@ def load_parser(parser_config: dict) -> ParserCommon:
     # Dynamically build a parser class from the config information
     elif 'make-class' in parser_config:
         mixins = []
-        class_parts = parser_config['parts']
+        class_parts = parser_config['make-class']['parts']
         for (module, mixin) in class_parts:
             pointer = importlib.import_module(f'source.{module}')
             mixins.append(pointer.__dict__[mixin])
