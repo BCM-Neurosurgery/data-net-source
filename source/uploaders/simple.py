@@ -20,8 +20,31 @@ class BucketUploaderMixin(BaseUploader):
 
 
 class CopyUploaderMixin(BaseUploader):
+    """
+    Simple uploader that uses shutil to copy files from one local directory to another
+
+    Middle Format:
+    {
+      "path": ""  # Path to the parent directory where the files to copy over are stored
+    }
+
+    Target Format:
+    {
+      "path": ""  # Path to the parent directory where the files to copy over are stored
+    }
+
+    Note: even though full file paths for all the files are passed to the upload function through the to_do dict,
+    the parent paths are still necessary to correctly generate the relative file paths and therefore the correct
+    output paths in the target directory.
+    """
 
     uploader_name = "CopyUploaderMixin"
+    middle_location = {
+        'path': '',
+    }
+    target_location = {
+        'path': ''
+    }
 
     def upload(self, ready):
 

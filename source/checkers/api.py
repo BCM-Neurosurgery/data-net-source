@@ -89,7 +89,23 @@ class OuraAPIDocumentChecker(BaseChecker):
     """
     This class is only compatible with data stored by the API as 'documents'.
 
-    Datatypes that are not stored like this have to be handled by a separate parser.
+    Datatypes that are not stored like this have to be handled by a different checker.
+
+    Source Format:
+    {
+        "collections": [],  # List of modality names, as defined by the OuraAPI to pull documents for
+        "patients": {       # Dictionary of patient IDs and the API keys needed to access that patient's data
+            "patient_id": "OuraAPI-patient-application-key"
+        }
+    }
+
+    Other Settings:
+      - look_back_duration: (optional) pandas frequency string, defines how far back from the current date to look for
+      new documents. By default, this is 14D, since the OuraRing can store up to two weeks of data locally.
+      - today: (optional) pandas date defining the current date, mainly used for testing purposes. Leave as None to use
+      the real current date.
+      - api_url: (optional) the full URL needed to access the OuraRing REST API.
+
     """
 
     checker_name = "OuraAPIChecker"
@@ -102,8 +118,7 @@ class OuraAPIDocumentChecker(BaseChecker):
         # Dict of patient IDs and the API keys for each patient
         'patients': {
             'patient_id': 'LONGAPIKEY',
-        },
-        'interim': 'location/to/store/downloaded/data',
+        }
     }
 
     look_back_duration = '14D'
