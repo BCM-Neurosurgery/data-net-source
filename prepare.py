@@ -25,9 +25,9 @@ if __name__ == '__main__':
     # parser.prepare()
 
     # Temp first step, make a simple empty upload log
-    log_dir = config['parser']['init']['middle']
+    log_dir = config['parser']['init']['middle']['path']
     os.makedirs(log_dir, exist_ok=True)
-    with open(os.path.join(log_dir, 'upload_log.json'), 'w') as logfile:
+    with open(os.path.join(log_dir, 'upload_state.json'), 'w') as logfile:
         json.dump(EMPTY_LOG, logfile)
 
 
