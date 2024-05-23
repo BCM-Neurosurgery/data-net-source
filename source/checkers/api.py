@@ -15,7 +15,9 @@ class RuneAPICheckerMixin(BaseChecker):
     day_resolution = int(pd.Timedelta(days=1).total_seconds())
 
     def check_device(self, device, device_log):
-        device_streams = rune_metadata.get_patient_stream_metadata(device.patient_id, device.id)
+        device_streams = rune_metadata.get_patient_stream_metadata(
+            device.patient_id, device.id
+        )
         device_meta = device_streams.to_dataframe()
         try:
             device_end = max(device_meta['max_time'])
@@ -33,14 +35,16 @@ class RuneAPICheckerMixin(BaseChecker):
             for i, stream_data in device_meta.iterrows():
                 stream_end = stream_data['max_time']
                 if stream_end > logged_end:
-                    new_streams.append({
-                        'stream_id': stream_data['id'],
-                        'time_range': [logged_end, stream_end],
-                    })
+                    new_streams.append(
+                        {
+                            'stream_id': stream_data['id'],
+                            'time_range': [logged_end, stream_end],
+                        }
+                    )
             device_todo = {
                 'time_range': [logged_end, device_end],
                 'name': device.name,
-                'streams': new_streams
+                'streams': new_streams,
             }
 
         else:
@@ -59,10 +63,12 @@ class RuneAPICheckerMixin(BaseChecker):
 
         log = self.load_log()
 
-        active_devices = [d for d in all_devices if d.id not in log['deactivated_devices']]
+        active_devices = [
+            d for d in all_devices if d.id not in log['deactivated_devices']
+        ]
 
         if not active_devices:
-            return {}   # No active devices therefore there is no new data to return
+            return {}  # No active devices therefore there is no new data to return
 
         else:
             rune_todo = {}
@@ -73,7 +79,6 @@ class RuneAPICheckerMixin(BaseChecker):
                 if device_todo:
                     rune_todo[device.id] = device_todo
             return rune_todo
-
 
     def save(self, completed):
         """Log which new time periods of RUNE data have been uploaded"""
@@ -94,12 +99,11 @@ class OuraAPIDocumentChecker(BaseChecker):
     source_location = {
         #: Names of the data types to download from Oura
         'collections': [],
-
         # Dict of patient IDs and the API keys for each patient
         'patients': {
             'patient_id': 'LONGAPIKEY',
         },
-        'interim': 'location/to/store/downloaded/data'
+        'interim': 'location/to/store/downloaded/data',
     }
 
     look_back_duration = '14D'
@@ -116,7 +120,9 @@ class OuraAPIDocumentChecker(BaseChecker):
             'start_date': start_date.strftime('%Y-%m-%d'),
             'end_date': today,
         }
-        response = requests.request('GET', collection_url, headers=headers, params=params)
+        response = requests.request(
+            'GET', collection_url, headers=headers, params=params
+        )
 
         if response.status_code != 200:
             # Per Oura ring docs any response code besides 200 should be an error
@@ -128,7 +134,9 @@ class OuraAPIDocumentChecker(BaseChecker):
     def cross_check(self, patient, collection, found_data):
         """Check the found data against the saved log of data to find any newly uploaded data"""
 
-        with open(os.path.join(self.middle_location['path'], 'upload_state.json')) as state_file:
+        with open(
+            os.path.join(self.middle_location['path'], 'upload_state.json')
+        ) as state_file:
             upload_state = json.load(state_file)
 
         # Organize the documents for this collection by day
@@ -144,8 +152,11 @@ class OuraAPIDocumentChecker(BaseChecker):
         new_data = {}
         for date, day_data in date_organized.items():
             uploaded = [
-                upload for upload in upload_state['success']
-                if upload['patient'] == patient and upload['collection'] == collection and upload['date'] == date
+                upload
+                for upload in upload_state['success']
+                if upload['patient'] == patient
+                and upload['collection'] == collection
+                and upload['date'] == date
             ]
             # We found no matching data for this day, so upload by default
             if not uploaded:
