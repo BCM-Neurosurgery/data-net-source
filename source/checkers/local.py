@@ -17,7 +17,7 @@ class DirectoryCheckerMixin(BaseChecker):
         Compare the files in a directory to find which still need to be uploaded
         :return:
         """
-        source_dir = self.source_location  # Defined in ParserBase
+        source_dir = self.source_location['path']  # Defined in ParserBase
         dirs_here = [
             directory for directory in os.listdir(source_dir)
             if os.path.isdir(os.path.join(source_dir, directory))
@@ -54,7 +54,7 @@ class FileCheckerMixin(BaseChecker):
         """Check only the individual files in a directory if they have been uploaded or not"""
 
         # Draw the source location from the class settings if not passed explicitly under recursion
-        source_dir = self.source_location if source_dir is None else source_dir
+        source_dir = self.source_location['path'] if source_dir is None else source_dir
 
         successes = self.load_success_log()
         uploaded_files = [success['uploaded'] for success in successes]
@@ -82,7 +82,7 @@ class FileCheckerMixin(BaseChecker):
     def build_log_entry(self, entry_data):
         return {
             'type': 'file',
-            'checked': self.source_location,
+            'checked': self.source_location['path'],
             'uploaded': entry_data['filename'],
             'status': entry_data['type'],
             'parser': self.describe_parser(),
@@ -100,7 +100,7 @@ class FileCheckerMixin(BaseChecker):
         new_failure = [self.build_log_entry(failure) for failure in completed['failure']]
         logged_data['failure'].extend(new_failure)
 
-        with open(os.path.join(self.middle_location, self.log_filename), 'w') as log:
+        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
 
     def clean(self):
@@ -156,7 +156,7 @@ class FileCheckerMixin(BaseChecker):
                 kept_success.append(uploaded)
 
         new_log = {'success': kept_success, 'failure': most_recent_errors}
-        with open(os.path.join(self.middle_location, self.log_filename), 'w') as log:
+        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
             json.dump(new_log, log, indent=2)
 
 
