@@ -265,7 +265,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
     """
 
-    source = {
+    source_location = {
         "path": "",
         "indicator_dir": ""
     }
@@ -275,7 +275,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
     def parse_indicators(self):
 
-        indicators = os.listdir(self.source['indicator_dir'])
+        indicators = os.listdir(self.source_location['indicator_dir'])
         check_locations = []
 
         for indicator in indicators:
@@ -283,8 +283,8 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
             if result is None:
                 continue  # This file does not match the indicator regex
             else:
-                formatted = self.indicator_format.format(result.groups)
-                check_locations.append(os.path.join(self.source['path'], formatted))
+                formatted = self.indicator_format.format(*result.groups())
+                check_locations.append(os.path.join(self.source_location['path'], formatted))
 
         return check_locations
 
@@ -296,7 +296,10 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
         failure = []
 
         for directory in to_check:
-            found_here = super().check(source_dir=directory)
+            try:
+                found_here = super().check(source_dir=directory)
+            except FileNotFoundError as e:
+                raise FileNotFoundError(f'Indicator file suggested an invalid path: \n  {e.filename}')
             to_do.extend(found_here['to do'])
             failure.extend(found_here['failure'])
 
