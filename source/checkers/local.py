@@ -90,6 +90,12 @@ class FileCheckerMixin(BaseChecker):
             'timestamp': datetime.now().timestamp()
         }
 
+    def save_state(self, successes, failures):
+        """Write the upload state json file which records the current state of all uploads"""
+        new_log = {'success': successes, 'failure': failures}
+        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
+            json.dump(new_log, log, indent=2)
+
     def save(self, completed):
         """Log the files the that have been uploaded, along with all errors"""
         # TODO: make this work with the method of passing around dicts
@@ -104,45 +110,43 @@ class FileCheckerMixin(BaseChecker):
         with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
 
-    def clean(self):
-        """Delete local copies of files that have already been uploaded"""
-        upload_log = self.load_log()
-
-        successes = upload_log['success']
-        errors = upload_log['failure']
-
-        # Remove errors that were later replaced by successes
+    def clean_fixed_failures(self, successes, failures):
+        """Remove failures in the upload state that were later replaced by successes"""
         unfixed_failures = []
-        for error in errors:
+        for failure in failures:
             for success in successes:
-                if success['uploaded'] == error['uploaded'] and success['timestamp'] > error['timestamp']:
-                    self.info(f'File was uploaded later successfully {error["uploaded"]}')
+                if success['uploaded'] == failure['uploaded'] and success['timestamp'] > failure['timestamp']:
+                    self.info(f'File was uploaded later successfully {failure["uploaded"]}')
                     break
             else:
-                self.info(f'File never uploaded {error["uploaded"]}')
-                unfixed_failures.append(error)
+                self.info(f'File never uploaded {failure["uploaded"]}')
+                unfixed_failures.append(failure)
+        return unfixed_failures
 
-        # Remove all but the most recent error for every file
+    def clean_duplicate_failures(self, failures):
+        """Remove all but the most recent error for every file"""
         most_recent_errors = []
         checked_files = []
-        for error in unfixed_failures:
+        for error in failures:
             if error['uploaded'] in checked_files:
                 pass  # The most recent error for this file was already selected
             else:
                 # Get and save only the most recent error out of all errors for this file
-                all_matching = [err for err in unfixed_failures if err['uploaded'] == error['uploaded']]
+                all_matching = [err for err in failures if err['uploaded'] == error['uploaded']]
                 youngest = error
                 for match in all_matching:
                     if match['timestamp'] < youngest['timestamp']:
                         youngest = match
                 if len(all_matching) > 1:
-                    self.info(f'Trimmed {len(all_matching)-1} errors for {error["uploaded"]}')
+                    self.info(f'Trimmed {len(all_matching) - 1} errors for {error["uploaded"]}')
                 most_recent_errors.append(youngest)
 
                 # We won't check errors for this file again
                 checked_files.append(error['uploaded'])
+        return most_recent_errors
 
-        # Delete files that have been successfully uploaded long enough ago
+    def clean_old_success(self, successes):
+        """Delete files that have been successfully uploaded long enough ago"""
         kept_success = []
         now = datetime.now().timestamp()
         for uploaded in successes:
@@ -155,10 +159,16 @@ class FileCheckerMixin(BaseChecker):
                     self.warning(f'File was already deleted!')
             else:
                 kept_success.append(uploaded)
+        return kept_success
 
-        new_log = {'success': kept_success, 'failure': most_recent_errors}
-        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
-            json.dump(new_log, log, indent=2)
+    def clean(self):
+        """Delete local copies of files that have already been uploaded"""
+        upload_log = self.load_log()
+
+        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
+        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
+        kept_success = self.clean_old_success(upload_log['success'])
+        self.save_state(kept_success, most_recent_fails)
 
 
 class StreamedFileCheckerMixin(FileCheckerMixin):
@@ -309,8 +319,30 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
         return {'to do': to_do, 'failure': failure}
 
+    def clean_old_indicators(self, indicated, logged_events):
+        """"""
+        relevant_events = []
+        for event in logged_events:
+            for indication in indicated:
+                if indication in event['path']:
+                    relevant_events.append(event)
+                    break  # We can skip to the next event since this one is already saved
+        return relevant_events
+
     def clean(self):
+        """Delete local copies of files that have already been uploaded"""
+        upload_log = self.load_log()
+
+        # Standard steps for cleaning up the upload state
+        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
+        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
+        kept_success = self.clean_old_success(upload_log['success'])
+
+        # Only save the events related to files that are still indicated
         check_locations = self.parse_indicators()
-        pass
+        relevant_success = self.clean_old_indicators(check_locations, kept_success)
+        relevant_failure = self.clean_old_indicators(check_locations, most_recent_fails)
+
+        self.save_state(relevant_success, relevant_failure)
 
 
