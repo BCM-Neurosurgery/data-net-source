@@ -324,7 +324,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
         relevant_events = []
         for event in logged_events:
             for indication in indicated:
-                if indication in event['path']:
+                if indication in event['uploaded']:
                     relevant_events.append(event)
                     break  # We can skip to the next event since this one is already saved
         return relevant_events
