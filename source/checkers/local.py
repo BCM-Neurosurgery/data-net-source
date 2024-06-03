@@ -291,18 +291,26 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
     def check(self, source_dir=None):
         """Recursively check the contents of a subset of the directories in the given path"""
 
+        # If we're recursing inside a folder, pass back to the recursive search function instead of proceeding
+        if source_dir:
+            return super(IndicatorFileCheckerMixin, self).check(source_dir=source_dir)
+
         to_check = self.parse_indicators()
         to_do = []
         failure = []
 
         for directory in to_check:
             try:
-                found_here = super().check(source_dir=directory)
+                found_here = super(IndicatorFileCheckerMixin, self).check(source_dir=directory)
             except FileNotFoundError as e:
                 raise FileNotFoundError(f'Indicator file suggested an invalid path: \n  {e.filename}')
             to_do.extend(found_here['to do'])
             failure.extend(found_here['failure'])
 
         return {'to do': to_do, 'failure': failure}
+
+    def clean(self):
+        check_locations = self.parse_indicators()
+        pass
 
 
