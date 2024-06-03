@@ -93,7 +93,7 @@ class FileCheckerMixin(BaseChecker):
     def save_state(self, successes, failures):
         """Write the upload state json file which records the current state of all uploads"""
         new_log = {'success': successes, 'failure': failures}
-        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
+        with open(os.path.join(self.state_path, self.log_filename), 'w') as log:
             json.dump(new_log, log, indent=2)
 
     def save(self, completed):
@@ -107,7 +107,7 @@ class FileCheckerMixin(BaseChecker):
         new_failure = [self.build_log_entry(failure) for failure in completed['failure']]
         logged_data['failure'].extend(new_failure)
 
-        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
+        with open(os.path.join(self.state_path, self.log_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
 
     def clean_fixed_failures(self, successes, failures):
