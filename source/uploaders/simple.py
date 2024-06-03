@@ -95,5 +95,8 @@ class CopyUploaderMixin(BaseUploader):
                     "destination": destination,
                 })
 
-        self.info(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
+        if len(all_rates):
+            self.info(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
+        else:
+            self.info(f"No files transferred.")
         return {"success": successes, "failure": errors}
