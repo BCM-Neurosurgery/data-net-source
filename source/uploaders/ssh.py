@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import pathlib
+import logging
 import traceback
 import numpy as np
 import pandas as pd
@@ -10,6 +11,9 @@ from paramiko import SSHClient
 from scp import SCPClient
 
 from source.uploaders.base import BaseUploader
+
+# Suppress verbosity of paramiko logger
+logging.getLogger("paramiko").setLevel(logging.WARNING)
 
 
 class SCPUploaderMixin(BaseUploader):
