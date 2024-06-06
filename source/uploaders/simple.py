@@ -52,7 +52,8 @@ class CopyUploaderMixin(BaseUploader):
         successes = []
         all_rates = []
 
-        for filename in ready["to upload"]:
+        n_files = len(ready['to upload'])
+        for i, filename in enumerate(ready["to upload"]):
             destination = "Failed to determine!"
             try:
                 rel_filepath = os.path.relpath(
@@ -72,7 +73,10 @@ class CopyUploaderMixin(BaseUploader):
                 self.info(f"Copying to {destination}")
                 size = os.path.getsize(filename) / 1024**2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
-                self.info(f"  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)")
+                self.info(
+                    f"  Upload ({i+1}/{n_files}) Complete. "
+                    f"({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)"
+                )
 
                 if size > 1.0:
                     all_rates.append(rate)

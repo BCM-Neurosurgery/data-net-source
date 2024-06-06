@@ -46,7 +46,8 @@ class SCPUploaderMixin(BaseUploader):
         remote_target = self.target_location['path']
         ssh, scp = self.get_ssh_transport()
 
-        for filename in ready['to upload']:
+        n_files = len(ready['to upload'])
+        for i, filename in enumerate(ready['to upload']):
             destination = 'Failed to determine!'
             try:
                 self.info(f'Uploading {filename}')
@@ -62,7 +63,10 @@ class SCPUploaderMixin(BaseUploader):
                 self.info(f'  Moving to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, scp.put, filename, destination.as_posix())
-                self.info(f'  Upload complete. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)')
+                self.info(
+                    f'  Upload {i+1}/{n_files} complete. '
+                    f'({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)'
+                )
                 if size > 1.0:
                     all_rates.append(rate)
             except Exception as e:
