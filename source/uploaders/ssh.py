@@ -46,7 +46,7 @@ class SCPUploaderMixin(BaseUploader):
             destination = 'Failed to determine!'
             try:
                 self.info(f'Uploading {filename}')
-                rel_filepath = os.path.relpath(filename, start=self.source_location)
+                rel_filepath = os.path.relpath(filename, start=self.source_location['path'])
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
                 # This solution is a bit hacky, likely executes a lot more commands than necessary
