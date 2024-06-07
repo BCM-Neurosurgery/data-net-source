@@ -50,11 +50,14 @@ class SCPUploaderMixin(BaseUploader):
             destination = 'Failed to determine!'
             try:
                 self.info(f'Uploading {filename}')
-                rel_filepath = os.path.relpath(filename, start=self.source_location['path'])
+                rel_filepath = os.path.relpath(
+                    filename, start=self.middle_location['path']
+                )
 
                 # Make sure the destination folder exists using ssh. We assume a *nix destination
                 # This solution is a bit hacky, likely executes a lot more commands than necessary
-                folder_path = pathlib.Path(remote_target, os.path.dirname(rel_filepath))
+                new_rel_path = self.rebuild_filepath(rel_filepath)
+                folder_path = pathlib.Path(remote_target, os.path.dirname(new_rel_path))
                 outputs = ssh.exec_command(f'mkdir -p {folder_path.as_posix()}')
 
                 # Actually do the file copy
