@@ -61,7 +61,7 @@ class SCPUploaderMixin(BaseUploader):
                 outputs = ssh.exec_command(f'mkdir -p {folder_path.as_posix()}')
 
                 # Actually do the file copy
-                destination = pathlib.Path(remote_target, rel_filepath)
+                destination = pathlib.Path(remote_target, new_rel_path)
                 self.info(f'  Moving to {destination}')
                 size = os.path.getsize(filename) / 1024 ** 2  # File size in MB
                 rate = self.time_upload(size, scp.put, filename, destination.as_posix())
