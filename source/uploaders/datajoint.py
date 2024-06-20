@@ -5,6 +5,7 @@ Uploaders that interface with custon DataJoint schemas to insert data into table
 import re
 import json
 import sys, traceback
+import pathlib
 from abc import ABC, abstractmethod
 from datajoint.errors import DataJointError, DuplicateError
 from source.uploaders.base import BaseUploader
@@ -59,6 +60,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
             # Skip files that are not in a DATA directory
             if 'DATA' not in filename:
                 continue
+            filename = pathlib.Path(filename).as_posix()
             filetype = filename.split('.')[-1]
             if filetype not in self.parsed_filetypes:
                 # Skip file types that are not listed as parsable
