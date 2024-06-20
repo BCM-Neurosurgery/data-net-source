@@ -51,7 +51,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
         successes, errors = [], []
         self.connect_to_database()
         # Define the schema to use by importing the appropriate script
-        from emu24 import EMU24 as schema
+        from emu24 import schema
 
         for filename in ready['to upload']:
 
