@@ -45,13 +45,13 @@ class FileCheckerMixin(BaseChecker):
 
 
     """
-
+    verbose_level = 3
     checker_name = "FileChecker"
-
+    
     #: Time to wait after upload before deleting the source version of a file
     delete_age_hours = -1  # Do not delete ever by default
 
-    def check(self, source_dir=None):
+    def check(self, source_dir=None, level=0):
         """Check only the individual files in a directory if they have been uploaded or not"""
 
         # Draw the source location from the class settings if not passed explicitly under recursion
@@ -75,9 +75,11 @@ class FileCheckerMixin(BaseChecker):
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
-                check_inside = self.check(full_path)
+                check_inside = self.check(full_path, level=level+1)
                 to_upload.extend(check_inside['to do'])
 
+        if level < self.verbose_level:
+            self.info(f'Checked everything in {source_dir}')
         return {'to do': to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
@@ -149,9 +151,10 @@ class FileCheckerMixin(BaseChecker):
         """Delete files that have been successfully uploaded long enough ago"""
         kept_success = []
         now = datetime.now().timestamp()
+        has_delete = hasattr(self, 'delete_age_hours')
         for uploaded in successes:
             age = (now - uploaded['timestamp']) / (60 * 60)  # Time since upload in hours
-            if age > self.delete_age_hours >= 0:
+            if has_delete and age > self.delete_age_hours >= 0:
                 self.info(f'Deleting {uploaded["uploaded"]}')
                 try:
                     os.remove(uploaded['uploaded'])
@@ -205,7 +208,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         else:
             return False
 
-    def check(self, source_dir=None):
+    def check(self, source_dir=None, level=0):
         """
         Same as in the FileCheckerMixin, but additionally ensure that they have finished being written
 

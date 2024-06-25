@@ -50,12 +50,15 @@ class ParserCommon(ABC):
     def process(self):
         self.info("STARTING PARSER")
         to_do = self.check()
+        self.info(f'Found {len(to_do["to do"])} new tasks...')
         if to_do:
             ready = self.transform(to_do)
             complete = self.upload(ready)
         else:
             complete = None
+        self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
         self.save(complete)
+        self.info('Performing cleanup')
         self.clean()
         self.info("FINISHED\n")
 

@@ -5,6 +5,8 @@ Run any preparation steps required before a source parser can be run
 import os
 import json
 import argparse
+import subprocess
+import sys
 from run import load_config, load_parser
 
 
@@ -24,11 +26,21 @@ if __name__ == '__main__':
     # parser = load_parser(config)
     # parser.prepare()
 
+    # Install the dependencies of this specific module (currently we only support pip dependencies)
+    if 'dependencies' in config and 'pip' in config['dependencies']:
+        for package in config['dependencies']['pip']:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+    else:
+        print('No compatible dependencies found. Skipping')
+
     # Temp first step, make a simple empty upload log
+    print('Making an empty upload state file')
     log_dir = config['parser']['init']['state_path']
     os.makedirs(log_dir, exist_ok=True)
     with open(os.path.join(log_dir, 'upload_state.json'), 'w') as logfile:
         json.dump(EMPTY_LOG, logfile)
+
+    print('Done.')
 
 
 
