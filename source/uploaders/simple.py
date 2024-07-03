@@ -69,10 +69,14 @@ class CopyUploaderMixin(BaseUploader):
 
                 # Perform the file copy
                 destination = os.path.join(self.target_location["path"], new_rel_path)
-                self.info(f"Copying to {destination}")
+                self.info(
+                    f"Copying to {destination}",
+                )
                 size = os.path.getsize(filename) / 1024**2  # File size in MB
                 rate = self.time_upload(size, shutil.copy, filename, destination)
-                self.info(f"  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)")
+                self.info(
+                    f"  Done. ({np.round(size, 2)} MB at {np.round(rate, 2)} MB/s)"
+                )
 
                 if size > 1.0:
                     all_rates.append(rate)
@@ -87,13 +91,17 @@ class CopyUploaderMixin(BaseUploader):
                     "trace": traceback.format_exception(*sys.exc_info()),
                 }
                 errors.append(error_dict)
-                self.warning(f"An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}")
+                self.warning(
+                    f"An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}"
+                )
             else:
-                successes.append({
-                    "type": "upload success",
-                    "filename": filename,
-                    "destination": destination,
-                })
+                successes.append(
+                    {
+                        "type": "upload success",
+                        "filename": filename,
+                        "destination": destination,
+                    }
+                )
 
         if len(all_rates):
             self.info(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
