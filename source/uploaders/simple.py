@@ -68,7 +68,6 @@ class CopyUploaderMixin(BaseUploader):
                     os.makedirs(folder_path)
 
                 # Perform the file copy
-
                 destination = os.path.join(self.target_location["path"], new_rel_path)
                 self.info(
                     f"Copying to {destination}",
@@ -104,5 +103,8 @@ class CopyUploaderMixin(BaseUploader):
                     }
                 )
 
-        self.info(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
+        if len(all_rates):
+            self.info(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
+        else:
+            self.info(f"No files transferred.")
         return {"success": successes, "failure": errors}

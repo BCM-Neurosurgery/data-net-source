@@ -19,28 +19,46 @@ class ParserCommon(ABC):
     uploader_name = "NullUploader"
     notifier_name = "NullNotifier"
 
-    def __init__(self, source, middle, target):
+    def __init__(self, state_path, source=None, middle=None, target=None):
         """
         Generic creation for all parsers.
 
+        :param state_path: Path to the directory where the parser should keep track of the upload state
         :param source: location to check for new data to be processed
-        :param middle: potentially temporary location to store intermediate processed data
+        :param middle: (optional) location to store intermediate processed data
         :param target: final location for the parser to leave the ready data
         """
-        self.source_location = source
-        self.middle_location = middle
-        self.target_location = target
+        self.state_path = state_path
         self.loggers = []
+
+        if source is None:
+            raise ValueError("Source configuration must be set!")
+        else:
+            self.source_location = source
+
+        if middle is None:
+            # This means there is no transformer, so we just copy over the data from source to pass to uploader
+            self.middle_location = source
+        else:
+            self.middle_location = middle
+
+        if target is None:
+            raise ValueError("Target configuration must be set!")
+        else:
+            self.target_location = target
 
     def process(self):
         self.info("STARTING PARSER")
         to_do = self.check()
+        self.info(f'Found {len(to_do["to do"])} new tasks...')
         if to_do:
             ready = self.transform(to_do)
             complete = self.upload(ready)
         else:
             complete = None
+        self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
         self.save(complete)
+        self.info('Performing cleanup')
         self.clean()
         self.info("FINISHED\n")
 
