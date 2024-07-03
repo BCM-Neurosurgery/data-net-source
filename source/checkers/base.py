@@ -6,9 +6,10 @@ from abc import ABC, abstractmethod
 class BaseChecker(ABC):
     """Base class for all checkers that defines the interface"""
     log_filename = 'upload_state.json'
+    state_path = "path/to/state/save/dir"
 
     def load_log(self):
-        with open(os.path.join(self.middle_location['path'], self.log_filename)) as f:
+        with open(os.path.join(self.state_path, self.log_filename)) as f:
             log = json.load(f)
         return log
 
@@ -17,7 +18,7 @@ class BaseChecker(ABC):
         return uploaded
 
     def write_log(self, log_data):
-        with open(os.path.join(self.middle_location['path'], self.log_filename), 'w') as log:
+        with open(os.path.join(self.state_path, self.log_filename), 'w') as log:
             json.dump(log_data, log, indent=2)
 
     @property

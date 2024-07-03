@@ -57,6 +57,8 @@ class RuneAPICheckerMixin(BaseChecker):
         Search for new data from the RUNE API
         NOTE: the source location for this is ignored
         """
+        import runeq
+
         runeq.initialize()
 
         # First get all available patients and devices
