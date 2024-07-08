@@ -37,15 +37,8 @@ if __name__ == '__main__':
     log_dir = config['parser']['init']['state_path']
     os.makedirs(log_dir, exist_ok=True)
     state_filepath = os.path.join(log_dir, 'upload_state.json')
-    # Give the user the option to overwrite an existing state file
-    if os.path.exists(state_filepath):
-        print('Found an existing state file! Would you like to overwrite it?')
-        print('Type "overwrite" to overwrite, or anything else to skip this step')
-        overwrite = input('> ')
-        if overwrite == 'overwrite':
-            os.remove(state_filepath)
 
-    # Only make a new state file if non exists (including if it was removed right above)
+    # Only make a new state file if none exists
     if not os.path.exists(state_filepath):
         print('Making an empty upload state file')
         with open(state_filepath, 'w') as statefile:
