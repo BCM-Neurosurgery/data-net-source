@@ -45,13 +45,17 @@ class FileCheckerMixin(BaseChecker):
 
 
     """
-    verbose_level = 3
+    verbose_level = 2
     checker_name = "FileChecker"
 
     #: Time to wait after upload before deleting the source version of a file
     delete_age_hours = -1  # Do not delete ever by default
 
-    def check(self, source_dir=None, level=0):
+    def check(self):
+        """Recursively search the entire file tree for un-uploaded files"""
+        return self.search_file_tree()
+
+    def search_file_tree(self, source_dir=None, level=0):
         """Check only the individual files in a directory if they have been uploaded or not"""
 
         # Draw the source location from the class settings if not passed explicitly under recursion
@@ -75,11 +79,11 @@ class FileCheckerMixin(BaseChecker):
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
-                check_inside = self.check(full_path, level=level+1)
+                check_inside = self.search_file_tree(full_path, level=level + 1)
                 to_upload.extend(check_inside['to do'])
 
-        if level < self.verbose_level:
-            self.info(f'Checked everything in {source_dir}')
+        if level and level < self.verbose_level:
+            self.info(f'Checked everything in ({level}:{self.verbose_level}) \n   {source_dir}')
         return {'to do': to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
@@ -182,7 +186,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
 
     #: list of file endings that should be considered as streamed files, and should not be uploaded right away
     streamed_files = []
-    
+
     #: list of file endings that only appear when the recording has ended
     termination_files = []
 
@@ -208,7 +212,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         else:
             return False
 
-    def check(self, source_dir=None, level=0):
+    def check(self):
         """
         Same as in the FileCheckerMixin, but additionally ensure that they have finished being written
 
@@ -218,7 +222,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         files that haven't been written to in at least that long
         """
 
-        all_new_files = super(StreamedFileCheckerMixin, self).check(source_dir=source_dir)
+        all_new_files = super(StreamedFileCheckerMixin, self).search_file_tree()
         min_time_unmodified = self.stream_rate * self.reliability_factor
 
         to_upload = []
@@ -232,7 +236,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
                 if secs_since_mod > min_time_unmodified:
                     to_upload.append(filepath)
                 else:
-                    self.info(f'You need to be at least {round(min_time_unmodified, 2) } seconds old ride this ride!\n'
+                    self.info(f'You need to be at least {round(min_time_unmodified, 2)} seconds old ride this ride!\n'
                               f'  This file was only {round(secs_since_mod, 2)} seconds old\n'
                               f'  Skipped: {filepath}')
 
@@ -301,12 +305,8 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
         return check_locations
 
-    def check(self, source_dir=None):
+    def check(self):
         """Recursively check the contents of a subset of the directories in the given path"""
-
-        # If we're recursing inside a folder, pass back to the recursive search function instead of proceeding
-        if source_dir:
-            return super(IndicatorFileCheckerMixin, self).check(source_dir=source_dir)
 
         to_check = self.parse_indicators()
         to_do = []
@@ -314,7 +314,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
         for directory in to_check:
             try:
-                found_here = super(IndicatorFileCheckerMixin, self).check(source_dir=directory)
+                found_here = super(IndicatorFileCheckerMixin, self).search_file_tree(source_dir=directory, level=1)
             except FileNotFoundError as e:
                 raise FileNotFoundError(f'Indicator file suggested an invalid path: \n  {e.filename}')
             to_do.extend(found_here['to do'])
