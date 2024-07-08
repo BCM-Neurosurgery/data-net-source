@@ -83,7 +83,7 @@ class FileCheckerMixin(BaseChecker):
                 to_upload.extend(check_inside['to do'])
 
         if level and level < self.verbose_level:
-            self.info(f'Checked everything in ({level}:{self.verbose_level}) \n   {source_dir}')
+            self.info(f'Checked everything in {source_dir}')
         return {'to do': to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
