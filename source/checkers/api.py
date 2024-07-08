@@ -1,4 +1,5 @@
 import os.path
+from datetime import date
 
 import pandas as pd
 import numpy as np
@@ -56,6 +57,8 @@ class RuneAPICheckerMixin(BaseChecker):
         Search for new data from the RUNE API
         NOTE: the source location for this is ignored
         """
+        import runeq
+
         runeq.initialize()
 
         # First get all available patients and devices
@@ -122,7 +125,14 @@ class OuraAPIDocumentChecker(BaseChecker):
     }
 
     look_back_duration = '14D'
-    today = pd.Timestamp('2023-07-05 00:00:00')
+    today = None
+
+    def format_today(self):
+        """Ensure that the variable for today is saved as a pd.Timestamp, setting to current system date otherwise"""
+        if self.today is None:
+            self.today = pd.Timestamp.today()
+        else:
+            self.today = pd.Timestamp(self.today)
 
     def fetch_collection_data(self, collection, headers):
         """Find and download all the JSON data for a single collection of a single patient"""
@@ -207,6 +217,7 @@ class OuraAPIDocumentChecker(BaseChecker):
         """
         Oura does not support a good way for querying new data. So we need to download the data and parse it locally
         """
+        self.format_today()
 
         all_paths = []
         for patient, token in self.source_location['patients'].items():

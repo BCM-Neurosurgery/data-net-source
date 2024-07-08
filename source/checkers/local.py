@@ -47,7 +47,7 @@ class FileCheckerMixin(BaseChecker):
     """
     verbose_level = 3
     checker_name = "FileChecker"
-    
+
     #: Time to wait after upload before deleting the source version of a file
     delete_age_hours = -1  # Do not delete ever by default
 
