@@ -134,7 +134,7 @@ def decide_action(config, new_events):
     elif choice == 'new':
         print(f'Saving to new file...')
         base = 'new_upload_state'
-        n_new = len(list(filter(lambda f: (base in f), os.listdir(state_path))))
+        n_new = 1 + len(list(filter(lambda f: (base in f), os.listdir(state_path))))
         new_state_filepath = os.path.join(state_path, f'{base}_{n_new}.json')
         with open(new_state_filepath, 'w') as state_file:
             json.dump(new_events, state_file)
@@ -143,7 +143,7 @@ def decide_action(config, new_events):
         print(f'Caching old state file before saving...')
         default_state_path = os.path.join(state_path, 'upload_state.json')
         base = 'old_upload_state'
-        n_old = len(list(filter(lambda f: (base in f), os.listdir(state_path))))
+        n_old = 1 + len(list(filter(lambda f: (base in f), os.listdir(state_path))))
         old_state_filepath = os.path.join(state_path, f'{base}_{n_old}.json')
         shutil.copyfile(default_state_path, old_state_filepath)
         print(f'Cached old state to {old_state_filepath}')
