@@ -89,18 +89,19 @@ def get_time_range(config, **kwargs):
 def forget(config, success=False, failure=False, **kwargs):
     """Remove all matching events from the saved state"""
 
-    remembered = {}
-    forgetting = {}
+    remembered = []
+    forgetting = []
     for category, event in iter_saved(config):
 
         category = (success and category == 'success') or (failure and category == 'failure')
         matches = category and match_event(event, **kwargs)
+        print(category, match_event(event, **kwargs))
 
         # Only remember the events that do not match the forget selection
         if matches:
-            forgetting.setdefault(category, []).append(event)
+            forgetting.append((category, event))
         else:
-            remembered.setdefault(category, []).append(event)
+            remembered.append((category, event))
 
     print(f'Search completed.')
     print(f'Found {len(forgetting)} matching events to forget')
@@ -108,11 +109,19 @@ def forget(config, success=False, failure=False, **kwargs):
     decide_action(config, remembered)
 
 
+def format_state_data(events):
+    """Re-organize a list of event tuples back into the state dictionary format"""
+    state_data = {'success': [], 'failure': []}
+    for category, event in events:
+        state_data[category].append(event)
+    return state_data
+
+
 def decide_action(config, new_events):
 
     choice = get_input(
         {
-            'show': 'Show changes without saving',
+            'show': 'Show the new state without saving',
             'write': 'Save these changes directly to the primary state file',
             'stash': 'Save changes to primary file, but cache the old state file',
             'new': 'Save the changes to a new file',
@@ -121,15 +130,17 @@ def decide_action(config, new_events):
         'Would you like to save these changes?\n'
     )
 
+    state_data = format_state_data(new_events)
     state_path = config['parser']['init']['state_path']
     if choice == 'show':
-        print(json.dumps(new_events, indent=2))
-        decide_action(config, new_events)
+        print(f'The new state file contents will be:')
+        print(json.dumps(state_data, indent=2))
+        decide_action(config, state_data)
     elif choice == 'yes':
         print('Saving to primary file...')
         state_filepath = os.path.join(state_path, 'upload_state.json')
         with open(state_filepath, 'w') as state_file:
-            json.dump(new_events, state_file)
+            json.dump(state_data, state_file)
         print(f'Saved to {state_filepath}')
     elif choice == 'new':
         print(f'Saving to new file...')
@@ -137,7 +148,7 @@ def decide_action(config, new_events):
         n_new = 1 + len(list(filter(lambda f: (base in f), os.listdir(state_path))))
         new_state_filepath = os.path.join(state_path, f'{base}_{n_new}.json')
         with open(new_state_filepath, 'w') as state_file:
-            json.dump(new_events, state_file)
+            json.dump(state_data, state_file)
         print(f'Saved to {new_state_filepath}')
     elif choice == 'stash':
         print(f'Caching old state file before saving...')
@@ -148,7 +159,7 @@ def decide_action(config, new_events):
         shutil.copyfile(default_state_path, old_state_filepath)
         print(f'Cached old state to {old_state_filepath}')
         with open(default_state_path, 'w') as state_file:
-            json.dump(new_events, state_file)
+            json.dump(state_data, state_file)
         print(f'Saved to {default_state_path}')
     else:
         print('Exiting without making any changes')
