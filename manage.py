@@ -1,7 +1,16 @@
 """
 Helper script to manage the parser, with a focus on the saved state of the parser
+Intended to be used as a command-line tool. See the help message (`python manage.py -h`) for full details
 
-Currently implemented options:
+All events are treated individually, and are only included in the processing for the given sub-command if they match
+all the criteria specified as options to this script
+
+Currently implemented sub-commands:
+  - count: count the total number of matching events
+  - time-range: return the earliest and latest timestamp of the matching events
+  - forget: remove the matching events from the state file
+
+If the sub-command makes changes to the state file, this tool will ask for confirmation before over-writing
 """
 import json
 import argparse
@@ -51,7 +60,17 @@ def match_event(event, after=0, before=float('inf'), upload_match=None):
 
 
 def iter_saved(config, success=True, failure=True, **kwargs):
+    """
+    Generator that yields a tuple for each event matching all the given conditions
 
+    Tuple has two elements, first is the event category (i.e. success or failure) and the second is the dictionary
+        containing all the event details.
+
+    :param config: Config file for the parser we're working with. Must specify the state path to find the state file
+    :param success: If true, the list of 'success' events will be included in the iteration
+    :param failure: If true, the list of 'failure' events will be included in the iteration
+    :param kwargs: Additional search condition key word arguments, passed to match_event()
+    """
     all_events = []
     state_file = os.path.join(config['parser']['init']['state_path'], 'upload_state.json')
     with open(state_file) as state_json:
@@ -76,7 +95,7 @@ def count(config, **kwargs):
 
 
 def get_time_range(config, **kwargs):
-    """Print the time of all events"""
+    """Print the earliest and latest time of all matching events"""
     times = []
     for c, event in iter_saved(config, **kwargs):
         times.append(event['timestamp'])
@@ -118,7 +137,12 @@ def format_state_data(events):
 
 
 def decide_action(config, new_events):
+    """
+    Give the user a chance to verify changes and safely save them to the state file
 
+    :param config: configuration information for the parser we are working with
+    :param new_events: List of tuples of all the new events that should be saved
+    """
     choice = get_input(
         {
             'show': 'Show the new state without saving',
@@ -131,6 +155,8 @@ def decide_action(config, new_events):
     )
 
     state_data = format_state_data(new_events)
+    print(f'New state file will have {len(new_events)} events'
+          f' with {len(state_data["success"])} successes and {len(state_data["failures"])} failures')
     state_path = config['parser']['init']['state_path']
     if choice == 'show':
         print(f'The new state file contents will be:')
@@ -169,7 +195,19 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    arg_parser = argparse.ArgumentParser()
+    arg_parser = argparse.ArgumentParser(
+        description="""
+        Command Line Helper script for easier management of the state file for a specific data net source parser.
+        
+        All events are treated individually, and are only included in the processing for the given sub-command if they 
+        match all the criteria specified as options to this script. See the -- options for possible criteria
+        """
+    )
+    arg_parser.add_argument(
+        'config_file',
+        type=str,
+        help='Path to the config file that specifies the parser whose state file we are using'
+    )
     arg_parser.add_argument(
         'command',
         type=str,
@@ -177,20 +215,17 @@ if __name__ == '__main__':
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
-        'config_file',
-        type=str,
-        help='Path to the config file that specifies the parser to run'
-    )
-    arg_parser.add_argument(
         '--after',
         action='store',
         type=int,
+        metavar='TIMESTAMP',
         help='Only events with a timestamp after this time will be included'
     )
     arg_parser.add_argument(
         '--before',
         action='store',
         type=int,
+        metavar='TIMESTAMP',
         help='Only events with a timestamp before this time will be included'
     )
     arg_parser.add_argument(
@@ -212,13 +247,12 @@ if __name__ == '__main__':
         '--upload-match',
         action='store',
         type=str,
+        metavar='REGEX',
         help='Filter events by upload path based on the given regex'
     )
     args = arg_parser.parse_args()
 
     config_json = load_config(args.config_file)
-
-    print(f'Regex: <{args.upload_match}>')
 
     # Parse all the filtering/selection arguments into a dict
     filter_kwargs = {}
