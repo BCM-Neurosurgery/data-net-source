@@ -139,9 +139,6 @@ def decide_action(config, new_events):
         print('Exiting without making any changes')
 
 
-
-
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -170,6 +167,21 @@ if __name__ == '__main__':
         type=int,
         help='Only events with a timestamp before this time will be included'
     )
+    arg_parser.add_argument(
+        '--success',
+        action='store_true',
+        help='Include failure events in the search'
+    )
+    arg_parser.add_argument(
+        '--failure',
+        action='store_true',
+        help='Include failure events in the search'
+    )
+    arg_parser.add_argument(
+        '--all-events',
+        action='store_true',
+        help='Include all events in the search'
+    )
     args = arg_parser.parse_args()
 
     config_json = load_config(args.config_file)
@@ -181,8 +193,15 @@ if __name__ == '__main__':
     if args.before is not None:
         filter_kwargs['before'] = args.before
 
+    # Only include successes/failures if all-events or the relevant flag is set to true
+    filter_kwargs['success'] = args.success
+    filter_kwargs['failure'] = args.failure
+    if args.all_events:
+        filter_kwargs['success'] = True
+        filter_kwargs['failure'] = True
+
+    # Send processing off to the appropriate function based on the command given
     if args.command == 'count':
         count(config_json, **filter_kwargs)
-
     elif args.command == 'forget':
         forget(config_json, **filter_kwargs)
