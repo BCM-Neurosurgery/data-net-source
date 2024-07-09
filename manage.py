@@ -71,6 +71,17 @@ def count(config, **kwargs):
     print(f'Found {num} saved events')
 
 
+def get_time_range(config, **kwargs):
+    """Print the time of all events"""
+    times = []
+    for c, event in iter_saved(config, **kwargs):
+        times.append(event['timestamp'])
+    if len(times):
+        print(f'Found events in time range: [{min(times)} - {max(times)}]')
+    else:
+        print(f'Found no events matching the given criteria!')
+
+
 def forget(config, success=False, failure=False, **kwargs):
     """Remove all matching events from the saved state"""
 
@@ -147,7 +158,7 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         'command',
         type=str,
-        choices=['count', 'forget'],
+        choices=['count', 'forget', 'time-range'],
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
@@ -203,5 +214,7 @@ if __name__ == '__main__':
     # Send processing off to the appropriate function based on the command given
     if args.command == 'count':
         count(config_json, **filter_kwargs)
+    elif args.command == 'time-range':
+        get_time_range(config_json, **filter_kwargs)
     elif args.command == 'forget':
         forget(config_json, **filter_kwargs)
