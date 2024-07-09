@@ -6,6 +6,7 @@ Currently implemented options:
 import json
 import argparse
 import os.path
+import re
 import shutil
 
 from run import load_config, load_parser
@@ -41,9 +42,15 @@ def event_tuples(event_category, state_data):
     return list(zip(labels, state_data[event_category]))
 
 
-def match_event(event, after=0, before=float('inf')):
+def match_event(event, after=0, before=float('inf'), upload_match=None):
+    """Check if an event matches all the given conditions"""
     in_time = after < event['timestamp'] < before
-    return in_time
+    if upload_match:
+        upload = bool(re.match(upload_match, event['uploaded']))
+    else:
+        upload = True
+
+    return in_time and upload
 
 
 def iter_saved(config, success=True, failure=True, **kwargs):
@@ -193,9 +200,17 @@ if __name__ == '__main__':
         action='store_true',
         help='Include all events in the search'
     )
+    arg_parser.add_argument(
+        '--upload-match',
+        action='store',
+        type=str,
+        help='Filter events by upload path based on the given regex'
+    )
     args = arg_parser.parse_args()
 
     config_json = load_config(args.config_file)
+
+    print(f'Regex: <{args.upload_match}>')
 
     # Parse all the filtering/selection arguments into a dict
     filter_kwargs = {}
@@ -203,6 +218,8 @@ if __name__ == '__main__':
         filter_kwargs['after'] = args.after
     if args.before is not None:
         filter_kwargs['before'] = args.before
+    if args.upload_match is not None:
+        filter_kwargs['upload_match'] = args.upload_match
 
     # Only include successes/failures if all-events or the relevant flag is set to true
     filter_kwargs['success'] = args.success
