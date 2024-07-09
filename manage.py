@@ -16,18 +16,15 @@ def get_input(options, instructions=None):
     """Recursive function to stubbornly force user to enter one of the possible options"""
     if instructions is None:
         instructions = f"""
-        Please enter one of these options: [{', '.join(options.keys())}]
-        or type 'help' for more details
+        Please enter one of these options or type 'help' for more details
         """
-    else:
-        instructions += f"{', '.join(options.keys())}"
-    print(instructions)
+    print(instructions + f"{', '.join(options.keys())}")
 
     response = input("> ")
     if response == '?' or response == 'help':
         help_message = 'The available options are:'
         for option, description in options.items():
-            instructions += f"'{option}': {description}\n"
+            help_message += f"'{option}': {description}\n"
         print(help_message)
     if response in options:
         return response
@@ -137,7 +134,7 @@ def decide_action(config, new_events):
     elif choice == 'new':
         print(f'Saving to new file...')
         base = 'new_upload_state'
-        n_new = len(filter(lambda f: (base in f), os.listdir(state_path)))
+        n_new = len(list(filter(lambda f: (base in f), os.listdir(state_path))))
         new_state_filepath = os.path.join(state_path, f'{base}_{n_new}.json')
         with open(new_state_filepath, 'w') as state_file:
             json.dump(new_events, state_file)
@@ -146,7 +143,7 @@ def decide_action(config, new_events):
         print(f'Caching old state file before saving...')
         default_state_path = os.path.join(state_path, 'upload_state.json')
         base = 'old_upload_state'
-        n_old = len(filter(lambda f: (base in f), os.listdir(state_path)))
+        n_old = len(list(filter(lambda f: (base in f), os.listdir(state_path))))
         old_state_filepath = os.path.join(state_path, f'{base}_{n_old}.json')
         shutil.copyfile(default_state_path, old_state_filepath)
         print(f'Cached old state to {old_state_filepath}')
