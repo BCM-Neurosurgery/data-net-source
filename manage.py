@@ -6,11 +6,47 @@ Currently implemented options:
 import json
 import argparse
 import os.path
+import shutil
 
 from run import load_config, load_parser
 
 
-def iter_saved(config, success=True, failure=True, after=0, before=float('inf')):
+def get_input(options, instructions=None):
+    """Recursive function to stubbornly force user to enter one of the possible options"""
+    if instructions is None:
+        instructions = f"""
+        Please enter one of these options: [{', '.join(options.keys())}]
+        or type 'help' for more details
+        """
+    else:
+        instructions += f"{', '.join(options.keys())}"
+    print(instructions)
+
+    response = input("> ")
+    if response == '?' or response == 'help':
+        help_message = 'The available options are:'
+        for option, description in options.items():
+            instructions += f"'{option}': {description}\n"
+        print(help_message)
+    if response in options:
+        return response
+    else:
+        return get_input(options, instructions)
+
+
+def event_tuples(event_category, state_data):
+    """Extract all the events in a category as a list of tuples labeling the category"""
+    n_events = len(state_data[event_category])
+    labels = [event_category] * n_events
+    return list(zip(labels, state_data[event_category]))
+
+
+def match_event(event, after=0, before=float('inf')):
+    in_time = after < event['timestamp'] < before
+    return in_time
+
+
+def iter_saved(config, success=True, failure=True, **kwargs):
 
     all_events = []
     state_file = os.path.join(config['parser']['init']['state_path'], 'upload_state.json')
@@ -18,13 +54,13 @@ def iter_saved(config, success=True, failure=True, after=0, before=float('inf'))
         state_data = json.load(state_json)
 
     if success:
-        all_events.extend(state_data['success'])
+        all_events.extend(event_tuples('success', state_data))
     if failure:
-        all_events.extend(state_data['failure'])
+        all_events.extend(event_tuples('failure', state_data))
 
-    for event in all_events:
-        if after < event['timestamp'] < before:
-            yield event
+    for category, event in all_events:
+        if match_event(event, **kwargs):
+            yield category, event
 
 
 def count(config, **kwargs):
@@ -35,9 +71,75 @@ def count(config, **kwargs):
     print(f'Found {num} saved events')
 
 
-def forget(config, **kwargs):
+def forget(config, success=False, failure=False, **kwargs):
     """Remove all matching events from the saved state"""
-    pass
+
+    remembered = {}
+    forgetting = {}
+    for category, event in iter_saved(config):
+
+        category = (success and category == 'success') or (failure and category == 'failure')
+        matches = category and match_event(event, **kwargs)
+
+        # Only remember the events that do not match the forget selection
+        if matches:
+            forgetting.setdefault(category, []).append(event)
+        else:
+            remembered.setdefault(category, []).append(event)
+
+    print(f'Search completed.')
+    print(f'Found {len(forgetting)} matching events to forget')
+
+    decide_action(config, remembered)
+
+
+def decide_action(config, new_events):
+
+    choice = get_input(
+        {
+            'show': 'Show changes without saving',
+            'write': 'Save these changes directly to the primary state file',
+            'stash': 'Save changes to primary file, but cache the old state file',
+            'new': 'Save the changes to a new file',
+            'exit': 'Exit without making any changes',
+        },
+        'Would you like to save these changes?\n'
+    )
+
+    state_path = config['parser']['init']['state_path']
+    if choice == 'show':
+        print(json.dumps(new_events, indent=2))
+        decide_action(config, new_events)
+    elif choice == 'yes':
+        print('Saving to primary file...')
+        state_filepath = os.path.join(state_path, 'upload_state.json')
+        with open(state_filepath, 'w') as state_file:
+            json.dump(new_events, state_file)
+        print(f'Saved to {state_filepath}')
+    elif choice == 'new':
+        print(f'Saving to new file...')
+        base = 'new_upload_state'
+        n_new = len(filter(lambda f: (base in f), os.listdir(state_path)))
+        new_state_filepath = os.path.join(state_path, f'{base}_{n_new}.json')
+        with open(new_state_filepath, 'w') as state_file:
+            json.dump(new_events, state_file)
+        print(f'Saved to {new_state_filepath}')
+    elif choice == 'stash':
+        print(f'Caching old state file before saving...')
+        default_state_path = os.path.join(state_path, 'upload_state.json')
+        base = 'old_upload_state'
+        n_old = len(filter(lambda f: (base in f), os.listdir(state_path)))
+        old_state_filepath = os.path.join(state_path, f'{base}_{n_old}.json')
+        shutil.copyfile(default_state_path, old_state_filepath)
+        print(f'Cached old state to {old_state_filepath}')
+        with open(default_state_path, 'w') as state_file:
+            json.dump(new_events, state_file)
+        print(f'Saved to {default_state_path}')
+    else:
+        print('Exiting without making any changes')
+
+
+
 
 
 if __name__ == '__main__':
