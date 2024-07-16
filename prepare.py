@@ -34,11 +34,15 @@ if __name__ == '__main__':
         print('No compatible dependencies found. Skipping')
 
     # Temp first step, make a simple empty upload log
-    print('Making an empty upload state file')
     log_dir = config['parser']['init']['state_path']
     os.makedirs(log_dir, exist_ok=True)
-    with open(os.path.join(log_dir, 'upload_state.json'), 'w') as logfile:
-        json.dump(EMPTY_LOG, logfile)
+    state_filepath = os.path.join(log_dir, 'upload_state.json')
+
+    # Only make a new state file if none exists
+    if not os.path.exists(state_filepath):
+        print('Making an empty upload state file')
+        with open(state_filepath, 'w') as statefile:
+            json.dump(EMPTY_LOG, statefile)
 
     print('Done.')
 
