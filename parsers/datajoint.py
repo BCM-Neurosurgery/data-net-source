@@ -4,22 +4,16 @@ from source.checkers.local import IndicatorFileCheckerMixin
 from source.uploaders.datajoint import EMUBlackrockDJUploader
 
 
-class DatalakeBRKChecker(BlackrockChecker, IndicatorFileCheckerMixin):
+class DatalakeBRKChecker(IndicatorFileCheckerMixin, BlackrockChecker):
     """
     """
 
     def check(self):
-        to_check = self.parse_indicators()
-        to_do = []
-        failure = []
+        """Use the Indicator Checker to get the list of all files, and then sub select only the NSP files"""
+        all_files = IndicatorFileCheckerMixin.check(self)
 
-        for directory in to_check:
-            try:
-                found_here = BlackrockChecker.check(self)
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f'Indicated patient not found! \n  {e.filename}')
-            to_do.extend(found_here['to do'])
-            failure.extend(found_here['failure'])
+        failure = all_files['failure']
+        to_do = self.filter_streamed_files(all_files['to do'])
 
         return {'to do': to_do, 'failure': failure}
 
