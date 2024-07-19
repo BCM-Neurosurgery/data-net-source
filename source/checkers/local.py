@@ -212,6 +212,30 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         else:
             return False
 
+    def filter_streamed_files(self, file_list):
+        """Filter out only the streamed files that are old enough to be processed"""
+        min_time_unmodified = self.stream_rate * self.reliability_factor
+
+        matching = []
+        for filepath in file_list:
+
+            # Streamed files should only be included if they're old enough
+            if self.is_streamed_file(filepath):
+                last_modified = os.path.getmtime(filepath)
+                secs_since_mod = datetime.now().timestamp() - last_modified
+                if secs_since_mod > min_time_unmodified:
+                    matching.append(filepath)
+                else:
+                    self.info(f'You need to be at least {round(min_time_unmodified, 2)} seconds old ride this ride!\n'
+                              f'  This file was only {round(secs_since_mod, 2)} seconds old\n'
+                              f'  Skipped: {filepath}')
+
+            # Init files can be written right away
+            elif self.is_init_file(filepath):
+                matching.append(filepath)
+
+        return matching
+
     def check(self):
         """
         Same as in the FileCheckerMixin, but additionally ensure that they have finished being written
@@ -223,26 +247,9 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         """
 
         all_new_files = super(StreamedFileCheckerMixin, self).search_file_tree()
-        min_time_unmodified = self.stream_rate * self.reliability_factor
 
-        to_upload = []
+        to_upload = self.filter_streamed_files(all_new_files['to do'])
         failure = all_new_files['failure']
-        for filepath in all_new_files['to do']:
-
-            # Streamed files should only be included if they're old enough
-            if self.is_streamed_file(filepath):
-                last_modified = os.path.getmtime(filepath)
-                secs_since_mod = datetime.now().timestamp() - last_modified
-                if secs_since_mod > min_time_unmodified:
-                    to_upload.append(filepath)
-                else:
-                    self.info(f'You need to be at least {round(min_time_unmodified, 2)} seconds old ride this ride!\n'
-                              f'  This file was only {round(secs_since_mod, 2)} seconds old\n'
-                              f'  Skipped: {filepath}')
-
-            # Init files can be written right away
-            elif self.is_init_file(filepath):
-                to_upload.append(filepath)
 
         return {'to do': to_upload, 'failure': failure}
 
@@ -270,7 +277,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
         "indicator_dir": "/path/to/directory/with/indicator_files"
     }
     The fields in this source:
-      - "indicator-dir": absolute path of the directory where the indicator files are found
+      - "indicator_dir": absolute path of the directory where the indicator files are found
 
     Additional settings
       - indicator_regex: regular expression that defines how the indicator files should be interpreted, must contain
