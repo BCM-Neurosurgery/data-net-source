@@ -68,6 +68,17 @@ To have the parser run automatically, schedule the run.py script to run regularl
 in the appropriate python environment. If you are on a Unix machine, you can use cron
 or the TaskScheduler utility on Windows.
 
+## Managing Parsers
+When parsers run, they will save their state in the directory specified by the 
+`state_path` in the config file. On systems with a large data throughput, this can 
+be a large file which is difficult to understand manually. For this reason, we provide
+the manage.py script, which provides some useful functions for understanding
+the current state of the parser.
+TO see the full documentation for this utility, run:
+```bash
+python manage.py --help
+```
+
 # Source Parsers
 
 Source parsers are built using a Mixin Architecture. All source parsers
