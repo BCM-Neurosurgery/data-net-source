@@ -13,10 +13,10 @@ any format of data collection, with a particular emphasis on the research enviro
 #### Citing Data Net:
 
 ## Table of Contents
-  - [Quick Start]()
-    - [Overview]()
-    - [Installation]()
-    - []()
+  - [Quick Start](#quick-start)
+    - [Overview](#overview)
+    - [Installation](#installation)
+    - [Running Parsers](#running-parsers)
   - [Source Parsers](#source-parsers)
     - [Checkers](#checkers)
     - [Transformers](#transformers)
@@ -26,7 +26,47 @@ any format of data collection, with a particular emphasis on the research enviro
 
 # Quick Start
 
+## Overview
 
+A SourceParser consists of three parts:
+  - A Checker, which finds new data to be processed
+  - An optional Transformer, which prepares the data
+  - An Uploader, which sends the data to it's next location
+
+Each parser is entirely specified by a config file. The details of this config
+file are available below, and a few example files are available in the `examples/` directory.
+
+## Installation
+To install data-net-source, ensure that a conda environment is installed on the system.
+To ensure proper tracking, ensure that git is installed, and clone the source code from github.
+
+```bash
+git clone git@github.com:BCM-Neurosurgery/data-net-source.git
+```
+
+Ensure that any external dependencies required by the parser you would like
+to run are correctly installed on your system.
+
+You should not need to manually install any python dependencies if your parser
+has its dependencies specified. Instead, activate the appropriate conda
+environment, and run the prepare script using:
+```bash
+python prepare.py path/to/the/config/file
+```
+In addition to installing dependencies, this will ensure that the logging directory is ready
+
+## Running Parsers
+
+To run a parser as specified by the config file, simply run the `run.py`
+script with the path to the config file as the first argument. 
+```bash
+python run.py path/to/the/config/file
+```
+This will run the parser once.
+
+To have the parser run automatically, schedule the run.py script to run regularly
+in the appropriate python environment. If you are on a Unix machine, you can use cron
+or the TaskScheduler utility on Windows.
 
 # Source Parsers
 
