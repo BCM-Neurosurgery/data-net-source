@@ -8,16 +8,17 @@ class BaseChecker(ABC):
     log_filename = 'upload_state.json'
     state_path = "path/to/state/save/dir"
 
-    def load_log(self):
+    def load_state(self):
+
         with open(os.path.join(self.state_path, self.log_filename)) as f:
             log = json.load(f)
         return log
 
     def load_success_log(self):
-        uploaded = self.load_log()['success']
+        uploaded = self.load_state()['success']
         return uploaded
 
-    def write_log(self, log_data):
+    def write_state(self, log_data):
         with open(os.path.join(self.state_path, self.log_filename), 'w') as log:
             json.dump(log_data, log, indent=2)
 
