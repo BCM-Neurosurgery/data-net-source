@@ -44,6 +44,9 @@ file are available below, and a few example files are available in the `examples
 
 ### Installation
 To install data-net-source, ensure that a conda environment is installed on the system.
+On sufficiently small/dedicated systems conda is not required, but this will mean that python
+dependencies will be installed directly into the system python, which is generally not advisable.
+
 To ensure proper tracking, ensure that git is installed, and clone the source code from github.
 
 ```bash
@@ -269,5 +272,32 @@ Available options are:
 ## Dependencies
 `[dependencies]`
 
+Any additional dependencies that need to be installed for this particular parser.
+Used by the prepare.py script to install dependencies for each individual parser deployment.
 
+This allows each parser to have it's own dependencies without bloating the entire 
+data-net-source package. 
 
+The only currently supported dependency format are pip dependencies.
+
+#### Pip 
+`[dependencies.pip]`
+
+Use pip to install all these dependencies into the currently active python environment.
+Dependencies are given as a list of strings, where each string is a valid argument to 
+pip for installing the desired package
+
+For example:
+
+```json
+{
+  "dependencies": {
+    "pip": [
+      "numpy",
+      "scipy==1.0.3",
+      "brpylib @ git+ssh://git@github.com/BCM-Neurosurgery/Blackrock-Python-Utilities.git@main"
+    ]
+  }
+}
+```
+This will install the newest version of numpy, version 1.0.3 of scipy, and the brpylib package directly from github
