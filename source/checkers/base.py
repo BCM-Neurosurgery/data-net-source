@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 from abc import ABC, abstractmethod
 
 
@@ -26,6 +27,9 @@ class BaseChecker(ABC):
         return log
 
     def load_successes(self):
+        """
+        Load and return only the `success` part of the upload state
+        """
         uploaded = self.load_state()['success']
         return uploaded
 
@@ -64,4 +68,57 @@ class BaseChecker(ABC):
 
         This function is responsible for ensuring each file appears only once in the upload log, and that old files
         that have already been uploaded are deleted from local storage.
+        There are several commonly used actions implemented that you can call if it makes sense for your parser
         """
+
+    def clean_fixed_failures(self, successes, failures):
+        """Remove failures in the upload state that were later replaced by successes"""
+        unfixed_failures = []
+        for failure in failures:
+            for success in successes:
+                if success['uploaded'] == failure['uploaded'] and success['timestamp'] > failure['timestamp']:
+                    self.info(f'File was uploaded later successfully {failure["uploaded"]}')
+                    break
+            else:
+                self.info(f'File never uploaded {failure["uploaded"]}')
+                unfixed_failures.append(failure)
+        return unfixed_failures
+
+    def clean_duplicate_failures(self, failures):
+        """Remove all but the most recent error for every file"""
+        most_recent_errors = []
+        checked_files = []
+        for error in failures:
+            if error['uploaded'] in checked_files:
+                pass  # The most recent error for this file was already selected
+            else:
+                # Get and save only the most recent error out of all errors for this file
+                all_matching = [err for err in failures if err['uploaded'] == error['uploaded']]
+                youngest = error
+                for match in all_matching:
+                    if match['timestamp'] < youngest['timestamp']:
+                        youngest = match
+                if len(all_matching) > 1:
+                    self.info(f'Trimmed {len(all_matching) - 1} errors for {error["uploaded"]}')
+                most_recent_errors.append(youngest)
+
+                # We won't check errors for this file again
+                checked_files.append(error['uploaded'])
+        return most_recent_errors
+
+    def clean_old_success(self, successes):
+        """Delete files that have been successfully uploaded long enough ago"""
+        kept_success = []
+        now = datetime.now().timestamp()
+        has_delete = hasattr(self, 'delete_age_hours')
+        for uploaded in successes:
+            age = (now - uploaded['timestamp']) / (60 * 60)  # Time since upload in hours
+            if has_delete and age > self.delete_age_hours >= 0:
+                self.info(f'Deleting {uploaded["uploaded"]}')
+                try:
+                    os.remove(uploaded['uploaded'])
+                except FileNotFoundError:
+                    self.warning(f'File was already deleted!')
+            else:
+                kept_success.append(uploaded)
+        return kept_success
