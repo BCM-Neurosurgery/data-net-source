@@ -25,7 +25,7 @@ any format of data collection, with a particular emphasis on the research enviro
     - [Parser Definition](#parser-definition)
       - [Class Specification]()
       - [Initialization](#initiation)
-      - [Optional Settings]()
+      - [Optional Settings](#settings-)
     - [Logging](#logging)
     - [Dependencies](#dependencies-)
 
@@ -133,7 +133,7 @@ When given a list of new files to process, this method must perform the entire
 upload process and return back the success or failure metadata for each file.
 
 # The Config File
-The config file is responsible for specifiying everything about a parsser, and 
+The config file is responsible for specifying everything about a parser, and 
 should be the only thing that needs to be customized for each deployment.
 
 Config file is broken down into sections as follows
@@ -206,17 +206,19 @@ This section of the parser configuration specifies the run settings for
 this particular parser. Think of these are required arguments for the parser
 which will be different in virtually every parser deployment.
 
+All parsers require a `state_path`. This gives the directory in the local
+filesystem where the parser should store the upload state.
+
 In particular, these are broken down into `source`, `middle`, and `target`.
-`source` specifies settings for where the Checker should look for new files.
-`target` specifies settings for where the uploader should move the data.
-`middle` specifies an intermediate storage location for files during processing,
-as well as any additional settings needed by the transformer. 
+  - `[parser.init.source]` specifies settings for where the Checker should look for new files.
+  - `[parser.init.target]` specifies settings for where the uploader should move the data.
+  - `[parser.init.middle]` specifies an intermediate storage location for files during processing,
+as well as any additional settings needed by the transformer.
 
 If no middle location is given, then the Uploader will use the information
 in source to locate and upload files identified by the checker.
 
-All parsers also require a `state_path`. This gives the directory in the local
-filesystem where the parser should store the upload state.
+
 
 Check each Mixin you plan to include in your parser for the settings they require.
 
