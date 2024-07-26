@@ -143,6 +143,7 @@ Config file is broken down into sections as follows
 
 ### Class
 `[parser.class]`
+
 The class element of the parser configuration defines the python class, and therefore
 thereby the Checker() Transformer() and Uploader() to to use when running this parser.
 These can be specified in one of two ways
@@ -152,18 +153,55 @@ If the "type" set on the parser class is "dynamic" then the parser class will be
 dynamically from the specified Mixins. This is the simplest way of specifying a parsers
 and allows creating of custom parsers without having to run any python code.
 
-In this case, this 
+In this case, 
 
+NOTE: this is not quite the way the load parser function actually works
+
+Example:
+```json
+{
+  "parser": {
+    "class": {
+      "type": "dynamic",
+      "parts": [
+        ["checkers.local", "StreamedFileCheckerMixin"],
+        ["uploaders.ssh", "SCPUploaderMixin"]
+      ]
+    },
+    ...
+  }
+}
+```
 
 #### Existing Parsers
-Parsers can also be defined in python code as a ready made class.
+Parsers can also be defined in python code as a ready-made class.
 In this case, set the "type" to 'existing', and specify the "module" that contains the
 desired class, as well as the "name". The runs script will then import this parser class 
 and use it directly.
+
+Module names are assumed to be the names of modules inside the 'parser' package.
+Use `.` notation in case of nesting.
+
 If the exact same parser needs to be used in multiple places, this will simplify the config file.
+
+Example:
+```json
+{
+  "parser": {
+    "class": {
+      "type": "existing",
+      "module": "blackrock",
+      "class": "BlackrockRemoteParser"
+    },
+    ...
+  }
+}
+```
+
 
 ### Initiation
 `[parser.init]`
+
 This section of the parser configuration specifies the run settings for 
 this particular parser. Think of these are required arguments for the parser
 which will be different in virtually every parser deployment.
@@ -176,6 +214,9 @@ as well as any additional settings needed by the transformer.
 
 If no middle location is given, then the Uploader will use the information
 in source to locate and upload files identified by the checker.
+
+All parsers also require a `state_path`. This gives the directory in the local
+filesystem where the parser should store the upload state.
 
 Check each Mixin you plan to include in your parser for the settings they require.
 
