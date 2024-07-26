@@ -23,9 +23,9 @@ any format of data collection, with a particular emphasis on the research enviro
     - [Uploaders](#uploaders)
   - [The Config File](#the-config-file)
     - [Parser Definition](#parser-definition)
-      - [Class Specification]()
+      - [Class Specification](#class)
       - [Initialization](#initiation)
-      - [Optional Settings](#settings-)
+      - [Optional Settings](#settings)
     - [Logging](#logging)
     - [Dependencies](#dependencies-)
 
@@ -219,10 +219,9 @@ If no middle location is given, then the Uploader will use the information
 in source to locate and upload files identified by the checker.
 
 
-
 Check each Mixin you plan to include in your parser for the settings they require.
 
-### Settings 
+### Settings
 `[parser.settings]`
 Additional optional settings for the parser. Think of these as keyword arguments where 
 a reasonable default value exists, and they will only need to be modified
@@ -234,6 +233,38 @@ settings could be useful.
 
 ## Logging
 `[logging]`
+
+Specify setting for how each parser should log it's activity for later review. Note
+that this is separate from the state tracking the parser does internally.
+Multiple logging formats can be used simultaneously.
+Two options are currently implemented
+
+#### File
+`[logging.file]`
+
+Log to a file locally using python's built-in logging RotatingFileHandler.
+Expected values are:
+  - `level`: integer setting for the logging level in python's logging package
+  - `filepath`: full path, including file name of where to save the logs
+  - `max_size`: the maximum allowed size, in bytes, before rotating out the log file
+  - `max files`: the number of old files to keep before deleting old logs.
+
+#### Sentry
+`[logging.sentry]`
+
+Use the sentry API to send log information to the Sentry service.
+Using this logging format will require setting up a Sentry account and installing
+the sentry SDK. 
+<LINK>
+
+Available options are:
+  - `dsn`: domain service name provided by sentry to send events to
+  - `event_level`: python logging level as an integer. All log entries above this 
+        level are sent to sentry as discreet events (ie errors)
+  - `level`: python logging level as an integer. All log entries above this level
+        are sent to sentry to be used as breadcrumbs to help track down the cause of events
+  - `release`: release name of this code. Useful to be able to separate out events from 
+        multiple related parsers all sending event information to the same endpoint.
 
 ## Dependencies
 `[dependencies]`
