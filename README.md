@@ -34,6 +34,10 @@ any format of data collection, with a particular emphasis on the research enviro
 
 ## Overview
 
+The work of this package is done by specifying 'Source Parsers'. Each Source Parser is responsible
+for a single step in the data moving pipeline (i.e. moving neural data from the recording 
+computer to the central server).
+
 A SourceParser consists of three parts:
   - A Checker, which finds new data to be processed
   - An optional Transformer, which prepares the data
@@ -53,11 +57,11 @@ To ensure proper tracking, ensure that git is installed, and clone the source co
 git clone git@github.com:BCM-Neurosurgery/data-net-source.git
 ```
 
-Ensure that any external dependencies required by the parser you would like
+Ensure that pip and any external dependencies required by the parser you would like
 to run are correctly installed on your system.
 
 You should not need to manually install any python dependencies if your parser
-has its dependencies specified. Instead, activate the appropriate conda
+has its dependencies specified in the config file. Instead, activate the appropriate conda
 environment, and run the prepare script using:
 ```bash
 python prepare.py path/to/the/config/file
@@ -148,7 +152,7 @@ Config file is broken down into sections as follows
 `[parser.class]`
 
 The class element of the parser configuration defines the python class, and therefore
-thereby the Checker() Transformer() and Uploader() to to use when running this parser.
+thereby the Checker() Transformer() and Uploader() to use when running this parser.
 These can be specified in one of two ways
 
 #### Assembling Parsers
