@@ -25,7 +25,7 @@ class DirectoryCheckerMixin(BaseChecker):
         ]
 
         # TODO: the log will need to be parsed somehow, not sure what other info we will save here
-        successes = self.load_success_log()
+        successes = self.load_successes()
         already_uploaded = [os.path.join(obj['checked'], obj['uploaded']) for obj in successes]
 
         to_upload = [
@@ -61,7 +61,7 @@ class FileCheckerMixin(BaseChecker):
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
-        successes = self.load_success_log()
+        successes = self.load_successes()
         uploaded_files = [success['uploaded'] for success in successes]
 
         # Determine which of the files here need to be uploaded
@@ -105,7 +105,7 @@ class FileCheckerMixin(BaseChecker):
     def save(self, completed):
         """Log the files the that have been uploaded, along with all errors"""
         # TODO: make this work with the method of passing around dicts
-        logged_data = self.load_log()
+        logged_data = self.load_state()
 
         new_success = [self.build_log_entry(success) for success in completed['success']]
         logged_data['success'].extend(new_success)
@@ -170,7 +170,7 @@ class FileCheckerMixin(BaseChecker):
 
     def clean(self):
         """Delete local copies of files that have already been uploaded"""
-        upload_log = self.load_log()
+        upload_log = self.load_state()
 
         unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
         most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
@@ -341,7 +341,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
     def clean(self):
         """Delete local copies of files that have already been uploaded"""
-        upload_log = self.load_log()
+        upload_log = self.load_state()
 
         # Standard steps for cleaning up the upload state
         unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])

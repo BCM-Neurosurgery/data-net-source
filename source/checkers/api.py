@@ -64,7 +64,7 @@ class RuneAPICheckerMixin(BaseChecker):
         # First get all available patients and devices
         all_devices = rune_patient.get_all_devices()
 
-        log = self.load_log()
+        log = self.load_state()
 
         active_devices = [
             d for d in all_devices if d.id not in log['deactivated_devices']
@@ -75,7 +75,7 @@ class RuneAPICheckerMixin(BaseChecker):
 
         else:
             rune_todo = {}
-            successes = self.load_success_log()
+            successes = self.load_successes()
             for device in active_devices:
                 device_log = successes[device.id] if device.id in successes else {}
                 device_todo = self.check_device(device, device_log)

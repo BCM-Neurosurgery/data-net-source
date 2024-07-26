@@ -9,12 +9,11 @@ class BaseChecker(ABC):
     state_path = "path/to/state/save/dir"
 
     def load_state(self):
-
         with open(os.path.join(self.state_path, self.log_filename)) as f:
             log = json.load(f)
         return log
 
-    def load_success_log(self):
+    def load_successes(self):
         uploaded = self.load_state()['success']
         return uploaded
 
