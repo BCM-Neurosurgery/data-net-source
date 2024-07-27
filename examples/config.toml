@@ -1,0 +1,32 @@
+[parser]
+
+
+[parser.class]
+type = "dynamic"
+parts = [
+  ["checkers.local", "StreamedFileCheckerMixin"],
+  ["uploaders.ssh", "SCPUploaderMixin"]
+]
+
+[parser.init]
+
+# All parsers require a state path. This is where the parser will store a file keeping track of it's upload state
+state_path = "/mnt/datalake/data/emu/blackrock/"
+
+[parser.init.source]
+path = "D:\\Work\\DataNet\\TestData\\sources\\blackrock"
+
+[parser.init.target]
+path = "/mnt/datalake/data/emu/blackrock/"
+ssh-config.hostname = "10.18.7.74"
+ssh-config.username = "auto"
+ssh-config.key_filename= "C:/Users/Tomek/.ssh/auto-elias-key"
+
+[parser.settings]
+
+[logging.sentry]
+dsn = "https://6ccb17cc74f60b9945d10fc1d55e7df1@o4506973712023552.ingest.us.sentry.io/4506973714251776",
+level = 10
+event_level = 30
+
+[dependencies]
