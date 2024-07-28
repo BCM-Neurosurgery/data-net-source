@@ -12,8 +12,8 @@ from os import PathLike
 
 def load_config(config_fp: [str, PathLike]) -> dict:
     with open(config_fp, 'r') as f:
-        json_config = json.load(f)
-    return json_config
+        toml_config = tomllib.load(f)
+    return toml_config
 
 
 def load_parser(parser_config: dict) -> ParserCommon:
