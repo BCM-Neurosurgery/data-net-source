@@ -3,6 +3,7 @@ Script to load and run a single parser based on a config json file
 """
 
 import json
+import tomllib
 import argparse
 import importlib
 from source.common import ParserCommon

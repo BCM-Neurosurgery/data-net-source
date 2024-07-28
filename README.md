@@ -51,16 +51,22 @@ To install data-net-source, ensure that a conda environment is installed on the 
 On sufficiently small/dedicated systems conda is not required, but this will mean that python
 dependencies will be installed directly into the system python, which is generally not advisable.
 
-To ensure proper tracking, ensure that git is installed, and clone the source code from github.
-
+To ensure proper tracking, ensure that git is installed, and clone the source code from github:
 ```bash
 git clone git@github.com:BCM-Neurosurgery/data-net-source.git
 ```
+Once you're in the directory of the newly cloned code, install the minimal basic dependencies using
+If you're using a virtual environment of any kind, make sure it is activated.
 
-Ensure that pip and any external dependencies required by the parser you would like
+```bash
+cd data-net-source
+pip install -r requirements.txt
+```
+
+Ensure any external dependencies required by the parser you would like
 to run are correctly installed on your system.
 
-You should not need to manually install any python dependencies if your parser
+You should not need to manually install python dependencies specific to your parser if your parser
 has its dependencies specified in the config file. Instead, activate the appropriate conda
 environment, and run the prepare script using:
 ```bash
