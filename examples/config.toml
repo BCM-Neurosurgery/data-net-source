@@ -1,32 +1,56 @@
 [parser]
 
 
+# Specify the python class that defines the source parser to run
 [parser.class]
-type = "dynamic"
+
+type = "dynamic" # Create a new Parser class using the elements specified in 'parts'
+# List of Mixins to use to dynamically create a parser class. Each mixin should be specified as a 2-element list,
+# where the first element is the import path to the module containing the desired class, and the second is the name
+# of the class to use. Must include a Checker and an Uploader; Transformer is optional
 parts = [
   ["checkers.local", "StreamedFileCheckerMixin"],
   ["uploaders.ssh", "SCPUploaderMixin"]
 ]
 
+# Specify the required initialization parameters for this particular source parser
 [parser.init]
 
-# All parsers require a state path. This is where the parser will store a file keeping track of it's upload state
+# All parsers require a state path. This is where the parser will store a file keeping track of its upload state
 state_path = "/mnt/datalake/data/emu/blackrock/"
 
+# Specify settings needed by the CheckerMixin, which define where to look for new data.
+# Should always include a 'path' but each Checker may have different requirements
 [parser.init.source]
 path = "D:\\Work\\DataNet\\TestData\\sources\\blackrock"
 
+# Specify settings needed by the UploaderMixin, which define where to place the newly discovered data.
+# Should always include a 'path' but each Uploader may have different requirements
 [parser.init.target]
 path = "/mnt/datalake/data/emu/blackrock/"
 ssh-config.hostname = "10.18.7.74"
 ssh-config.username = "auto"
 ssh-config.key_filename= "C:/Users/Tomek/.ssh/auto-elias-key"
 
+# Specify any additional optional settings for the Parser
+# Each Mixin may check different settings, check the Mixins in use for a list of available settings
 [parser.settings]
 
+# Enable logging to a local file using the python's built-in Logging File Handler
+[logging.file]
+filepath = "D:\\Work\\DataNet\\TestData\\parsers\\behav_test_parser\\upload_log.txt"
+level = 0
+max_size = 21048576
+max_files = 5
+
+# Enable logging to Sentry using the Sentry SDK API
 [logging.sentry]
 dsn = "https://6ccb17cc74f60b9945d10fc1d55e7df1@o4506973712023552.ingest.us.sentry.io/4506973714251776",
 level = 10
 event_level = 30
 
 [dependencies]
+pip = [
+  "numpy",
+  "paramiko"
+]
