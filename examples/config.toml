@@ -1,6 +1,5 @@
 [parser]
 
-
 # Specify the python class that defines the source parser to run
 [parser.class]
 
@@ -36,7 +35,7 @@ ssh-config.key_filename= "C:/Users/Tomek/.ssh/auto-elias-key"
 # Each Mixin may check different settings, check the Mixins in use for a list of available settings
 [parser.settings]
 
-# Enable logging to a local file using the python's built-in Logging File Handler
+# Enable logging to a local file using the python's built-in logging File Handler
 [logging.file]
 filepath = "D:\\Work\\DataNet\\TestData\\parsers\\behav_test_parser\\upload_log.txt"
 level = 0
@@ -45,12 +44,13 @@ max_files = 5
 
 # Enable logging to Sentry using the Sentry SDK API
 [logging.sentry]
-dsn = "https://6ccb17cc74f60b9945d10fc1d55e7df1@o4506973712023552.ingest.us.sentry.io/4506973714251776",
+dsn = "https://6ccb17cc74f60b9945d10fc1d55e7df1@o4506973712023552.ingest.us.sentry.io/4506973714251776"
 level = 10
 event_level = 30
 
 [dependencies]
 pip = [
   "numpy",
-  "paramiko"
+  "paramiko==1.0.3",
+  "brpylib @ git+ssh://git@github.com/BlackrockNeurotech/bypylib.git@main"
 ]
