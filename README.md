@@ -166,14 +166,17 @@ If the "type" set on the parser class is "dynamic" then the parser class will be
 dynamically from the specified Mixins. This is the simplest way of specifying a parsers
 and allows creating of custom parsers without having to run any python code.
 
-In this case, 
-
-NOTE: this is not quite the way the load parser function actually works
+In this case, you must give the name to use for the new class, as well as a list of
+identifiers for the Mixins to use to define the parser's behavior. Each identifier
+consists of a pair of values, the first is the importable path from within the `data_net_source.source`
+module, and the second is the name of the Mixin. At least a Checker and an Uploader must be specified, and 
+you are expected to pass at most one of each.
 
 Example:
 ```toml
 [parser.class]
 type = "dynamic" 
+name = "MyCustomParser"
 parts = [
   ["checkers.local", "StreamedFileCheckerMixin"],
   ["uploaders.ssh", "SCPUploaderMixin"]

@@ -7,7 +7,7 @@ type = "dynamic" # Create a new Parser class using the elements specified in 'pa
 # List of Mixins to use to dynamically create a parser class. Each mixin should be specified as a 2-element list,
 # where the first element is the import path to the module containing the desired class, and the second is the name
 # of the class to use. Must include a Checker and an Uploader; Transformer is optional
-name = 'MyCustomParser'
+name = 'MyCustomParser'  # Name to use for the new class
 parts = [
   ["checkers.local", "StreamedFileCheckerMixin"],
   ["uploaders.ssh", "SCPUploaderMixin"]
