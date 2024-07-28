@@ -171,19 +171,14 @@ In this case,
 NOTE: this is not quite the way the load parser function actually works
 
 Example:
-```json
-{
-  "parser": {
-    "class": {
-      "type": "dynamic",
-      "parts": [
-        ["checkers.local", "StreamedFileCheckerMixin"],
-        ["uploaders.ssh", "SCPUploaderMixin"]
-      ]
-    },
-    ...
-  }
-}
+```toml
+[parser.class]
+type = "dynamic" 
+parts = [
+  ["checkers.local", "StreamedFileCheckerMixin"],
+  ["uploaders.ssh", "SCPUploaderMixin"]
+]
+
 ```
 
 #### Existing Parsers
@@ -198,17 +193,11 @@ Use `.` notation in case of nesting.
 If the exact same parser needs to be used in multiple places, this will simplify the config file.
 
 Example:
-```json
-{
-  "parser": {
-    "class": {
-      "type": "existing",
-      "module": "blackrock",
-      "class": "BlackrockRemoteParser"
-    },
-    ...
-  }
-}
+```toml
+[parser.class] 
+type = "existing"
+module = "blackrock"  # Module inside the 'parsers' module which contains the class
+class = "BlackrockRemoteParser"
 ```
 
 
