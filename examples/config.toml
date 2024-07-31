@@ -36,12 +36,12 @@ ssh-config.key_filename= "C:/Users/Tomek/.ssh/auto-elias-key"
 # Each Mixin may check different settings, check the Mixins in use for a list of available settings
 [parser.settings]
 
-# Enable logging to a local file using the python's built-in logging File Handler
+# Enable logging to a local file using the python's built-in logging.RotatingFileHandler
 [logging.file]
 filepath = "D:\\Work\\DataNet\\TestData\\parsers\\behav_test_parser\\upload_log.txt"
-level = 0
-max_size = 21048576
-max_files = 5
+level = 0             # level of events to include in this logger
+max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
+max_files = 5         # Max number of files to keep before deleting the oldest
 
 # Enable logging to Sentry using the Sentry SDK API
 [logging.sentry]
