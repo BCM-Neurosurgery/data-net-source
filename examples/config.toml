@@ -17,20 +17,20 @@ parts = [
 [parser.init]
 
 # All parsers require a state path. This is where the parser will store a file keeping track of its upload state
-state_path = "/mnt/datalake/data/emu/blackrock/"
+state_path = "/path/to/save/upload/state/"
 
 # Specify settings needed by the CheckerMixin, which define where to look for new data.
 # Should always include a 'path' but each Checker may have different requirements
 [parser.init.source]
-path = "D:\\Work\\DataNet\\TestData\\sources\\blackrock"
+path = "/path/to/check/for/data/"
 
 # Specify settings needed by the UploaderMixin, which define where to place the newly discovered data.
 # Should always include a 'path' but each Uploader may have different requirements
 [parser.init.target]
-path = "/mnt/datalake/data/emu/blackrock/"
-ssh-config.hostname = "10.18.7.74"
-ssh-config.username = "auto"
-ssh-config.key_filename= "C:/Users/Tomek/.ssh/auto-elias-key"
+path = "/path/to/destination/"
+ssh-config.hostname = "0.0.0.0"
+ssh-config.username = "placeholder"
+ssh-config.key_filename= "/path/to/key/file"
 
 # Specify any additional optional settings for the Parser
 # Each Mixin may check different settings, check the Mixins in use for a list of available settings
@@ -38,14 +38,14 @@ ssh-config.key_filename= "C:/Users/Tomek/.ssh/auto-elias-key"
 
 # Enable logging to a local file using the python's built-in logging.RotatingFileHandler
 [logging.file]
-filepath = "D:\\Work\\DataNet\\TestData\\parsers\\behav_test_parser\\upload_log.txt"
+filepath = "path/to/the/log/file.txt"
 level = 0             # level of events to include in this logger
 max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
 max_files = 5         # Max number of files to keep before deleting the oldest
 
 # Enable logging to Sentry using the Sentry SDK API
 [logging.sentry]
-dsn = "https://6ccb17cc74f60b9945d10fc1d55e7df1@o4506973712023552.ingest.us.sentry.io/4506973714251776"
+dsn = "placeholder"
 level = 10
 event_level = 30
 
