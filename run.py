@@ -2,8 +2,7 @@
 Script to load and run a single parser based on a config json file
 """
 
-import json
-import tomllib
+import toml
 import argparse
 import importlib
 from source.common import ParserCommon
@@ -12,7 +11,7 @@ from os import PathLike
 
 def load_config(config_fp: [str, PathLike]) -> dict:
     with open(config_fp, 'r') as f:
-        toml_config = tomllib.load(f)
+        toml_config = toml.load(f)
     return toml_config
 
 
