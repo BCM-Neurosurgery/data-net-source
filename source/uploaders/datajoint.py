@@ -21,12 +21,19 @@ class EMUBlackrockDJUploader(DataJointUploader):
     parsed_filetypes = ['nev', 'ns3', 'ns5']
     destination = None
 
-    @staticmethod
-    def lookup(dj_table, primary_keys, search):
+    def lookup(self, dj_table, primary_keys, search, squash=True):
         """Search for and return the primary keys for one entry in a table"""
         query = dj_table & search
-        pks = query.fetch1(*primary_keys)
-        return pks
+        matches = query.fetch(*primary_keys)
+        if len(matches) == 0:
+            raise DataJointError(f'No matching entry in table {dj_table}!')
+        elif len(matches) == 1:
+            return matches[0]
+        elif squash:
+            self.warning(f'Found {len(matches)} matching entries. Returning only the first!')
+            return matches[0]
+        else:
+            raise DataJointError(f'Lookup expected exactly one entry, found {len(matches)}!')
 
     def connect_to_database(self):
         """Connect to the SQL database using the info in the configuration"""
@@ -88,9 +95,12 @@ class EMUBlackrockDJUploader(DataJointUploader):
                     toc_id = self.lookup(
                         schema.TOCInstance(),
                         ['toc_id'],
-                        f"patient_id='{patient_id}' AND admission_id='{admission_id}' AND base_file='{toc_name}'"
+                        f"patient_id='{patient_id}' AND admission_id='{admission_id}' AND base_file='{toc_name}'",
+                        squash=True
                     )
-                except DataJointError:
+                except DataJointError as e:
+                    self.warning(f'Got an error while looking up the TOC instance: {e}')
+                    self.warning('Making a new TOC mode instance')
                     new_toc_id = len(schema.TOCInstance())
                     schema.TOCInstance().insert1({
                         'patient_id': patient_id,
