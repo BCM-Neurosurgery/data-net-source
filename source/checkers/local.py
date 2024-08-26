@@ -144,21 +144,33 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
     #: Factor measuring how reliable the update rate is. Will wait this many times the stream_rate before including
     reliability_factor = None
 
-    def is_init_file(self, filename):
-        """Check if the given file is an initialization file, that is not streamed"""
-        for ending in self.initialize_files:
+    @staticmethod
+    def is_file_category(filename, category_info):
+        """
+        Check to see if a file belongs to a file category specified in category info
+
+        :param filename:
+        :param category_info:
+        :return:
+        """
+        if category_info == '*':
+            return True
+        elif category_info is None:
+            return False
+
+        for ending in category_info:
             if filename.endswith(ending):
                 return True
-        else:
-            return False
+            else:
+                return False
+
+    def is_init_file(self, filename):
+        """Check if the given file is an initialization file, that is not streamed"""
+        return self.is_file_category(filename, self.initialize_files)
 
     def is_streamed_file(self, filename):
         """Check if the given file is a streamed file that is written to incrementally"""
-        for ending in self.streamed_files:
-            if filename.endswith(ending):
-                return True
-        else:
-            return False
+        return self.is_file_category(filename, self.streamed_files)
 
     def filter_streamed_files(self, file_list):
         """Filter out only the streamed files that are old enough to be processed"""
