@@ -133,6 +133,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
     initialize_files = []
 
     #: list of file endings that should be considered as streamed files, and should not be uploaded right away
+    #: If streamed files is '*' instead of a list, all files will be identified as streamed files
     streamed_files = []
 
     #: list of file endings that only appear when the recording has ended
@@ -147,10 +148,15 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
     @staticmethod
     def is_file_category(filename, category_info):
         """
-        Check to see if a file belongs to a file category specified in category info
+        Check to see if a file belongs to a file category by parsing the category info and comparing it to
+        the file type endings (everything after the last period)
 
         :param filename:
-        :param category_info:
+        :param category_info: List of strings, string, or None.  If a list, then each element of the list specifies
+        a file time to (for example: txt, csv) to consider as member of this category.
+        Besides this case, there are two special cases:
+            - string '*': will match all file types
+            - None: will match no file types, equivalent to []
         :return:
         """
         if category_info == '*':
