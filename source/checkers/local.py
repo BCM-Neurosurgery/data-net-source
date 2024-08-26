@@ -25,7 +25,7 @@ class DirectoryCheckerMixin(BaseChecker):
         ]
 
         # TODO: the log will need to be parsed somehow, not sure what other info we will save here
-        successes = self.load_success_log()
+        successes = self.load_successes()
         already_uploaded = [os.path.join(obj['checked'], obj['uploaded']) for obj in successes]
 
         to_upload = [
@@ -61,7 +61,7 @@ class FileCheckerMixin(BaseChecker):
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
-        successes = self.load_success_log()
+        successes = self.load_successes()
         uploaded_files = [success['uploaded'] for success in successes]
 
         # Determine which of the files here need to be uploaded
@@ -74,7 +74,7 @@ class FileCheckerMixin(BaseChecker):
                 continue
 
             # For any files besides the logfile check if they've been uploaded
-            if os.path.isfile(full_path) and item_here != self.log_filename:
+            if os.path.isfile(full_path) and item_here != self.state_filename:
                 to_upload.append(full_path)
 
             # For any directories that have not been marked as completed, process recursively
@@ -99,13 +99,13 @@ class FileCheckerMixin(BaseChecker):
     def save_state(self, successes, failures):
         """Write the upload state json file which records the current state of all uploads"""
         new_log = {'success': successes, 'failure': failures}
-        with open(os.path.join(self.state_path, self.log_filename), 'w') as log:
+        with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(new_log, log, indent=2)
 
     def save(self, completed):
         """Log the files the that have been uploaded, along with all errors"""
         # TODO: make this work with the method of passing around dicts
-        logged_data = self.load_log()
+        logged_data = self.load_state()
 
         new_success = [self.build_log_entry(success) for success in completed['success']]
         logged_data['success'].extend(new_success)
@@ -113,64 +113,12 @@ class FileCheckerMixin(BaseChecker):
         new_failure = [self.build_log_entry(failure) for failure in completed['failure']]
         logged_data['failure'].extend(new_failure)
 
-        with open(os.path.join(self.state_path, self.log_filename), 'w') as log:
+        with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
-
-    def clean_fixed_failures(self, successes, failures):
-        """Remove failures in the upload state that were later replaced by successes"""
-        unfixed_failures = []
-        for failure in failures:
-            for success in successes:
-                if success['uploaded'] == failure['uploaded'] and success['timestamp'] > failure['timestamp']:
-                    self.info(f'File was uploaded later successfully {failure["uploaded"]}')
-                    break
-            else:
-                self.info(f'File never uploaded {failure["uploaded"]}')
-                unfixed_failures.append(failure)
-        return unfixed_failures
-
-    def clean_duplicate_failures(self, failures):
-        """Remove all but the most recent error for every file"""
-        most_recent_errors = []
-        checked_files = []
-        for error in failures:
-            if error['uploaded'] in checked_files:
-                pass  # The most recent error for this file was already selected
-            else:
-                # Get and save only the most recent error out of all errors for this file
-                all_matching = [err for err in failures if err['uploaded'] == error['uploaded']]
-                youngest = error
-                for match in all_matching:
-                    if match['timestamp'] < youngest['timestamp']:
-                        youngest = match
-                if len(all_matching) > 1:
-                    self.info(f'Trimmed {len(all_matching) - 1} errors for {error["uploaded"]}')
-                most_recent_errors.append(youngest)
-
-                # We won't check errors for this file again
-                checked_files.append(error['uploaded'])
-        return most_recent_errors
-
-    def clean_old_success(self, successes):
-        """Delete files that have been successfully uploaded long enough ago"""
-        kept_success = []
-        now = datetime.now().timestamp()
-        has_delete = hasattr(self, 'delete_age_hours')
-        for uploaded in successes:
-            age = (now - uploaded['timestamp']) / (60 * 60)  # Time since upload in hours
-            if has_delete and age > self.delete_age_hours >= 0:
-                self.info(f'Deleting {uploaded["uploaded"]}')
-                try:
-                    os.remove(uploaded['uploaded'])
-                except FileNotFoundError:
-                    self.warning(f'File was already deleted!')
-            else:
-                kept_success.append(uploaded)
-        return kept_success
 
     def clean(self):
         """Delete local copies of files that have already been uploaded"""
-        upload_log = self.load_log()
+        upload_log = self.load_state()
 
         unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
         most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
@@ -341,7 +289,7 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
     def clean(self):
         """Delete local copies of files that have already been uploaded"""
-        upload_log = self.load_log()
+        upload_log = self.load_state()
 
         # Standard steps for cleaning up the upload state
         unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
