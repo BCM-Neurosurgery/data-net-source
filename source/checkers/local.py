@@ -140,10 +140,10 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
     termination_files = []
 
     #: Time, in seconds, between file updates in the streamed files
-    stream_rate = None
+    stream_rate = 60
 
     #: Factor measuring how reliable the update rate is. Will wait this many times the stream_rate before including
-    reliability_factor = None
+    reliability_factor = 1.0
 
     @staticmethod
     def is_file_category(filename, category_info):
