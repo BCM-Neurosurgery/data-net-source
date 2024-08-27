@@ -133,32 +133,50 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
     initialize_files = []
 
     #: list of file endings that should be considered as streamed files, and should not be uploaded right away
+    #: If streamed files is '*' instead of a list, all files will be identified as streamed files
     streamed_files = []
 
     #: list of file endings that only appear when the recording has ended
     termination_files = []
 
     #: Time, in seconds, between file updates in the streamed files
-    stream_rate = None
+    stream_rate = 60
 
     #: Factor measuring how reliable the update rate is. Will wait this many times the stream_rate before including
-    reliability_factor = None
+    reliability_factor = 1.0
+
+    @staticmethod
+    def is_file_category(filename, category_info):
+        """
+        Check to see if a file belongs to a file category by parsing the category info and comparing it to
+        the file type endings (everything after the last period)
+
+        :param filename:
+        :param category_info: List of strings, string, or None.  If a list, then each element of the list specifies
+        a file time to (for example: txt, csv) to consider as member of this category.
+        Besides this case, there are two special cases:
+            - string '*': will match all file types
+            - None: will match no file types, equivalent to []
+        :return:
+        """
+        if category_info == '*':
+            return True
+        elif category_info is None:
+            return False
+
+        for ending in category_info:
+            if filename.endswith(ending):
+                return True
+            else:
+                return False
 
     def is_init_file(self, filename):
         """Check if the given file is an initialization file, that is not streamed"""
-        for ending in self.initialize_files:
-            if filename.endswith(ending):
-                return True
-        else:
-            return False
+        return self.is_file_category(filename, self.initialize_files)
 
     def is_streamed_file(self, filename):
         """Check if the given file is a streamed file that is written to incrementally"""
-        for ending in self.streamed_files:
-            if filename.endswith(ending):
-                return True
-        else:
-            return False
+        return self.is_file_category(filename, self.streamed_files)
 
     def filter_streamed_files(self, file_list):
         """Filter out only the streamed files that are old enough to be processed"""

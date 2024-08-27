@@ -89,7 +89,7 @@ class BaseUploader(ABC):
         {
             'source_regex': 'string',
             'path_elements': ['string', ...]
-            'new_path': 'string'
+            'new_format': 'string'
         }
         source_regex: This must be a regex pattern that matches the source filepath. It should contain capturing groups
             for all the path elements that should be included in the output filepath. The filepath here will always
@@ -103,7 +103,7 @@ class BaseUploader(ABC):
             old_path: '/source/patientDATAFILE/modality/date.json'
             source_regex: '.*/([a-zA-Z]*)DATAFILE/([a-zA-Z]*)/([0-9-]*).json'
             path_elements: ['patient', 'modality', 'date']
-            new_path: 'output/{patient}/{date}/{modality}.json'
+            new_format: 'output/{patient}/{date}/{modality}.json'
 
         :param old_file_path:
         :return: Path representing the new file name and destination
