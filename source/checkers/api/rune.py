@@ -1,14 +1,37 @@
+import os.path
+
 import pandas as pd
 
 from source.checkers.base import BaseChecker
-
+from runeq.resources.patient import get_patient, get_device
+from runeq.resources.client import Config, StreamClient, GraphClient
+from runeq.resources.stream import get_stream_data
 
 class RuneAPICheckerMixin(BaseChecker):
+
+    #: Duration before the current date-time to search for new data, as a pandas frequency string
+    look_back_duration = '14D'
+
+    def clean(self):
+        pass
 
     checker_name = "RuneAPIChecker"
     day_resolution = int(pd.Timedelta(days=1).total_seconds())
 
-    def check_device(self, device, device_log):
+    def setup_clients(self):
+        """Prepare both the metadata and stream data clients for use by this checker"""
+        # Load the Rune config from the specified rune config file
+        rune_config = Config(self.source_location['rune_config'])
+
+        # These will be set directly on the ParserCommon class.
+        # TODO: Is there a better way to safely store these? without using rune's globals.
+        self.stream_client = StreamClient(rune_config)
+        self.graph_client = GraphClient(rune_config)
+
+    def check_device(self, device):
+        """Check whether there is any new data for a specific device"""
+        device_log = self.filter_device_logs(device)
+
         device_streams = rune_metadata.get_patient_stream_metadata(
             device.patient_id, device.id
         )
@@ -50,31 +73,37 @@ class RuneAPICheckerMixin(BaseChecker):
         Search for new data from the RUNE API
         NOTE: the source location for this is ignored
         """
-        import runeq
+        self.setup_clients()
+        tasks = []
 
-        runeq.initialize()
+        for patient_name, patient_config in self.source_location["patients"].items():
+            patient = get_patient(patient_config["rune_id"], client=self.graph_client)
+            for device_id in patient_config["active_devices"]:
+                device = get_device(patient, device_id, client=self.graph_client)
 
-        # First get all available patients and devices
-        all_devices = rune_patient.get_all_devices()
+                new_data = self.check_device(device)
 
-        log = self.load_state()
+                for data_section in new_data:
 
-        active_devices = [
-            d for d in all_devices if d.id not in log['deactivated_devices']
-        ]
+                    start_time = pd.Timestamp(data_section["date"])
+                    end_time = start_time + pd.Timedelta('1D')
 
-        if not active_devices:
-            return {}  # No active devices therefore there is no new data to return
+                    dataframe = pd.DataFrame(get_stream_data(
+                        stream_id=data_section['stream_id'],
+                        start_time=start_time.timestamp(),
+                        end_time=end_time.timestamp(),
+                        client=self.stream_client
+                    ))
+                    out_path = os.path.join(
+                        self.source_location['path'],
+                        patient_name, data_section['date']
+                    )
+                    os.makedirs(out_path, exist_ok=True)
+                    out_file = os.path.join(out_path, f'{device.name}.csv')
+                    dataframe.to_csv(out_file)
 
-        else:
-            rune_todo = {}
-            successes = self.load_successes()
-            for device in active_devices:
-                device_log = successes[device.id] if device.id in successes else {}
-                device_todo = self.check_device(device, device_log)
-                if device_todo:
-                    rune_todo[device.id] = device_todo
-            return rune_todo
+        return {'todo': tasks, 'failure': []}
+
 
     def save(self, completed):
         """Log which new time periods of RUNE data have been uploaded"""
