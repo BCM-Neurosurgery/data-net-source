@@ -28,6 +28,11 @@ class RuneAPICheckerMixin(BaseChecker):
         self.stream_client = StreamClient(rune_config)
         self.graph_client = GraphClient(rune_config)
 
+    def filtered_device_logs(self, device):
+        """"""
+        all_logs = self.load_state()
+        return all_logs
+
     def check_device(self, device):
         """Check whether there is any new data for a specific device"""
         device_log = self.filter_device_logs(device)
