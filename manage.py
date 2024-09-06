@@ -156,7 +156,7 @@ def decide_action(config, new_events):
 
     state_data = format_state_data(new_events)
     print(f'New state file will have {len(new_events)} events'
-          f' with {len(state_data["success"])} successes and {len(state_data["failures"])} failures')
+          f' with {len(state_data["success"])} successes and {len(state_data["failure"])} failures')
     state_path = config['parser']['init']['state_path']
     if choice == 'show':
         print(f'The new state file contents will be:')
