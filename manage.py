@@ -112,8 +112,8 @@ def forget(config, success=False, failure=False, **kwargs):
     forgetting = []
     for category, event in iter_saved(config):
 
-        category = (success and category == 'success') or (failure and category == 'failure')
-        matches = category and match_event(event, **kwargs)
+        is_category = (success and category == 'success') or (failure and category == 'failure')
+        matches = is_category and match_event(event, **kwargs)
         print(category, match_event(event, **kwargs))
 
         # Only remember the events that do not match the forget selection
