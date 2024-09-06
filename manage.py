@@ -143,6 +143,9 @@ def decide_action(config, new_events):
     :param config: configuration information for the parser we are working with
     :param new_events: List of tuples of all the new events that should be saved
     """
+    state_data = format_state_data(new_events)
+    print(f'New state file will have {len(new_events)} events'
+          f' with {len(state_data["success"])} successes and {len(state_data["failure"])} failures')
     choice = get_input(
         {
             'show': 'Show the new state without saving',
@@ -154,9 +157,6 @@ def decide_action(config, new_events):
         'Would you like to save these changes?\n'
     )
 
-    state_data = format_state_data(new_events)
-    print(f'New state file will have {len(new_events)} events'
-          f' with {len(state_data["success"])} successes and {len(state_data["failure"])} failures')
     state_path = config['parser']['init']['state_path']
     if choice == 'show':
         print(f'The new state file contents will be:')
