@@ -167,8 +167,8 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
         for ending in category_info:
             if filename.endswith(ending):
                 return True
-            else:
-                return False
+        else:
+            return False
 
     def is_init_file(self, filename):
         """Check if the given file is an initialization file, that is not streamed"""
