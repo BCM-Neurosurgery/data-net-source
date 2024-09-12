@@ -159,16 +159,19 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
             - None: will match no file types, equivalent to []
         :return:
         """
+        # Special behaviors are checked first
         if category_info == '*':
             return True
         elif category_info is None:
             return False
 
+        # Check each file ending in the list
         for ending in category_info:
             if filename.endswith(ending):
                 return True
-        else:
-            return False
+
+        # We only reach here if none of the file endings matched
+        return False
 
     def is_init_file(self, filename):
         """Check if the given file is an initialization file, that is not streamed"""
