@@ -1,12 +1,90 @@
+import os
 import json
 
 import pandas as pd
 import requests
 
+from abc import abstractmethod
+
 from source.checkers.base import BaseChecker
 
 
-class OuraAPIDocumentChecker(BaseChecker):
+class OuraAPIBaseChecker(BaseChecker):
+
+    api_url = 'https://api.ouraring.com/v2/usercollection'
+
+    source_location = {
+        #: Names of the data types to download from Oura
+        'collections': [],
+        # Dict of patient IDs and the API keys for each patient
+        'patients': {
+            'patient_id': 'LONGAPIKEY',
+        }
+    }
+
+    look_back_duration = '14D'
+    today = None
+
+    _time_parameter_name = None
+
+    def format_today(self):
+        """Ensure that the variable for today is saved as a pd.Timestamp, setting to current system date otherwise"""
+        if self.today is None:
+            self.today = pd.Timestamp.today()
+        else:
+            self.today = pd.Timestamp(self.today)
+
+    def fetch_collection_data(self, collection, headers):
+        """Find and download all the JSON data for a single collection of a single patient"""
+        collection_url = f'{self.api_url}/{collection}'
+
+        # Get all documents for this collection between now and the look back duration
+        start_date = self.today - pd.Timedelta(self.look_back_duration)
+        today = self.today.strftime('%Y-%m-%d')
+        params = {
+            f'start_{self._time_parameter_name}': start_date.strftime('%Y-%m-%d'),
+            f'end_{self._time_parameter_name}': today,
+        }
+        response = requests.request(
+            'GET', collection_url, headers=headers, params=params
+        )
+
+        if response.status_code != 200:
+            # Per Oura ring docs any response code besides 200 should be an error
+            self.error(f'Oura returned an error code ({response.status_code})')
+            return {}
+
+        return response.json()['data']
+    @abstractmethod
+    def cross_check(self, collection):
+        """Define how to cross-check all available data with already saved data to avoid unnecessary over-writes"""
+
+    def check(self):
+        """
+        Oura does not support a good way for querying new data. So we need to download the data and parse it locally
+        """
+        self.format_today()
+
+        all_paths = []
+        for patient, token in self.source_location['patients'].items():
+            headers = {'Authorization': f'Bearer {token}'}
+
+            for collection in self.source_location['collections']:
+                all_oura_data = self.fetch_collection_data(collection, headers)
+                new_data = self.cross_check(patient, collection, all_oura_data)
+
+                for day, day_data in new_data.items():
+                    out_dir = os.path.join(self.middle_location['path'], patient)
+                    os.makedirs(out_dir, exist_ok=True)
+                    filepath = os.path.join(out_dir, f'{collection}_{day}.json')
+                    with open(filepath, 'w') as day_json:
+                        json.dump(day_data, day_json)
+                    all_paths.append(filepath)
+
+        return {'to do': all_paths, 'failure': []}
+
+
+class OuraAPIDocumentChecker(OuraAPIBaseChecker):
     """
     This class is only compatible with data stored by the API as 'documents'.
 
@@ -29,50 +107,8 @@ class OuraAPIDocumentChecker(BaseChecker):
 
     """
 
-    checker_name = "OuraAPIChecker"
-
-    api_url = 'https://api.ouraring.com/v2/usercollection'
-
-    source_location = {
-        #: Names of the data types to download from Oura
-        'collections': [],
-        # Dict of patient IDs and the API keys for each patient
-        'patients': {
-            'patient_id': 'LONGAPIKEY',
-        }
-    }
-
-    look_back_duration = '14D'
-    today = None
-
-    def format_today(self):
-        """Ensure that the variable for today is saved as a pd.Timestamp, setting to current system date otherwise"""
-        if self.today is None:
-            self.today = pd.Timestamp.today()
-        else:
-            self.today = pd.Timestamp(self.today)
-
-    def fetch_collection_data(self, collection, headers):
-        """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f'{self.api_url}/{collection}'
-
-        # Get all documents for this collection between now and the look back duration
-        start_date = self.today - pd.Timedelta(self.look_back_duration)
-        today = self.today.strftime('%Y-%m-%d')
-        params = {
-            'start_date': start_date.strftime('%Y-%m-%d'),
-            'end_date': today,
-        }
-        response = requests.request(
-            'GET', collection_url, headers=headers, params=params
-        )
-
-        if response.status_code != 200:
-            # Per Oura ring docs any response code besides 200 should be an error
-            self.error(f'Oura returned an error code ({response.status_code})')
-            return {}
-
-        return response.json()['data']
+    checker_name = "OuraAPIDocumentChecker"
+    _time_parameter_name = 'date'
 
     def cross_check(self, patient, collection, found_data):
         """Check the found data against the saved log of data to find any newly uploaded data"""
@@ -131,32 +167,19 @@ class OuraAPIDocumentChecker(BaseChecker):
 
         return new_data
 
-    def check(self):
-        """
-        Oura does not support a good way for querying new data. So we need to download the data and parse it locally
-        """
-        self.format_today()
-
-        all_paths = []
-        for patient, token in self.source_location['patients'].items():
-            headers = {'Authorization': f'Bearer {token}'}
-
-            for collection in self.source_location['collections']:
-                all_oura_data = self.fetch_collection_data(collection, headers)
-                new_data = self.cross_check(patient, collection, all_oura_data)
-
-                for day, day_data in new_data.items():
-                    out_dir = os.path.join(self.middle_location['path'], patient)
-                    os.makedirs(out_dir, exist_ok=True)
-                    filepath = os.path.join(out_dir, f'{collection}_{day}.json')
-                    with open(filepath, 'w') as day_json:
-                        json.dump(day_data, day_json)
-                    all_paths.append(filepath)
-
-        return {'to do': all_paths, 'failure': []}
-
     def save(self, completed):
         pass
 
     def clean(self):
         pass
+
+
+class OuraAPIStreamChecker(BaseChecker):
+    """
+    Checker to pull down data from oura that is saved as individual datapoints instead of documents
+
+
+    """
+    checker_name = "OuraAPIDocumentChecker"
+    _time_parameter_name = 'datetime'
+
