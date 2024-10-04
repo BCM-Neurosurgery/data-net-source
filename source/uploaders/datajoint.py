@@ -207,58 +207,61 @@ class TRBDDJUploader(DataJointUploader):
         self.connect_to_database()
         from trbd import schema
 
-        for directory in ready['to upload']:
-            # Assuming directory is a folder like 'Percept010/2024-09-28'
-            folder_path = pathlib.Path(directory)
-            if not folder_path.is_dir():
+        for filepath in ready['to upload']:
+            filepath = pathlib.Path(filepath)
+            
+            # Skip if it's not a file
+            if not filepath.is_file():
                 continue
 
-            # Extract the date from the folder name
-            date = folder_path.name
+            # Extract date from the file's parent directory (e.g., 2024-09-28)
+            date = filepath.parent.name
 
-            # Iterate over the files in the folder
-            for filename in folder_path.iterdir():
-                filename = filename.as_posix()
-                filetype = filename.split('.')[-1]
-                if filetype not in self.parsed_filetypes:
-                    continue
+            # Extract patient ID from the grandparent directory (e.g., 'Percept010')
+            patient = filepath.parent.parent.name
 
-                try:
-                    # Get patient ID based on directory structure (e.g., 'Percept010' for patient name)
-                    patient = folder_path.parent.name  # 'Percept010' parent directory
-                    patient_id = self.lookup(
-                        schema.Patient(),
-                        ['patient_id'],
-                        f"patient_id='{patient}'"
-                    )
+            # Ensure the file extension is valid (in this case 'json')
+            filetype = filepath.suffix[1:]  # remove the leading '.' from the extension
+            if filetype not in self.parsed_filetypes:
+                continue
 
-                    # Determine which DataJoint table to insert into based on the file name
-                    file_table = self.identify_file_table(filename)
+            try:
+                # Lookup the patient_id in the database
+                patient_id = self.lookup(
+                    schema.Patient(),
+                    ['patient_id'],
+                    f"patient_id='{patient}'"
+                )
 
-                    # Insert file record
-                    file_table.insert1({
-                        'patient_id': patient_id,
-                        'date': date,
-                        'file_path': filename,
-                        'upload_date': datetime.now().date(),
-                        'last_ingested': None
-                    })
-                    self.info(f'Added: {filetype} for {patient} on {date}')
-                    successes.append({
-                        'type': 'upload success',
-                        'filename': filename,
-                        'destination': self.destination,
-                    })
-                except Exception as e:
-                    error_dict = {
-                        'type': 'upload failure',
-                        'location': 'CopyUploaderMixin.upload',
-                        'filename': filename,
-                        'destination': self.destination,
-                        'error': str(e),
-                        'trace': traceback.format_exception(*sys.exc_info())
-                    }
-                    errors.append(error_dict)
-                    self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
+                # Determine which DataJoint table to insert into based on the file name
+                file_table = self.identify_file_table(filepath.name)
+
+                # Insert file record into the appropriate table
+                file_table.insert1({
+                    'patient_id': patient_id,
+                    'date': date,
+                    'file_path': str(filepath),
+                    'upload_date': datetime.now().date(),
+                    'last_ingested': None
+                })
+                
+                self.info(f'Added: {filetype} for {patient} on {date}')
+                successes.append({
+                    'type': 'upload success',
+                    'filename': str(filepath),
+                    'destination': self.destination,
+                })
+
+            except Exception as e:
+                error_dict = {
+                    'type': 'upload failure',
+                    'location': 'CopyUploaderMixin.upload',
+                    'filename': str(filepath),
+                    'destination': self.destination,
+                    'error': str(e),
+                    'trace': traceback.format_exception(*sys.exc_info())
+                }
+                errors.append(error_dict)
+                self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
 
         return {'success': successes, 'failure': errors}
