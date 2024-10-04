@@ -189,11 +189,15 @@ class TRBDDJUploader(DataJointUploader):
 
     def identify_file_table(self, filename):
         """Determine which DataJoint table corresponds to the file based on its name"""
-        if "sleep" in filename.lower():
+        filename_lower = filename.lower()
+
+        if "daily_sleep" in filename_lower:
+            return schema.DailySleepFile()
+        elif "sleep" in filename_lower and "daily" not in filename_lower:
             return schema.SleepFile()
-        elif "stress" in filename.lower():
+        elif "stress" in filename_lower:
             return schema.DailyStressFile()
-        elif "activity" in filename.lower():
+        elif "activity" in filename_lower:
             return schema.DailyActivityFile()
         else:
             raise ValueError(f"Cannot determine file table from filename: {filename}")
