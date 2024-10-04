@@ -50,6 +50,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
         dj.config['stores'] = self.target_location['stores']
         if 'checksum_size_limit' in self.target_location:
             dj.config["filepath_checksum_size_limit"] = self.target_location['checksum_size_limit']
+            print(f"Limiting file checksums to {self.target_location['checksum_size_limit']}")
 
         # Connect to the database
         dj.conn()
