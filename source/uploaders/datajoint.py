@@ -9,7 +9,7 @@ import pathlib
 from abc import ABC, abstractmethod
 from datajoint.errors import DataJointError, DuplicateError
 from source.uploaders.base import BaseUploader
-
+from datetime import datetime
 
 class DataJointUploader(BaseUploader, ABC):
     """Parent Uploader for inserting data into custom DataJoint schemas"""
@@ -150,3 +150,111 @@ class EMUBlackrockDJUploader(DataJointUploader):
         return {
             'success': successes, 'failure': errors
         }
+
+
+class TRBDDJUploader(DataJointUploader):
+
+    uploader_name = 'TRBDSPDataJointUploader'
+    parsed_filetypes = ['json']
+    destination = None
+
+    def lookup(self, dj_table, primary_keys, search, squash=True):
+        """Search for and return the primary keys for one entry in a table"""
+        query = dj_table & search
+        matches = query.fetch(*primary_keys)
+        if len(matches) == 0:
+            raise DataJointError(f'No matching entry in table {dj_table}!')
+        elif len(matches) == 1:
+            return matches[0]
+        elif squash:
+            self.warning(f'Found {len(matches)} matching entries. Returning only the first!')
+            return matches[0]
+        else:
+            raise DataJointError(f'Lookup expected exactly one entry, found {len(matches)}!')
+
+    def connect_to_database(self):
+        """Connect to the SQL database using the info in the configuration"""
+        import datajoint as dj
+
+        sql_config = self.target_location['sql-config']
+        dj.config['database.host'] = sql_config['host']
+        dj.config['database.user'] = sql_config['username']
+        dj.config['database.password'] = sql_config['password']
+        dj.config['database.port'] = sql_config['port']
+        dj.config['stores'] = self.target_location['stores']
+
+        # Connect to the database
+        dj.conn()
+        self.destination = f"{sql_config['username']}@{sql_config['host']}:{sql_config['port']}"
+
+    def identify_file_table(self, filename):
+        """Determine which DataJoint table corresponds to the file based on its name"""
+        if "sleep" in filename.lower():
+            return schema.SleepFile()
+        elif "stress" in filename.lower():
+            return schema.DailyStressFile()
+        elif "activity" in filename.lower():
+            return schema.DailyActivityFile()
+        else:
+            raise ValueError(f"Cannot determine file table from filename: {filename}")
+
+    def upload(self, ready):
+        successes, errors = [], []
+        self.connect_to_database()
+        from trbd import schema
+
+        for directory in ready['to upload']:
+            # Assuming directory is a folder like 'Percept010/2024-09-28'
+            folder_path = pathlib.Path(directory)
+            if not folder_path.is_dir():
+                continue
+
+            # Extract the date from the folder name
+            date = folder_path.name
+
+            # Iterate over the files in the folder
+            for filename in folder_path.iterdir():
+                filename = filename.as_posix()
+                filetype = filename.split('.')[-1]
+                if filetype not in self.parsed_filetypes:
+                    continue
+
+                try:
+                    # Get patient ID based on directory structure (e.g., 'Percept010' for patient name)
+                    patient = folder_path.parent.name  # 'Percept010' parent directory
+                    patient_id = self.lookup(
+                        schema.Patient(),
+                        ['patient_id'],
+                        f"patient_id='{patient}'"
+                    )
+
+                    # Determine which DataJoint table to insert into based on the file name
+                    file_table = self.identify_file_table(filename)
+
+                    # Insert file record
+                    file_table.insert1({
+                        'patient_id': patient_id,
+                        'date': date,
+                        'file_path': filename,
+                        'upload_date': datetime.now().date(),
+                        'last_ingested': None
+                    })
+                    self.info(f'Added: {filetype} for {patient} on {date}')
+                    successes.append({
+                        'type': 'upload success',
+                        'filename': filename,
+                        'destination': self.destination,
+                    })
+                except Exception as e:
+                    error_dict = {
+                        'type': 'upload failure',
+                        'location': 'CopyUploaderMixin.upload',
+                        'filename': filename,
+                        'destination': self.destination,
+                        'error': str(e),
+                        'trace': traceback.format_exception(*sys.exc_info())
+                    }
+                    errors.append(error_dict)
+                    self.warning(f'An upload failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
+
+        return {'success': successes, 'failure': errors}
