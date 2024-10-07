@@ -242,7 +242,7 @@ class TRBDDJUploader(DataJointUploader):
                     'last_ingested': datetime.now().date()
                 })
 
-                self.info(f'Added: {filetype} for {patient} on {date}')
+                self.info(f'Added: {filepath.name} for {patient} on {date}')
                 successes.append({
                     'type': 'upload success',
                     'filename': str(filepath),
