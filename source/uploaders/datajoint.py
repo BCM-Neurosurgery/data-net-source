@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from datajoint.errors import DataJointError, DuplicateError
 from source.uploaders.base import BaseUploader
 from datetime import datetime
+import os
 
 class DataJointUploader(BaseUploader, ABC):
     """Parent Uploader for inserting data into custom DataJoint schemas"""
@@ -189,6 +190,7 @@ class TRBDDJUploader(DataJointUploader):
 
     def identify_file_table(self, filename):
         """Determine which DataJoint table corresponds to the file based on its name"""
+        from trbd import schema
         filename_lower = filename.lower()
 
         if "daily_sleep" in filename_lower:
@@ -209,42 +211,37 @@ class TRBDDJUploader(DataJointUploader):
 
         for filepath in ready['to upload']:
             filepath = pathlib.Path(filepath)
-            
-            # Skip if it's not a file
+
             if not filepath.is_file():
                 continue
 
-            # Extract date from the file's parent directory (e.g., 2024-09-28)
             date = filepath.parent.name
 
-            # Extract patient ID from the grandparent directory (e.g., 'Percept010')
             patient = filepath.parent.parent.name
 
-            # Ensure the file extension is valid (in this case 'json')
-            filetype = filepath.suffix[1:]  # remove the leading '.' from the extension
+            filetype = filepath.suffix[1:]
             if filetype not in self.parsed_filetypes:
                 continue
 
             try:
-                # Lookup the patient_id in the database
                 patient_id = self.lookup(
                     schema.Patient(),
                     ['patient_id'],
                     f"patient_id='{patient}'"
                 )
 
-                # Determine which DataJoint table to insert into based on the file name
                 file_table = self.identify_file_table(filepath.name)
 
-                # Insert file record into the appropriate table
+                file_stats = os.stat(filepath)
+
                 file_table.insert1({
                     'patient_id': patient_id,
                     'date': date,
                     'file_path': str(filepath),
-                    'upload_date': datetime.now().date(),
-                    'last_ingested': None
+                    'upload_date': datetime.fromtimestamp(file_stats.st_mtime).date(),
+                    'last_ingested': datetime.now().date()
                 })
-                
+
                 self.info(f'Added: {filetype} for {patient} on {date}')
                 successes.append({
                     'type': 'upload success',
