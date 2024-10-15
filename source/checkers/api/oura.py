@@ -22,7 +22,7 @@ class OuraAPIBaseChecker(BaseChecker, ABC):
         }
     }
 
-    look_back_duration = '14D'
+    look_back_duration = '1D'
     today = None
 
     _time_parameter_name = None
@@ -209,14 +209,16 @@ class OuraAPIStreamChecker(OuraAPIBaseChecker):
             if response.status_code != 200:
                 # Per Oura ring docs any response code besides 200 should be an error
                 self.error(f'Oura returned an error {response.status_code} for {collection} when fetching {day}')
-                day_data = {}
-
+            elif not response.json()['data']:
+                self.error(f'Oura returned an empty dataset')
             else:
                 day_str = day.strftime('%Y-%m-%d')
-                day_data = response.json()['data']
-                day_data['date'] = day_str
-                day_data['id'] = [f'{day_str}:n-points:{len(day_data)}']
-
-            all_data.append(day_data)
+                stream_data = response.json()['data']
+                day_data = {
+                    'day': day_str,
+                    'id': f'{day_str}:n-points:{len(stream_data)}',
+                    'data': stream_data
+                }
+                all_data.append(day_data)
 
         return all_data
