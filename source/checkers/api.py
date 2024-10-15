@@ -228,7 +228,7 @@ class OuraAPIDocumentChecker(BaseChecker):
                 new_data = self.cross_check(patient, collection, all_oura_data)
 
                 for day, day_data in new_data.items():
-                    out_dir = os.path.join(self.source_location['interim'], patient)
+                    out_dir = os.path.join(self.source_location['path'], patient)
                     os.makedirs(out_dir, exist_ok=True)
                     filepath = os.path.join(out_dir, f'{collection}_{day}.json')
                     with open(filepath, 'w') as day_json:
