@@ -214,15 +214,18 @@ class TRBDDJUploader(DataJointUploader):
 
                 file_stats = os.stat(filepath)
 
-                file_table.insert1({
-                    'patient_id': patient_id,
-                    'date': date,
-                    'file_path': str(filepath),
-                    'upload_date': datetime.fromtimestamp(file_stats.st_mtime).date(),
-                    'last_ingested': None,
-                })
+                try:
+                    file_table.insert1({
+                        'patient_id': patient_id,
+                        'date': date,
+                        'file_path': str(filepath),
+                        'upload_date': datetime.fromtimestamp(file_stats.st_mtime).date(),
+                        'last_ingested': None,
+                    })
+                    self.info(f'Added: {filepath.name} for {patient} on {date}')
+                except DuplicateError:
+                    self.info(f'Already in DB: {filepath.name} for {patient} on {date}')
 
-                self.info(f'Added: {filepath.name} for {patient} on {date}')
                 successes.append({
                     'type': 'upload success',
                     'filename': str(filepath),
