@@ -220,7 +220,6 @@ class TRBDDJUploader(DataJointUploader):
                         'date': date,
                         'file_path': str(filepath),
                         'upload_date': datetime.fromtimestamp(file_stats.st_mtime).date(),
-                        'last_ingested': None,
                     })
                     self.info(f'Added: {filepath.name} for {patient} on {date}')
                 except DuplicateError:
