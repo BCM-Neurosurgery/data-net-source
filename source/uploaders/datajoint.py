@@ -177,10 +177,26 @@ class TRBDDJUploader(DataJointUploader):
             return schema.DailySleepFile()
         elif "sleep" in filename_lower and "daily" not in filename_lower:
             return schema.SleepFile()
-        elif "stress" in filename_lower:
+        elif "daily_stress" in filename_lower:
             return schema.DailyStressFile()
-        elif "activity" in filename_lower:
+        elif "daily_activity" in filename_lower:
             return schema.DailyActivityFile()
+        elif "daily_readiness" in filename_lower:
+            return schema.DailyReadinessFile()
+        elif "daily_resilience" in filename_lower:
+            return schema.DailyResilienceFile()
+        elif "daily_spo2" in filename_lower:
+            return schema.DailySpO2File()
+        elif "rest_mode_period" in filename_lower:
+            return schema.RestModePeriodFile()
+        elif "session" in filename_lower:
+            return schema.SessionFile()
+        elif "vO2_max" in filename_lower:
+            return schema.VO2MaxFile()
+        elif "workout" in filename_lower:
+            return schema.WorkoutFile()
+        elif "heartrate" in filename_lower:
+            return schema.HeartRateFile()
         else:
             raise ValueError(f"Cannot determine file table from filename: {filename}")
 
