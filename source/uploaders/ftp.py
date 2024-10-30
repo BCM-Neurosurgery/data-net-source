@@ -1,5 +1,7 @@
 import os
+import sys
 import pathlib
+import traceback
 
 from ftputil import FTPHost
 from source.uploaders.base import BaseUploader
@@ -37,6 +39,9 @@ class FTPUploader(BaseUploader):
         :return:
         """
 
+        errors = ready['failure']
+        success = []
+
         with FTPHost(**self.target_location['ftp']) as ftp:
 
             remote_base = self.target_location['path']
@@ -59,18 +64,23 @@ class FTPUploader(BaseUploader):
                         pathlib.Path(file).as_posix(),
                         pathlib.Path(remote_path).as_posix()
                     )
-                    self.info(f'  Upload complete. ({round(file_size, 2)} MB at {round(upload_rate, 2)} MB/s)')
                 except Exception as e:
-                    print(e)
+                    self.error(e)
+                    error_dict = {
+                        'type': 'upload failure',
+                        'location': 'SCPUploaderMixin.upload',
+                        'filename': str(file),
+                        'destination': str(remote_path),
+                        'error': str(e),
+                        'trace': traceback.format_exception(*sys.exc_info())
+                    }
+                    errors.append(error_dict)
                 else:
-                    print(f'success')
-
-
-
-
-
-
-
-
-
-
+                    self.info(f'  Upload complete. ({round(file_size, 2)} MB at {round(upload_rate, 2)} MB/s)')
+                    success.append({
+                        'type': 'upload success',
+                        'filename': file,
+                        'destination': remote_path,
+                        'transfer rate': upload_rate
+                    })
+        return {'success': success, 'failure': errors}
