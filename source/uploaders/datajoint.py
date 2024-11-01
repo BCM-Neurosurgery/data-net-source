@@ -150,9 +150,24 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
 class TRBDDJUploader(DataJointUploader):
 
+    from trbd import schema
     uploader_name = 'TRBDSPDataJointUploader'
     parsed_filetypes = ['json']
     destination = None
+    filename2schema = {
+        "daily_sleep.json": schema.DailySleepFile,
+        "sleep.json": schema.SleepFile,
+        "daily_stress.json": schema.DailyStressFile,
+        "daily_activity.json": schema.DailyActivityFile,
+        "daily_readiness.json": schema.DailyReadinessFile,
+        "daily_resilience.json": schema.DailyResilienceFile,
+        "daily_spo2.json": schema.DailySpO2File,
+        "rest_mode_period.json": schema.RestModePeriodFile,
+        "session.json": schema.SessionFile,
+        "vO2_max.json": schema.VO2MaxFile,
+        "workout.json": schema.WorkoutFile,
+        "heartrate.json": schema.HeartRateFile,
+    }
 
     def lookup(self, dj_table, primary_keys, search, squash=True):
         """Search for and return the primary keys for one entry in a table"""
@@ -170,34 +185,9 @@ class TRBDDJUploader(DataJointUploader):
 
     def identify_file_table(self, filename):
         """Determine which DataJoint table corresponds to the file based on its name"""
-        from trbd import schema
-        filename_lower = filename.lower()
-
-        if "daily_sleep" in filename_lower:
-            return schema.DailySleepFile()
-        elif "sleep" in filename_lower and "daily" not in filename_lower:
-            return schema.SleepFile()
-        elif "daily_stress" in filename_lower:
-            return schema.DailyStressFile()
-        elif "daily_activity" in filename_lower:
-            return schema.DailyActivityFile()
-        elif "daily_readiness" in filename_lower:
-            return schema.DailyReadinessFile()
-        elif "daily_resilience" in filename_lower:
-            return schema.DailyResilienceFile()
-        elif "daily_spo2" in filename_lower:
-            return schema.DailySpO2File()
-        elif "rest_mode_period" in filename_lower:
-            return schema.RestModePeriodFile()
-        elif "session" in filename_lower:
-            return schema.SessionFile()
-        elif "vO2_max" in filename_lower:
-            return schema.VO2MaxFile()
-        elif "workout" in filename_lower:
-            return schema.WorkoutFile()
-        elif "heartrate" in filename_lower:
-            return schema.HeartRateFile()
-        else:
+        try:
+            return self.filename2schema[filename]()
+        except KeyError:
             raise ValueError(f"Cannot determine file table from filename: {filename}")
 
     def upload(self, ready):
