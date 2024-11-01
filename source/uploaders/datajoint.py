@@ -11,6 +11,7 @@ from datajoint.errors import DataJointError, DuplicateError
 from source.uploaders.base import BaseUploader
 from datetime import datetime
 import os
+import importlib
 
 class DataJointUploader(BaseUploader, ABC):
     """Parent Uploader for inserting data into custom DataJoint schemas"""
@@ -150,10 +151,10 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
 class TRBDDJUploader(DataJointUploader):
 
-    from trbd import schema
     uploader_name = 'TRBDSPDataJointUploader'
     parsed_filetypes = ['json']
     destination = None
+    schema = importlib.import_module("trbd.schema")
     filename2schema = {
         "daily_sleep.json": schema.DailySleepFile,
         "sleep.json": schema.SleepFile,
@@ -193,7 +194,6 @@ class TRBDDJUploader(DataJointUploader):
     def upload(self, ready):
         successes, errors = [], []
         self.connect_to_database()
-        from trbd import schema
 
         for filepath in ready['to upload']:
             filepath = pathlib.Path(filepath)
@@ -211,7 +211,7 @@ class TRBDDJUploader(DataJointUploader):
 
             try:
                 patient_id = self.lookup(
-                    schema.Patient(),
+                    self.schema.Patient(),
                     ['patient_id'],
                     f"patient_id='{patient}'"
                 )
