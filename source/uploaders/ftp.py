@@ -11,7 +11,7 @@ from source.uploaders.base import BaseUploader
 
 class FTPUploader(BaseUploader):
     """
-
+    Uploader that users FTP (with TLS by default) to transfer files to an FTP server
     """
 
     uploader_name = "FTPUploader"
@@ -30,14 +30,6 @@ class FTPUploader(BaseUploader):
     def upload(self, ready):
         """
         Upload a file to the remote server using FTP
-
-        Steps:
-            - Establish an FTP connection and authenticate
-            - Ensure the target base dir exists and CD to it
-            - For each file:
-               - Ensure the target file directory exists (may need to recursively .mkd() folders)
-               - Use .storbinary(...) to move the file to the remote location
-               - Return back to the base dir
 
         :param ready:
         :return:
