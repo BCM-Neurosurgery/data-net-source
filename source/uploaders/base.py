@@ -16,6 +16,15 @@ class BaseUploader(ABC):
         """Replace with a simple attribute naming the mixin class for later reference"""
         return "BaseUploader"
 
+    def relative_filepath(self, filename):
+        return os.path.relpath(filename, self.middle_location['path'])
+
+    def remote_filepath(self, filename):
+        return os.path.join(self.target_location['path'], self.relative_filepath(filename))
+
+    def remote_dirpath(self, filename):
+        return os.path.dirname(self.remote_filepath(filename))
+
     @abstractmethod
     def upload(self, ready):
         """

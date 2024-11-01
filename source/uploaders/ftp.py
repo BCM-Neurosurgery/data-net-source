@@ -1,6 +1,8 @@
 import os
 import sys
+import ftplib
 import pathlib
+import paramiko
 import traceback
 
 from ftputil import FTPHost
@@ -23,6 +25,8 @@ class FTPUploader(BaseUploader):
         }
     }
 
+    use_tls = True
+
     def upload(self, ready):
         """
         Upload a file to the remote server using FTP
@@ -42,7 +46,9 @@ class FTPUploader(BaseUploader):
         errors = ready['failure']
         success = []
 
-        with FTPHost(**self.target_location['ftp']) as ftp:
+        ftp_backend = ftplib.FTP_TLS if self.use_tls else ftplib.FTP
+
+        with FTPHost(**self.target_location['ftp'], session_factory=ftp_backend) as ftp:
 
             remote_base = self.target_location['path']
             local_base = self.middle_location['path']
@@ -68,7 +74,7 @@ class FTPUploader(BaseUploader):
                     self.error(e)
                     error_dict = {
                         'type': 'upload failure',
-                        'location': 'SCPUploaderMixin.upload',
+                        'location': self.uploader_name,
                         'filename': str(file),
                         'destination': str(remote_path),
                         'error': str(e),
@@ -84,3 +90,66 @@ class FTPUploader(BaseUploader):
                         'transfer rate': upload_rate
                     })
         return {'success': success, 'failure': errors}
+
+
+class SFTPUploader(BaseUploader):
+    """
+    Use the SFTP protocol to transfer files to a remote server
+    """
+
+    uploader_name = "SFTPUploader"
+    middle_location = {"path": ""}
+    target_location = {
+        "path": "",
+        "sftp": {
+            "host": "",
+            "port": 22,
+            "user": "",
+            "password": ""
+        }
+    }
+
+    def get_connection(self):
+        """Open a paramiko SFTP connection to the remote server"""
+        sftp_config = self.target_location['sftp']
+        transport = paramiko.Transport((sftp_config['host'], sftp_config['port']))
+        transport.connect(None, sftp_config['user'], sftp_config['password'])
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        return sftp
+
+    def upload_file(self, ready):
+
+        success = []
+        errors = [*ready['failures']]
+
+        with self.connect() as sftp:
+
+            for file in ready['to do']:
+
+                try:
+
+                    sftp.makedirs(self.remote_dirpath(file), exist_ok=True)
+
+                    self.info(f'Moving file: {file}')
+                    sftp.put(file, self.remote_filepath(file))
+
+                except Exception as e:
+                    self.error(f'Failed when moving {file} with error {e}')
+                    errors.append({
+                        'type': 'upload failure',
+                        'location': self.uploader_name,
+                        'filename': str(file),
+                        'destination': str(self.remote_filepath(file)),
+                        'error': str(e),
+                        'trace': traceback.format_exception(*sys.exc_info())
+                    })
+                else:
+                    self.info('Move complete')
+                    success.append({
+                        'type': 'upload success',
+                        'filename': file,
+                        'destination': self.remote_filepath(file),
+                        'transfer rate': float('nan')
+                    })
+        return {'success': success, 'failure': errors}
+
