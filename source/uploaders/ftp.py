@@ -121,9 +121,13 @@ class SFTPUploader(BaseUploader):
                 try:
 
                     sftp.makedirs(self.remote_dirpath(file), exist_ok=True)
-
+                    file_size = os.path.getsize(file)
                     self.info(f'Moving file: {file}')
-                    sftp.put(file, self.remote_filepath(file))
+                    upload_rate = self.time_upload(
+                        file_size,
+                        sftp.put,
+                        file, self.remote_filepath(file)
+                    )
 
                 except Exception as e:
                     self.error(f'Failed when moving {file} with error {e}')
@@ -136,12 +140,12 @@ class SFTPUploader(BaseUploader):
                         'trace': traceback.format_exception(*sys.exc_info())
                     })
                 else:
-                    self.info('Move complete')
+                    self.info(f'  Upload complete. ({round(file_size, 2)} MB at {round(upload_rate, 2)} MB/s)')
                     success.append({
                         'type': 'upload success',
                         'filename': file,
                         'destination': self.remote_filepath(file),
-                        'transfer rate': float('nan')
+                        'transfer rate': upload_rate
                     })
         return {'success': success, 'failure': errors}
 
