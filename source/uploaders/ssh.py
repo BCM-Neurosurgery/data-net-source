@@ -126,7 +126,7 @@ class SFTPUploader(BaseUploader):
         sftp = ssh.open_sftp()
         return sftp
 
-    def upload_file(self, ready):
+    def upload(self, ready):
 
         success = []
         errors = [*ready['failures']]
