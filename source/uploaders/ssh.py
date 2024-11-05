@@ -129,7 +129,7 @@ class SFTPUploader(BaseUploader):
     def upload(self, ready):
 
         success = []
-        errors = [*ready['failures']]
+        errors = [*ready['failure']]
 
         with self.connect() as sftp:
 
