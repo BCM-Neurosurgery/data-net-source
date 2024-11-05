@@ -46,7 +46,8 @@ class FTPUploader(BaseUploader):
             for file in ready['to upload']:
 
                 try:
-                    relative_path = os.path.relpath(file, local_base)
+                    old_rel_path = os.path.relpath(file, local_base)
+                    relative_path = self.rebuild_filepath(old_rel_path)
                     remote_path = os.path.join(remote_base, relative_path)
 
                     remote_dir = os.path.dirname(remote_path)
