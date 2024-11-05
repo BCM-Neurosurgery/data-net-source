@@ -118,7 +118,7 @@ class SFTPUploader(BaseUploader):
         }
     }
 
-    def get_connection(self):
+    def connect(self):
         """Open a paramiko SFTP connection to the remote server"""
         ssh = SSHClient()
         ssh.load_system_host_keys()
