@@ -2,12 +2,12 @@ import os.path
 
 import pandas as pd
 
-from source.checkers.base import BaseChecker
+from source.checkers.api.base import BaseAPIChecker
 from runeq.resources.patient import get_patient, get_device
 from runeq.resources.client import Config, StreamClient, GraphClient
 from runeq.resources.stream import get_stream_data
 
-class RuneAPICheckerMixin(BaseChecker):
+class RuneAPICheckerMixin(BaseAPIChecker):
 
     #: Duration before the current date-time to search for new data, as a pandas frequency string
     look_back_duration = '14D'
@@ -81,7 +81,7 @@ class RuneAPICheckerMixin(BaseChecker):
         self.setup_clients()
         tasks = []
 
-        for patient_name, patient_config in self.source_location["patients"].items():
+        for patient_name, patient_config in self.patients.items():
             patient = get_patient(patient_config["rune_id"], client=self.graph_client)
             for device_id in patient_config["active_devices"]:
                 device = get_device(patient, device_id, client=self.graph_client)

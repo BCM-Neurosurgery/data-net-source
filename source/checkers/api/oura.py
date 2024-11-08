@@ -6,10 +6,10 @@ import requests
 
 from abc import abstractmethod, ABC
 
-from source.checkers.base import BaseChecker
+from source.checkers.api.base import BaseAPIChecker
 
 
-class OuraAPIBaseChecker(BaseChecker, ABC):
+class OuraAPIBaseChecker(BaseAPIChecker, ABC):
 
     api_url = 'https://api.ouraring.com/v2/usercollection'
 
@@ -102,7 +102,7 @@ class OuraAPIBaseChecker(BaseChecker, ABC):
         self.format_today()
 
         all_paths = []
-        for patient, token in self.source_location['patients'].items():
+        for patient, token in self.patients.items():
             headers = {'Authorization': f'Bearer {token}'}
 
             for collection in self.source_location['collections']:
