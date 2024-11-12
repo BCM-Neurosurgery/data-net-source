@@ -16,7 +16,7 @@ jobs:
   basics:
     runs-on: mini-elias
     container:
-      imgae: python:3.12-slim
+      image: python:3.12-slim
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
