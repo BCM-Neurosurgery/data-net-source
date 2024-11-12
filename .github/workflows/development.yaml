@@ -56,7 +56,3 @@ jobs:
       run: python prepare.py $config_path
     - name: Run the trial parser
       run: python run.py $config_path
-
-  cleanup:
-    runs-on: mini-elias
-    needs: [test, try-checkers]
