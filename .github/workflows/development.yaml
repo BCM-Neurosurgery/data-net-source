@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:
 
-    runs-on: mini-elias-source
+    runs-on: mini-elias
 
     steps:
     - uses: actions/checkout@v4
