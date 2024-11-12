@@ -17,8 +17,8 @@ jobs:
     runs-on: mini-elias
 
     steps:
-      - uses: .github/actions/install
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
         with:
           python-version: '3.12'
       - name: Install dependencies
