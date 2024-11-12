@@ -48,7 +48,7 @@ jobs:
         checker: [FileCheckerMixin]
     runs-on: mini-elias
     env:
-      config_path: ${{ format("{0}/checkers/{1}", assembled_config_path, matrix.checker) }}
+      config_path: "placeholder/path"
     steps:
     - name: Assemble a parser config for this checker
       run: python tests/make_config.py checker {{ matrix.checker }}
