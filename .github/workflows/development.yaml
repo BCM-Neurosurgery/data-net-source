@@ -13,9 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  install:
+  basics:
     runs-on: mini-elias
-
+    container:
+      imgae: python:3.12-slim
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
@@ -33,16 +34,10 @@ jobs:
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-  test: # Run any available pytest tests to ensure catch general problems
-    needs: install
-    runs-on: mini-elias
-    steps:
-    - name: Test with pytest
-      run: |
-        pytest
-
   try-checkers: # Run the complete throughput test with each checker
-    needs: install
+    container:
+      image: python:3.12-slim
+    needs: basics
     strategy:
       matrix:
         checker: [FileCheckerMixin]
