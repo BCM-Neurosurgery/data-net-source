@@ -13,16 +13,12 @@ permissions:
   contents: read
 
 jobs:
-  build:
-
+  install:
     runs-on: mini-elias
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.10"
+    - uses: actions/install
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -34,6 +30,31 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  test: # Run any available pytest tests to ensure catch general problems
+    needs: install
+    runs-on: mini-elias
+    steps:
     - name: Test with pytest
       run: |
         pytest
+
+  try-checkers: # Run the complete throughput test with each checker
+    needs: install
+    strategy:
+      matrix:
+        checker: [FileCheckerMixin]
+    runs-on: mini-elias
+    env:
+      config_path: ${{ format("{0}/checkers/{1}", assembled_config_path, matrix.checker) }}
+    steps:
+    - name: Assemble a parser config for this checker
+      run: python tests/make_config.py checker {{ matrix.checker }}
+    - name: Prepare an individual source parser
+      run: python prepare.py $config_path
+    - name: Run the trial parser
+      run: python run.py $config_path
+
+  cleanup:
+    runs-on: mini-elias
+    needs: [test, try-checkers]
