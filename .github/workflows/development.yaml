@@ -15,9 +15,10 @@ permissions:
 jobs:
   basics:
     runs-on: mini-elias
-    container:
-      image: python:3
+    #container:
+    #  image: python:3
     steps:
+      - run: echo groups
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
         with:
