@@ -2,11 +2,11 @@ name: 'Install Basics'
 description: 'Create a docker container to run a python task'
 inputs:
 runs:
-  using: "composite"
+  using: "docker"
 
-  container: python:3.12
-  steps:
-    - name: Set Greeting
-      run: conda create
-      shell: bash -l {0}
+  # container: python:3.12
+#  steps:
+#    - name: Set Greeting
+#      run: conda create
+#      shell: bash -l {0}
 
