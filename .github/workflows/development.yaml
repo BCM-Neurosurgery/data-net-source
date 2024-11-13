@@ -19,7 +19,7 @@ jobs:
     #  image: python:3
     steps:
       - run: |
-          echo groups
+          groups
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
         with:
