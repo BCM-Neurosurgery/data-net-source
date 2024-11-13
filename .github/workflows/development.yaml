@@ -15,15 +15,15 @@ permissions:
 jobs:
   basics:
     runs-on: mini-elias
-    #container:
-    #  image: python:3
+    container:
+      image: python:3
     steps:
       - run: |
           groups
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/install
-        with:
-          python-version: '3.12'
+#      - uses: ./.github/actions/install
+#        with:
+#          python-version: '3.12'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
