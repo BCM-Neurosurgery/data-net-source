@@ -1,7 +1,5 @@
 name: 'Install Basics'
 description: 'Create a docker container to run a python task'
-inputs:
-  name: placeholder
 runs:
   using: "docker"
 
