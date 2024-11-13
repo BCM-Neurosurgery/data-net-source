@@ -1,11 +1,13 @@
 name: 'Install Basics'
 description: 'Create a docker container to run a python task'
 runs:
-  using: "docker"
+  using: "composite"
+  steps:
+    - name: made the conda env
+      run: conda create -y --name  temp-env python=3.12 pip
+      shell: bash -l {0}
 
-  # container: python:3.12
-#  steps:
-#    - name: Set Greeting
-#      run: conda create
-#      shell: bash -l {0}
+    - name: activate the conda env
+      run: conda activate temp-env
+      shell: bash -l {0}
 
