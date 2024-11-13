@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   basics:
-    runs-on: mini-elias
+    runs-on: [self-hosted,testing,generic]
     steps:
       - run: |
           groups
