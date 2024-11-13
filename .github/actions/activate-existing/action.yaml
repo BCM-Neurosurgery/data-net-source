@@ -1,0 +1,15 @@
+name: 'Activate existing'
+description: 'Activate a persistent conda environment to test for breaking changes in deployed parsers'
+inputs:
+  env-name:
+    description: 'Name of the persistent conda env to activate'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Activate the base conda environment
+      run: source /home/auto/miniconda/bin/activate
+      shell: bash
+    - name: Set Greeting
+      run: conda activate $env-name
+      shell: bash
