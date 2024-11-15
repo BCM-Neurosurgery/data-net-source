@@ -16,15 +16,15 @@ jobs:
   basics:
     runs-on: [self-hosted,testing,generic]
     env:
-      env-name: 'temp-env'
-      conda: conda run --name $env-name
+      env_name: 'temp-env'
+      conda: conda run --name $env_name
     steps:
       - run: |
           groups
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
         with:
-          env-name: temp-env
+          env_name: $env_name
       - name: Install dependencies
         run: |
           $conda conda info
