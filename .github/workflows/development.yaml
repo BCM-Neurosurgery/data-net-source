@@ -22,9 +22,8 @@ jobs:
       - uses: ./.github/actions/install
       - name: Install dependencies
         run: |
-          conda info
-          pip install flake8 pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          conda run --name test-env conda info
+          conda run --name test-env pip install flake8 pytest
         shell: bash -ileo pipefail {0}
       - name: Lint with flake8
         run: |
