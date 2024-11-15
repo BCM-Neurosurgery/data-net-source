@@ -51,8 +51,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
       - name: Assemble a parser config for this checker
-        run: ${{ conda-run }} python tests/make_config.py checker ${{ matrix.checker }}
+        run: $conda-run python tests/make_config.py checker ${{ matrix.checker }}
       - name: Prepare an individual source parser
-        run: ${{ conda-run }} python prepare.py $config_path
+        run: $conda-run python prepare.py $config_path
       - name: Run the trial parser
-        run: ${{ conda-run }} python run.py $config_path
+        run: $conda-run python run.py $config_path
