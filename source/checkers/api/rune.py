@@ -6,6 +6,7 @@ from source.checkers.api.base import BaseAPIChecker
 from runeq.resources.patient import get_patient, get_device
 from runeq.resources.client import Config, StreamClient, GraphClient
 from runeq.resources.stream import get_stream_data
+from runeq.resources.stream_metadata import get_patient_stream_metadata
 
 class RuneAPICheckerMixin(BaseAPIChecker):
 
@@ -35,9 +36,9 @@ class RuneAPICheckerMixin(BaseAPIChecker):
 
     def check_device(self, device):
         """Check whether there is any new data for a specific device"""
-        device_log = self.filter_device_logs(device)
+        device_log = self.filtered_device_logs(device)
 
-        device_streams = rune_metadata.get_patient_stream_metadata(
+        device_streams = get_patient_stream_metadata(
             device.patient_id, device.id
         )
         device_meta = device_streams.to_dataframe()
