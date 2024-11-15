@@ -1,5 +1,5 @@
 from source.common import ParserCommon
-from source.checkers.api import OuraAPIDocumentChecker
+from source.checkers.api.oura import OuraAPIDocumentChecker, OuraAPIStreamChecker
 from source.uploaders.simple import CopyUploaderMixin
 
 
@@ -15,4 +15,9 @@ class OuraRingDocumentParser(OuraAPIDocumentChecker, CopyUploaderMixin, ParserCo
     Checker definition for more information.
 
     The parser is intended to run on the same machine that stores the data, so the data transfer is a simple local copy
+    """
+
+
+class OuraRingStreamParser(OuraAPIStreamChecker, CopyUploaderMixin, ParserCommon):
+    """
     """

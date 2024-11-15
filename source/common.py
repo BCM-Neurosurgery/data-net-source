@@ -17,7 +17,6 @@ class ParserCommon(ABC):
     checker_name = "NullChecker"
     transformer_name = "NullTransformer"
     uploader_name = "NullUploader"
-    notifier_name = "NullNotifier"
 
     def __init__(self, state_path, source=None, middle=None, target=None):
         """
