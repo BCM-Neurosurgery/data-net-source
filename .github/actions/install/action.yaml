@@ -5,9 +5,9 @@ runs:
   steps:
     - name: made the conda env
       run: conda create -y --name  temp-env python=3.12 pip
-      shell: bash -ileo {0}
+      shell: bash -ileo pipefail {0}
 
     - name: activate the conda env
       run: conda activate temp-env
-      shell: bash -ileo {0}
+      shell: bash -ileo pipefail {0}
 
