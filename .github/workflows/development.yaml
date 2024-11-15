@@ -17,7 +17,7 @@ jobs:
     runs-on: [self-hosted,testing,generic]
     env:
       env-name: 'temp-env'
-      conda-run: conda run --name ${{ env-name }}
+      conda-run: conda run --name $env-name
     steps:
       - run: |
           groups
