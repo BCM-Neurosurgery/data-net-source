@@ -15,38 +15,44 @@ permissions:
 jobs:
   basics:
     runs-on: [self-hosted,testing,generic]
+    env:
+      env-name: 'temp-env'
+      conda-run: conda run --name ${{ env-name }}
     steps:
       - run: |
           groups
       - uses: actions/checkout@v4
       - uses: ./.github/actions/install
+        with:
+          env-name: temp-env
       - name: Install dependencies
         run: |
-          conda run --name temp-env conda info
-          conda run --name temp-env pip install flake8 pytest
+          ${{ conda-run }} conda info
+          ${{ conda-run }}  pip install flake8 pytest
         shell: bash -ileo pipefail {0}
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
-           conda run --name temp-env flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+           ${{ conda-run }} flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-           conda run --name temp-env flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+           ${{ conda-run }}  flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         shell: bash -ileo pipefail {0}
 
   try-checkers: # Run the complete throughput test with each checker
-    container:
-      image: python:3.12-slim
     needs: basics
     strategy:
       matrix:
         checker: [FileCheckerMixin]
-    runs-on: mini-elias
+    runs-on: [self-hosted,testing,generic]
     env:
       config_path: "placeholder/path"
+      conda-run: conda run --name temp-env
     steps:
-    - name: Assemble a parser config for this checker
-      run: python tests/make_config.py checker {{ matrix.checker }}
-    - name: Prepare an individual source parser
-      run: python prepare.py $config_path
-    - name: Run the trial parser
-      run: python run.py $config_path
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
+      - name: Assemble a parser config for this checker
+        run: ${{ conda-run }} python tests/make_config.py checker ${{ matrix.checker }}
+      - name: Prepare an individual source parser
+        run: ${{ conda-run }} python prepare.py $config_path
+      - name: Run the trial parser
+        run: ${{ conda-run }} python run.py $config_path
