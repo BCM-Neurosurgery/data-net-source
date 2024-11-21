@@ -28,9 +28,6 @@ path = "/path/to/check/for/data/"
 # Should always include a 'path' but each Uploader may have different requirements
 [parser.init.target]
 path = "/path/to/destination/"
-ssh-config.hostname = "0.0.0.0"
-ssh-config.username = "placeholder"
-ssh-config.key_filename= "/path/to/key/file"
 
 # Specify any additional optional settings for the Parser
 # Each Mixin may check different settings, check the Mixins in use for a list of available settings
