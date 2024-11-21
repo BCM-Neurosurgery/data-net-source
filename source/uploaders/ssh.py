@@ -4,8 +4,11 @@ import json
 import pathlib
 import logging
 import traceback
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import paramiko
 
 from paramiko import SSHClient
 from scp import SCPClient
@@ -96,3 +99,69 @@ class SCPUploaderMixin(BaseUploader):
         return {
             'success': successes, 'failure': errors
         }
+
+
+class SFTPUploader(BaseUploader):
+    """
+    Use the SFTP protocol to transfer files to a remote server
+    """
+
+    uploader_name = "SFTPUploader"
+    middle_location = {"path": ""}
+    target_location = {
+        "path": "",
+        "sftp": {
+            "host": "",
+            "port": 22,
+            "user": "",
+            "password": ""
+        }
+    }
+
+    def connect(self):
+        """Open a paramiko SFTP connection to the remote server"""
+        ssh = SSHClient()
+        ssh.load_system_host_keys()
+        ssh.connect(**self.target_location['sftp'])
+        sftp = ssh.open_sftp()
+        return sftp
+
+    def upload(self, ready):
+
+        success = []
+        errors = [*ready['failure']]
+
+        with self.connect() as sftp:
+
+            for file in ready['to do']:
+
+                try:
+
+                    sftp.makedirs(Path(self.remote_dirpath(file)).as_posix(), exist_ok=True)
+                    file_size = os.path.getsize(file)
+                    self.info(f'Moving file: {file}')
+                    upload_rate = self.time_upload(
+                        file_size,
+                        sftp.put,
+                        file, Path(self.remote_filepath(file)).as_posix()
+                    )
+
+                except Exception as e:
+                    self.error(f'Failed when moving {file} with error {e}')
+                    errors.append({
+                        'type': 'upload failure',
+                        'location': self.uploader_name,
+                        'filename': str(file),
+                        'destination': str(self.remote_filepath(file)),
+                        'error': str(e),
+                        'trace': traceback.format_exception(*sys.exc_info())
+                    })
+                else:
+                    self.info(f'  Upload complete. ({round(file_size, 2)} MB at {round(upload_rate, 2)} MB/s)')
+                    success.append({
+                        'type': 'upload success',
+                        'filename': file,
+                        'destination': self.remote_filepath(file),
+                        'transfer rate': upload_rate
+                    })
+        return {'success': success, 'failure': errors}
