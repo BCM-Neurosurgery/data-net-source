@@ -16,13 +16,7 @@ EMPTY_LOG = {
 }
 
 
-if __name__ == '__main__':
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('config_file', type=str,
-                            help='Path to the config file that specifies the parser to run')
-    args = arg_parser.parse_args()
-
-    config = load_config(args.config_file)
+def prepare_parser(config):
     # parser = load_parser(config)
     # parser.prepare()
 
@@ -45,6 +39,16 @@ if __name__ == '__main__':
             json.dump(EMPTY_LOG, statefile)
 
     print('Done.')
+
+
+if __name__ == '__main__':
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('config_file', type=str,
+                            help='Path to the config file that specifies the parser to run')
+    args = arg_parser.parse_args()
+
+    loaded_config = load_config(args.config_file)
+    prepare_parser(loaded_config)
 
 
 
