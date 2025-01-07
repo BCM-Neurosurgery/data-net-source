@@ -51,16 +51,22 @@ To install data-net-source, ensure that a conda environment is installed on the 
 On sufficiently small/dedicated systems conda is not required, but this will mean that python
 dependencies will be installed directly into the system python, which is generally not advisable.
 
-To ensure proper tracking, ensure that git is installed, and clone the source code from github.
-
+To ensure proper tracking, ensure that git is installed, and clone the source code from github:
 ```bash
 git clone git@github.com:BCM-Neurosurgery/data-net-source.git
 ```
+Once you're in the directory of the newly cloned code, install the minimal basic dependencies using
+If you're using a virtual environment of any kind, make sure it is activated.
 
-Ensure that pip and any external dependencies required by the parser you would like
+```bash
+cd data-net-source
+pip install -r requirements.txt
+```
+
+Ensure any external dependencies required by the parser you would like
 to run are correctly installed on your system.
 
-You should not need to manually install any python dependencies if your parser
+You should not need to manually install python dependencies specific to your parser if your parser
 has its dependencies specified in the config file. Instead, activate the appropriate conda
 environment, and run the prepare script using:
 ```bash
@@ -160,24 +166,22 @@ If the "type" set on the parser class is "dynamic" then the parser class will be
 dynamically from the specified Mixins. This is the simplest way of specifying a parsers
 and allows creating of custom parsers without having to run any python code.
 
-In this case, 
-
-NOTE: this is not quite the way the load parser function actually works
+In this case, you must give the name to use for the new class, as well as a list of
+identifiers for the Mixins to use to define the parser's behavior. Each identifier
+consists of a pair of values, the first is the importable path from within the `data_net_source.source`
+module, and the second is the name of the Mixin. At least a Checker and an Uploader must be specified, and 
+you are expected to pass at most one of each.
 
 Example:
-```json
-{
-  "parser": {
-    "class": {
-      "type": "dynamic",
-      "parts": [
-        ["checkers.local", "StreamedFileCheckerMixin"],
-        ["uploaders.ssh", "SCPUploaderMixin"]
-      ]
-    },
-    ...
-  }
-}
+```toml
+[parser.class]
+type = "dynamic" 
+name = "MyCustomParser"
+parts = [
+  ["checkers.local", "StreamedFileCheckerMixin"],
+  ["uploaders.ssh", "SCPUploaderMixin"]
+]
+
 ```
 
 #### Existing Parsers
@@ -192,17 +196,11 @@ Use `.` notation in case of nesting.
 If the exact same parser needs to be used in multiple places, this will simplify the config file.
 
 Example:
-```json
-{
-  "parser": {
-    "class": {
-      "type": "existing",
-      "module": "blackrock",
-      "class": "BlackrockRemoteParser"
-    },
-    ...
-  }
-}
+```toml
+[parser.class] 
+type = "existing"
+module = "blackrock"  # Module inside the 'parsers' module which contains the class
+class = "BlackrockRemoteParser"
 ```
 
 

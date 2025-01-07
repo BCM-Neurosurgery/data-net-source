@@ -1,13 +1,8 @@
-pandas
-numpy
-scp
-paramiko>=2.11
-sentry-sdk
+toml
 
 ## Data-net dependencies
 # common @ git+ssh://git@github.com/Weill-Neurohub-OPTiMaL/data-net-common.git@main
 # If you're developing locally you can use this version of the install, just change the path
 -e file://D:/Work/DataNet/data-net-common#egg=common
--e file://D:/Work/BCM/emu24#egg=emu24
 
 

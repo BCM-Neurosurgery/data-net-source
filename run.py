@@ -2,7 +2,7 @@
 Script to load and run a single parser based on a config json file
 """
 
-import json
+import toml
 import argparse
 import importlib
 from source.common import ParserCommon
@@ -11,8 +11,8 @@ from os import PathLike
 
 def load_config(config_fp: [str, PathLike]) -> dict:
     with open(config_fp, 'r') as f:
-        json_config = json.load(f)
-    return json_config
+        toml_config = toml.load(f)
+    return toml_config
 
 
 def load_parser(parser_config: dict) -> ParserCommon:
@@ -22,22 +22,24 @@ def load_parser(parser_config: dict) -> ParserCommon:
     Doing dynamic importing like this makes it so that the only external requirements needed to run any parser are
     the software that particular parser needs. There are no global non-python requirements
     """
+
+    class_config = parser_config['class']
     # Build a source parser from a ready class
-    if 'module' in parser_config and 'class' in parser_config:
-        pointer = importlib.import_module(f'parsers.{parser_config["module"]}')
+    if class_config['type'] == "existing":
+        pointer = importlib.import_module(f'parsers.{class_config["module"]}')
         parser_class = pointer.__dict__[parser_config["class"]]
 
     # Dynamically build a parser class from the config information
-    elif 'make-class' in parser_config:
+    elif parser_config['class']['type'] == "dynamic":
         mixins = []
-        class_parts = parser_config['make-class']['parts']
+        class_parts = class_config['parts']
         for (module, mixin) in class_parts:
             pointer = importlib.import_module(f'source.{module}')
             mixins.append(pointer.__dict__[mixin])
         sub_classes = (*mixins, ParserCommon)
-        parser_class = type(parser_config['make-class']['name'], sub_classes, {})
+        parser_class = type(class_config['name'], sub_classes, {})
     else:
-        raise KeyError('Invalid parser configuration!')
+        raise KeyError('Invalid parser class configuration!')
 
     source_parser = parser_class(**parser_config["init"])
 
