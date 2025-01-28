@@ -101,23 +101,39 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
         """
         self.format_today()
 
-        all_paths = []
+        all_paths, failures = [], []
         for patient, token in self.patients.items():
             headers = {'Authorization': f'Bearer {token}'}
 
             for collection in self.source_location['collections']:
-                all_oura_data = self.fetch_collection_data(collection, headers)
-                new_data = self.cross_check(patient, collection, all_oura_data)
 
-                for day, day_data in new_data.items():
-                    out_dir = os.path.join(self.source_location['path'], patient)
-                    os.makedirs(out_dir, exist_ok=True)
-                    filepath = os.path.join(out_dir, f'{collection}_{day}.json')
-                    with open(filepath, 'w') as day_json:
-                        json.dump(day_data, day_json)
-                    all_paths.append(filepath)
+                try:
+                    all_oura_data = self.fetch_collection_data(collection, headers)
+                    new_data = self.cross_check(patient, collection, all_oura_data)
 
-        return {'to do': all_paths, 'failure': []}
+                    for day, day_data in new_data.items():
+                        out_dir = os.path.join(self.source_location['path'], patient)
+                        os.makedirs(out_dir, exist_ok=True)
+                        filepath = os.path.join(out_dir, f'{collection}_{day}.json')
+                        with open(filepath, 'w') as day_json:
+                            json.dump(day_data, day_json)
+                        all_paths.append(filepath)
+
+                except Exception as e:
+                    import sys, traceback
+                    error_dict = {
+                        "type": "checker failure",
+                        "location": f"{self.checker_name}.check",
+                        "checking": f'{patient} {collection}',
+                        "error": str(e),
+                        "trace": traceback.format_exception(*sys.exc_info()),
+                    }
+                    failures.append(error_dict)
+                    self.warning(
+                        f"Error encountered in checker! \n {json.dumps(error_dict, skipkeys=True, indent=2)}"
+                    )
+
+        return {'to do': all_paths, 'failure': failures}
 
     def save(self, completed):
         pass
