@@ -2,11 +2,18 @@
 Script to load and run a single parser based on a config json file
 """
 
-import toml
 import argparse
 import importlib
 from source.common import ParserCommon
 from os import PathLike
+
+try:
+    import toml
+except ImportError:
+    import sys
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "toml"])
+    import toml
 
 
 def load_config(config_fp: [str, PathLike]) -> dict:
