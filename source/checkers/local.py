@@ -65,22 +65,37 @@ class FileCheckerMixin(BaseChecker):
         uploaded_files = [success['uploaded'] for success in successes]
 
         # Determine which of the files here need to be uploaded
-        to_upload = []
+        to_upload, failures = [], []
         for item_here in os.listdir(source_dir):
-            full_path = os.path.join(source_dir, item_here)
+            try:
+                full_path = os.path.join(source_dir, item_here)
 
-            # Skip any files and folders that have already been logged as complete
-            if full_path in uploaded_files:
-                continue
+                # Skip any files and folders that have already been logged as complete
+                if full_path in uploaded_files:
+                    continue
 
-            # For any files besides the logfile check if they've been uploaded
-            if os.path.isfile(full_path) and item_here != self.state_filename:
-                to_upload.append(full_path)
+                # For any files besides the logfile check if they've been uploaded
+                if os.path.isfile(full_path) and item_here != self.state_filename:
+                    to_upload.append(full_path)
 
-            # For any directories that have not been marked as completed, process recursively
-            elif os.path.isdir(full_path):
-                check_inside = self.search_file_tree(full_path, level=level + 1)
-                to_upload.extend(check_inside['to do'])
+                # For any directories that have not been marked as completed, process recursively
+                elif os.path.isdir(full_path):
+                    check_inside = self.search_file_tree(full_path, level=level + 1)
+                    to_upload.extend(check_inside['to do'])
+
+            except Exception as e:
+                import sys, traceback
+                error_dict = {
+                    "type": "checker failure",
+                    "location": f"{self.checker_name}.search_file_tree",
+                    "checking": item_here,
+                    "error": str(e),
+                    "trace": traceback.format_exception(*sys.exc_info()),
+                }
+                failures.append(error_dict)
+                self.warning(
+                    f"Error encountered in checker! \n {json.dumps(error_dict, skipkeys=True, indent=2)}"
+                )
 
         if level and level < self.verbose_level:
             self.info(f'Checked everything in {source_dir}')
@@ -134,7 +149,7 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
 
     #: list of file endings that should be considered as streamed files, and should not be uploaded right away
     #: If streamed files is '*' instead of a list, all files will be identified as streamed files
-    streamed_files = []
+    streamed_files = "*"  # []
 
     #: list of file endings that only appear when the recording has ended
     termination_files = []
