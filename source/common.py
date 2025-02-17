@@ -49,7 +49,7 @@ class ParserCommon(ABC):
     def process(self):
         self.info("STARTING PARSER")
         to_do = self.check()
-        self.info(f'Found {len(to_do["to do"])} new tasks...')
+        self.info(f'Checker: Found {len(to_do["to do"])} new tasks and {len(to_do["failure"])} failures')
         if to_do:
             ready = self.transform(to_do)
             complete = self.upload(ready)

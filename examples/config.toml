@@ -45,6 +45,7 @@ max_files = 5         # Max number of files to keep before deleting the oldest
 dsn = "placeholder"
 level = 10
 event_level = 30
+# release?
 
 [dependencies]
 pip = [
