@@ -30,7 +30,7 @@ path = "/Users/tpk/Documents/Research/data/rune"
 
 [parser.init.source.patients.thomas_test]
 rune_id = "c2e72a4bc7004b19be199ab5c325bcfd"
-# active_devices = ["qVQ245Mn", "5QKVqRiL"]
+active_devices = ["5QKVqRiL"] #"qVQ245Mn", 
 
 # [parser.settings]
 # Optional settings for the parser or checker

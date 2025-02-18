@@ -1,5 +1,5 @@
 import os.path
-
+import json
 import pandas as pd
 from datetime import datetime
 from runeq import initialize
@@ -26,6 +26,8 @@ class RuneAPICheckerMixin(BaseAPIChecker):
     checker_name = "RuneAPIChecker"
     day_resolution = int(pd.Timedelta(days=1).total_seconds())
 
+    _state = []
+
     def setup_clients(self):
         """Prepare both the metadata and stream data clients for use by this checker"""
         # Load the Rune config from the specified rune config file
@@ -36,54 +38,42 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         self.stream_client = StreamClient(rune_config)
         self.graph_client = GraphClient(rune_config)
 
-    def filtered_device_logs(self, device):
-        """"""
-        all_logs = self.load_state()
-        return all_logs
-
-    def filter_streams(self, device_streams, logged_end):
-        """Filter device_streams by categories and by log time"""
-
-        def new_stream_data(stream) -> bool:
-            """Return True if stream has data since last log"""
-            return stream.max_time > logged_end
-        
-        device_streams = device_streams.filter(filter_function=new_stream_data)
-        device_streams_update = StreamMetadataSet()
-        for category in self.categories:
-            category_streams = device_streams.filter(category=category)
-            device_streams_update.update(category_streams)
-
-        return device_streams_update
-
     def check_device(self, device):
         """Check whether there is any new data for a specific device"""
-        device_log = self.filtered_device_logs(device)
+        log = self.load_state()
+        
+        # Ensure log_df exists with required columns
+        if not log.get('success'):
+            log_df = pd.DataFrame(columns=['stream_id', 'logged_end'])
+        else:
+            log_df = pd.DataFrame(log['success'])
 
         device_streams = get_patient_stream_metadata(
             device.patient_id, device.id
         )
         device_streams_df = device_streams.to_dataframe()
+
+        # Merge device_streams_df with log_df safely
+        merged_df = device_streams_df.merge(
+            log_df[['stream_id', 'logged_end']],
+            left_on='id',
+            right_on='stream_id',
+            how='left'
+        )
+
+        # Filtering conditions
+        filtered_df = merged_df[
+            (merged_df['max_time'] > merged_df['logged_end']) | merged_df['logged_end'].isna()
+        ]
         
-        try:
-            device_end = max(device_streams_df['max_time'])
-        except KeyError as e:
-            if device_streams_df.empty:
-                self.info(f'No info available for {device.id}: {device.name}')
-                return {}
-            else:
-                raise e
+        filtered_df = filtered_df[filtered_df['category'].isin(self.categories)]
 
-        logged_end = device_log[-1]['max_time'] if device_log['success'] else min(device_streams_df['min_time']) # the last log is the last log time, else it is the earliest time of data collection
+        if filtered_df.empty:
+            self.info(f'No info available for {device.id}: {device.name}')
+        
+        return filtered_df
 
-        if device_end > logged_end: # if there is new data since last upload, 
-            device_streams = self.filter_streams(self, device_streams, logged_end) # filter device streams by category and time since last log
-        else:
-            device_streams = {}
-
-        return device_streams # dataframe of stream ID's and their dates
-
-    def deduplication(df):
+    def deduplication(self, df):
         'deduplicating stream data'
         # 1) Remove duplicate rows, ignoring the 'id' column
         cols_for_duplicates = [col for col in df.columns if col not in ['id','stream_type','parameters']]
@@ -146,6 +136,8 @@ class RuneAPICheckerMixin(BaseAPIChecker):
             # Move to the next day
             current_day = next_day
 
+        return file_list # passes on list of files for the uploader (for a single stream)
+
     def check(self):
         """
         Search for new data from the RUNE API
@@ -165,9 +157,9 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 }
                 failures.append(error_dict)
             else:
-                for device_id in patient.devices:
+                for device in patient.devices:
                     try:
-                        device = get_device(patient, device_id, client=self.graph_client)
+                        device = get_device(patient, device.id, client=self.graph_client)
                     except Exception as e:
                         error_dict = {
                             "type": "checker failure",
@@ -176,11 +168,9 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                         }
                         failures.append(error_dict)
                     else:                    
-                        new_data = self.check_device(device)
-                        if not new_data:
-                            print('no new data for ',device_id)
-                            continue
-                        new_data_df = new_data.to_dataframe()
+                        new_data_df = self.check_device(device)
+                        if new_data_df.empty:
+                            pass
                         new_data_df = self.deduplication(new_data_df)
 
                         for i, stream in new_data_df.iterrows():
@@ -196,6 +186,12 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                                 failures.append(error_dict)
                             else:
                                 stream_tasks = self.save_daily_stream_data(stream, meta, patient_name)
+                                self._state.append({
+                                    'id':stream['id'],
+                                    'logged_end':stream['max_time'],
+                                    'log_time':datetime.now(),
+                                    'failed_dates':[]
+                                })
                                 tasks.extend(stream_tasks)
 
         return {'to do': tasks, 'failure': failures}
@@ -203,4 +199,34 @@ class RuneAPICheckerMixin(BaseAPIChecker):
 
     def save(self, completed):
         """Log which new time periods of RUNE data have been uploaded"""
-        pass
+        # Extract failures from completed
+        failure_paths = completed.get('failure', [])
+
+        # Process each failed file path
+        for path in failure_paths:
+            try:
+                # Extract date (YYYY-MM-DD) from the directory in the path
+                parts = path.split(os.sep)
+                date_str = next((p for p in parts if p.count('-') == 2 and len(p) == 10), None)
+                
+                # Extract stream_id from the filename
+                filename = os.path.basename(path)
+                stream_id = filename.split('_')[-1]  # Assuming stream_id is the first part of filename
+                
+                if date_str and stream_id:
+                    # Find the corresponding _state entry
+                    state_entry = next((entry for entry in self._state if entry['id'] == stream_id), None)
+                    
+                    if state_entry:
+                        # Append unique failed date
+                        if date_str not in state_entry['failed_dates']:
+                            state_entry['failed_dates'].append(date_str)
+
+            except Exception as e:
+                print(f"Error processing path {path}: {e}")
+
+        state = self.load_state()
+        state['success'].extend(self._state)
+        state['failure'].extend(completed['failure'])
+        with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
+            json.dump(state, log, indent=2)
