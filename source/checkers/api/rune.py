@@ -1,7 +1,7 @@
 import os.path
 import json
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from runeq import initialize
 initialize()
 
@@ -17,7 +17,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
     'Saves by measurement category'
 
     #: Duration before the current date-time to search for new data, as a pandas frequency string
-    look_back_duration = '90D'
+    look_back_duration = '2D'
     categories = ['sleep', 'motion', 'vitals', 'device_info', 'environment']
 
     def clean(self):
@@ -38,38 +38,42 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         self.stream_client = StreamClient(rune_config)
         self.graph_client = GraphClient(rune_config)
 
-    def check_device(self, device):
-        """Check whether there is any new data for a specific device"""
-        log = self.load_state()
+    def check_streams(self, patient_stream_data):
+        """Check whether there is any new data for a specific patient"""
+        logs = self.load_state()
         
         # Ensure log_df exists with required columns
-        if not log.get('success'):
+        if not logs.get('success'):
             log_df = pd.DataFrame(columns=['stream_id', 'logged_end'])
         else:
-            log_df = pd.DataFrame(log['success'])
+            log_df = pd.DataFrame(logs['success'])
 
-        device_streams = get_patient_stream_metadata(
-            device.patient_id, device.id
-        )
-        device_streams_df = device_streams.to_dataframe()
+        streams_df = patient_stream_data.to_dataframe()
+
+        # Convert look_back_duration (e.g., '14D') into a timestamp (Unix time)
+        look_back_days = int(self.look_back_duration[:-1])  # Extract number of days
+        look_back_timestamp = (datetime.utcnow() - timedelta(days=look_back_days)).timestamp()
 
         # Merge device_streams_df with log_df safely
-        merged_df = device_streams_df.merge(
+        merged_df = streams_df.merge(
             log_df[['stream_id', 'logged_end']],
             left_on='id',
             right_on='stream_id',
             how='left'
         )
 
+        # Replace NaN values in 'logged_end' with the look-back timestamp
+        merged_df['logged_end'].fillna(look_back_timestamp, inplace=True)
+
         # Filtering conditions
         filtered_df = merged_df[
-            (merged_df['max_time'] > merged_df['logged_end']) | merged_df['logged_end'].isna()
+            merged_df['max_time'] > merged_df['logged_end']
         ]
         
         filtered_df = filtered_df[filtered_df['category'].isin(self.categories)]
 
         if filtered_df.empty:
-            self.info(f'No info available for {device.id}: {device.name}')
+            self.info(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}")  # Adjusted for Pandas row access
         
         return filtered_df
 
@@ -89,13 +93,54 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         Given stream metadata, pull and save stream data from each day
         Return list of files for upload for given stream
         """
-        start_ts = stream['created_at'] - 1
-        end_ts = stream['max_time'] + 1
+        start_ts = stream['logged_end']
+        end_ts = stream['max_time'] 
         # Convert to Pandas Timestamps, then “floor” or “ceil” to whole days
         start_day = pd.to_datetime(start_ts, unit='s').floor('D')
         end_day = pd.to_datetime(end_ts, unit='s').ceil('D')
 
         file_list = []
+
+        logs = self.load_state()
+        if not logs.get('success'):
+            log_df = pd.DataFrame(columns=['stream_id', 'logged_end'])
+        else:
+            log_df = pd.DataFrame(logs['success'])
+        
+        if 'failed_dates' in log_df and not log_df['failed_dates'].empty:
+            start_time = pd.to_datetime(log_df['failed_dates'], unit='s').floor('D')
+            end_time = pd.to_datetime(log_df['failed_dates'], unit='s').ceil('D')
+            for i in range(len(start_time)):
+                # add data to previously failed days
+                day_data = stream_metadata.get_stream_dataframe(
+                    start_time=start_time[i],
+                    end_time=end_time[i],
+                )
+                # Only save if we actually have rows (not just an empty/header-only DataFrame)
+                if not day_data.empty:  # e.g. day_data.shape[0] > 0
+                    # Format the date (YYYY-MM-DD) for folder naming, etc.
+                    day_str = current_day.strftime('%Y-%m-%d')
+
+                    # Build output folder path: [root]/[patient_name]/[day_str]
+                    out_path = os.path.join(
+                        self.source_location['path'],
+                        patient_name,
+                        day_str
+                    )
+                    os.makedirs(out_path, exist_ok=True)
+
+                    # Choose the filename: e.g. "tremor_<stream_id>.csv"
+                    out_file = os.path.join(
+                        out_path, 
+                        f"{stream['measurement']}_{stream['id']}.csv"
+                    )
+
+                    file_list.append(out_file)
+
+                    # Write CSV
+                    day_data.to_csv(out_file, index=False)
+                    self.debug(f"Wrote {len(day_data)} rows to {out_file}.")
+
 
         # Walk day by day in [start_day, end_day)
         current_day = start_day
@@ -148,7 +193,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
 
         for patient_name, patient_config in self.patients.items():
             try:
-                patient = get_patient(patient_config["rune_id"], client=self.graph_client)
+                patient = get_patient_stream_metadata(patient_config["rune_id"], client=self.graph_client)
             except Exception as e:
                 error_dict = {
                     "type": "checker failure",
@@ -156,46 +201,34 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                     "error": str(e),
                 }
                 failures.append(error_dict)
-            else:
-                for device in patient.devices:
+            else:               
+                new_data_df = self.check_streams(patient)
+                if new_data_df.empty:
+                    pass
+                new_data_df = self.deduplication(new_data_df)
+
+                for i, stream in new_data_df.iterrows():
                     try:
-                        device = get_device(patient, device.id, client=self.graph_client)
+                        meta = get_stream_metadata(stream_ids=stream['id'])
                     except Exception as e:
                         error_dict = {
                             "type": "checker failure",
-                            "location": "RuneAPICheckerMixin: get_device",
+                            "location": "RuneAPICheckerMixin: get_stream_metadata",
+                            "stream_metadata": stream,
                             "error": str(e),
                         }
                         failures.append(error_dict)
-                    else:                    
-                        new_data_df = self.check_device(device)
-                        if new_data_df.empty:
-                            pass
-                        new_data_df = self.deduplication(new_data_df)
-
-                        for i, stream in new_data_df.iterrows():
-                            try:
-                                meta = get_stream_metadata(stream_ids=stream['id'])
-                            except Exception as e:
-                                error_dict = {
-                                    "type": "checker failure",
-                                    "location": "RuneAPICheckerMixin: get_stream_metadata",
-                                    "stream_metadata": stream,
-                                    "error": str(e),
-                                }
-                                failures.append(error_dict)
-                            else:
-                                stream_tasks = self.save_daily_stream_data(stream, meta, patient_name)
-                                self._state.append({
-                                    'id':stream['id'],
-                                    'logged_end':stream['max_time'],
-                                    'log_time':datetime.now(),
-                                    'failed_dates':[]
-                                })
-                                tasks.extend(stream_tasks)
+                    else:
+                        stream_tasks = self.save_daily_stream_data(stream, meta, patient_name)
+                        self._state.append({
+                            'id':stream['id'],
+                            'logged_end':stream['max_time'],
+                            'log_time':datetime.now(),
+                            'failed_dates':[]
+                        })
+                        tasks.extend(stream_tasks)
 
         return {'to do': tasks, 'failure': failures}
-
 
     def save(self, completed):
         """Log which new time periods of RUNE data have been uploaded"""
@@ -211,7 +244,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 
                 # Extract stream_id from the filename
                 filename = os.path.basename(path)
-                stream_id = filename.split('_')[-1]  # Assuming stream_id is the first part of filename
+                stream_id = filename.split('_')[-1]  # Assuming stream_id is the last part of filename
                 
                 if date_str and stream_id:
                     # Find the corresponding _state entry
@@ -228,5 +261,12 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         state = self.load_state()
         state['success'].extend(self._state)
         state['failure'].extend(completed['failure'])
+
+        # Convert datetime objects in _state to ISO format before saving
+        def convert_datetime(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()  # Convert datetime to string
+            raise TypeError(f"Type {type(obj)} not serializable")
+
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
-            json.dump(state, log, indent=2)
+            json.dump(state, log, indent=2, default=convert_datetime) 
