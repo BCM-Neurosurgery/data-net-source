@@ -17,7 +17,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
     'Saves by measurement category'
 
     #: Duration before the current date-time to search for new data, as a pandas frequency string
-    look_back_duration = '2D'
+    look_back_duration = None
     categories = ['sleep', 'motion', 'vitals', 'device_info', 'environment']
 
     def clean(self):
@@ -44,28 +44,33 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         
         # Ensure log_df exists with required columns
         if not logs.get('success'):
-            log_df = pd.DataFrame(columns=['stream_id', 'logged_end'])
+            log_df = pd.DataFrame(columns=['id', 'logged_end'])
         else:
             log_df = pd.DataFrame(logs['success'])
 
         streams_df = patient_stream_data.to_dataframe()
 
-        # Convert look_back_duration (e.g., '14D') into a timestamp (Unix time)
-        look_back_days = int(self.look_back_duration[:-1])  # Extract number of days
-        look_back_timestamp = (datetime.utcnow() - timedelta(days=look_back_days)).timestamp()
+        # If look back timestamp doesn't exist, then just make it the minimum stream time to capture all stream data
+        if self.look_back_duration:
+            look_back_days = int(self.look_back_duration[:-1])  # Extract number of days
+            look_back_timestamp = (datetime.utcnow() - timedelta(days=look_back_days)).timestamp()
+        else:
+            look_back_timestamp = streams_df['min_time']
 
-        # Merge device_streams_df with log_df safely
+        # Merge device stream metadata with the upload_state data to then filter out old data to check
         merged_df = streams_df.merge(
-            log_df[['stream_id', 'logged_end']],
+            log_df[['id', 'logged_end']],
             left_on='id',
-            right_on='stream_id',
+            right_on='id',
             how='left'
         )
 
-        # Replace NaN values in 'logged_end' with the look-back timestamp
+        # if the last log time is earlier than the look_back_timestamp, replace it with the look_back_timestamp
+        merged_df['logged_end'].mask(merged_df['logged_end'] < look_back_timestamp, look_back_timestamp, inplace=True)
+        # Replace NaN values in 'logged_end' with the look-back timestamp: if there is no upload state, go by look back duration
         merged_df['logged_end'].fillna(look_back_timestamp, inplace=True)
 
-        # Filtering conditions
+        # Filtering only for new data
         filtered_df = merged_df[
             merged_df['max_time'] > merged_df['logged_end']
         ]
@@ -73,7 +78,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         filtered_df = filtered_df[filtered_df['category'].isin(self.categories)]
 
         if filtered_df.empty:
-            self.info(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}")  # Adjusted for Pandas row access
+            self.info(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}")  
         
         return filtered_df
 
@@ -102,44 +107,46 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         file_list = []
 
         logs = self.load_state()
-        if not logs.get('success'):
-            log_df = pd.DataFrame(columns=['stream_id', 'logged_end'])
-        else:
-            log_df = pd.DataFrame(logs['success'])
-        
-        if 'failed_dates' in log_df and not log_df['failed_dates'].empty:
-            start_time = pd.to_datetime(log_df['failed_dates'], unit='s').floor('D')
-            end_time = pd.to_datetime(log_df['failed_dates'], unit='s').ceil('D')
-            for i in range(len(start_time)):
-                # add data to previously failed days
-                day_data = stream_metadata.get_stream_dataframe(
-                    start_time=start_time[i],
-                    end_time=end_time[i],
-                )
-                # Only save if we actually have rows (not just an empty/header-only DataFrame)
-                if not day_data.empty:  # e.g. day_data.shape[0] > 0
-                    # Format the date (YYYY-MM-DD) for folder naming, etc.
-                    day_str = current_day.strftime('%Y-%m-%d')
+        if not logs.get('success'): # is there
+            log_df = pd.DataFrame(columns=['id', 'logged_end'])
+            if 'failed_dates' in log_df:
+                failed_dates = log_df.loc[log_df['id'] == stream['id'], 'failed_dates'].values # get failed dates list for this stream
+                if failed_dates and isinstance(failed_dates[0], list) and failed_dates[0]:
+                    failed_dates = failed_dates[0]
+                    start_times = [pd.to_datetime(date).floor('D') for date in failed_dates]
+                    end_times = [pd.to_datetime(date).ceil('D') for date in failed_dates]
 
-                    # Build output folder path: [root]/[patient_name]/[day_str]
-                    out_path = os.path.join(
-                        self.source_location['path'],
-                        patient_name,
-                        day_str
-                    )
-                    os.makedirs(out_path, exist_ok=True)
+                    for start_time, end_time in zip(start_times, end_times):
+                        # add data to previously failed days
+                        day_data = stream_metadata.get_stream_dataframe(
+                            start_time=start_time,
+                            end_time=end_time,
+                        )
+                        # Only save if we actually have rows (not just an empty/header-only DataFrame)
+                        if not day_data.empty:  # e.g. day_data.shape[0] > 0
+                            # Format the date (YYYY-MM-DD) for folder naming, etc.
+                            day_str = current_day.strftime('%Y-%m-%d')
 
-                    # Choose the filename: e.g. "tremor_<stream_id>.csv"
-                    out_file = os.path.join(
-                        out_path, 
-                        f"{stream['measurement']}_{stream['id']}.csv"
-                    )
+                            # Build output folder path: [root]/[patient_name]/[day_str]
+                            out_path = os.path.join(
+                                self.source_location['path'],
+                                patient_name,
+                                day_str,
+                                stream['measurement']
+                            )
+                            os.makedirs(out_path, exist_ok=True)
 
-                    file_list.append(out_file)
+                            # Choose the filename: e.g. "tremor_<stream_id>.csv"
+                            out_file = os.path.join(
+                                out_path, 
+                                f"{stream['source_device']}_{stream['id']}.csv"
+                            )
 
-                    # Write CSV
-                    day_data.to_csv(out_file, index=False)
-                    self.debug(f"Wrote {len(day_data)} rows to {out_file}.")
+                            file_list.append(out_file)
+
+                            # Write CSV
+                            day_data.to_csv(out_file, index=False)
+                            self.debug(f"Wrote {len(day_data)} rows to {out_file}.")
 
 
         # Walk day by day in [start_day, end_day)
@@ -162,14 +169,15 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 out_path = os.path.join(
                     self.source_location['path'],
                     patient_name,
-                    day_str
+                    day_str,
+                    stream['measurement']
                 )
                 os.makedirs(out_path, exist_ok=True)
 
                 # Choose the filename: e.g. "tremor_<stream_id>.csv"
                 out_file = os.path.join(
                     out_path, 
-                    f"{stream['measurement']}_{stream['id']}.csv"
+                    f"{stream['source_device']}_{stream['id']}.csv"
                 )
 
                 file_list.append(out_file)

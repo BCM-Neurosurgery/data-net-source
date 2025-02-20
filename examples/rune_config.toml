@@ -10,7 +10,7 @@ parts = [
 ]
 
 [parser.init]
-state_path = "/Users/tpk/Documents/Research/data-net-rune"
+state_path = "/Users/tpk/Documents/Research/data/rune"
 
 # The source section will contain the parameters the checker expects
 [parser.init.source]
@@ -26,31 +26,23 @@ path = "/Users/tpk/Documents/Research/data/rune"
 
 # [parser.init.source.patients.sai_test]
 # rune_id = "b79e9da25bd048008322a1d8d185fccd"
-# active_devices = ["fpO2V9Y2", "iU1bD*DQ", "113Z*c4H", "uH_IKv2X"]
 
 [parser.init.source.patients.thomas_test]
 rune_id = "c2e72a4bc7004b19be199ab5c325bcfd"
-active_devices = ["5QKVqRiL", "qVQ245Mn"]
 
-# [parser.settings]
+[parser.settings]
 # Optional settings for the parser or checker
-# For example, if you want to override look_back_duration or other attributes
-# look_back_duration = "14D"
+look_back_duration = "5D"
+categories = ['sleep', 'motion', 'vitals', 'device_info', 'environment']
 
 [parser.init.target]
 path = "/Users/tpk/Documents/Research/data/rune-upload"
 
 [logging.file]
-filepath = "/Users/tpk/Documents/Research/data-net-rune/log.txt"
+filepath = "/Users/tpk/Documents/Research/data/rune/log.txt"
 level = 0
 max_size = 21048576
 max_files = 5
-
-# [logging.sentry]
-# dsn = "placeholder"
-# level = 10
-# event_level = 30
-# release = '2.19'
 
 [dependencies]
 pip = [
