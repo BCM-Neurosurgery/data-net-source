@@ -27,7 +27,7 @@ def load_parser(parser_config: dict) -> ParserCommon:
     # Build a source parser from a ready class
     if class_config['type'] == "existing":
         pointer = importlib.import_module(f'parsers.{class_config["module"]}')
-        parser_class = pointer.__dict__[parser_config["class"]]
+        parser_class = pointer.__dict__[class_config["class"]]
 
     # Dynamically build a parser class from the config information
     elif parser_config['class']['type'] == "dynamic":
