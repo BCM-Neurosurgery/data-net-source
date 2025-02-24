@@ -1,0 +1,50 @@
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "RuneLabsDataParser"
+parts = [
+  # Adjust the first part's import path and class name based on where RuneAPICheckerMixin is defined
+  ["checkers.api.rune", "RuneAPICheckerMixin"],
+  ["uploaders.simple", "CopyUploaderMixin"]
+]
+
+[parser.init]
+state_path = "/Users/tpk/Documents/Research/data/rune"
+
+# The source section will contain the parameters the checker expects
+[parser.init.source]
+# Path to the Rune configuration file used by runeq.Config()
+rune_config = "/Users/tpk/.rune/config"
+
+# Local directory where the checker should store downloaded data
+path = "/Users/tpk/Documents/Research/data/rune"
+
+# Define patients and their associated device configurations
+# The code loops over self.patients.items(), so we define a table for each patient
+[parser.init.source.patients]
+
+# [parser.init.source.patients.sai_test]
+# rune_id = "b79e9da25bd048008322a1d8d185fccd"
+
+[parser.init.source.patients.thomas_test]
+rune_id = "c2e72a4bc7004b19be199ab5c325bcfd"
+
+[parser.settings]
+# Optional settings for the parser or checker
+look_back_duration = "5D"
+categories = ['sleep', 'motion', 'vitals', 'device_info', 'environment']
+
+[parser.init.target]
+path = "/Users/tpk/Documents/Research/data/rune-upload"
+
+[logging.file]
+filepath = "/Users/tpk/Documents/Research/data/rune/log.txt"
+level = 0
+max_size = 21048576
+max_files = 5
+
+[dependencies]
+pip = [
+  "runeq"
+]
