@@ -1,10 +1,77 @@
 import os
 import re
+import toml
 
 from source.checkers.local import FileCheckerMixin
 
 
-class IndicatorFileCheckerMixin(FileCheckerMixin):
+class BaseIndicatorChecker(FileCheckerMixin):
+    """"""
+
+    def check(self):
+        """Recursively check the contents of a subset of the directories in the given path"""
+
+        to_check = self.parse_indicators()
+        to_do = []
+        failure = []
+
+        for directory in to_check:
+            try:
+                found_here = super(IndicatorFileCheckerMixin, self).search_file_tree(source_dir=directory, level=1)
+            except FileNotFoundError as e:
+                raise FileNotFoundError(f'Indicator file suggested an invalid path: \n  {e.filename}')
+            to_do.extend(found_here['to do'])
+            failure.extend(found_here['failure'])
+
+        return {'to do': to_do, 'failure': failure}
+
+    def clean_old_indicators(self, indicated, logged_events):
+        """"""
+        relevant_events = []
+        for event in logged_events:
+            for indication in indicated:
+                if indication in event['uploaded']:
+                    relevant_events.append(event)
+                    break  # We can skip to the next event since this one is already saved
+        return relevant_events
+
+    def clean(self):
+        """Delete local copies of files that have already been uploaded"""
+        upload_log = self.load_state()
+
+        # Standard steps for cleaning up the upload state
+        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
+        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
+        kept_success = self.clean_old_success(upload_log['success'])
+
+        # Only save the events related to files that are still indicated
+        check_locations = self.parse_indicators()
+        relevant_success = self.clean_old_indicators(check_locations, kept_success)
+        relevant_failure = self.clean_old_indicators(check_locations, most_recent_fails)
+
+        self.save_state(relevant_success, relevant_failure)
+
+class IndicatorTomlChecker(BaseIndicatorChecker):
+    """"""
+    source_location = {
+        "path": "",
+        "indicator_toml": ""
+    }
+
+    def parse_indicators(self):
+
+        with open(self.source_location['indicator_toml'], 'r') as f:
+            config = toml.load(f)
+
+        check_locations = []
+        for indicated in config:
+            sub_path = indicated['path']
+            check_locations.append(os.path.join(self.source_location['path'], sub_path))
+
+        return check_locations
+
+
+class IndicatorFileCheckerMixin(BaseIndicatorChecker):
     """
     Checker that uses a set of indicator files to limit the directories to search for new files
 
@@ -62,45 +129,4 @@ class IndicatorFileCheckerMixin(FileCheckerMixin):
 
         return check_locations
 
-    def check(self):
-        """Recursively check the contents of a subset of the directories in the given path"""
 
-        to_check = self.parse_indicators()
-        to_do = []
-        failure = []
-
-        for directory in to_check:
-            try:
-                found_here = super(IndicatorFileCheckerMixin, self).search_file_tree(source_dir=directory, level=1)
-            except FileNotFoundError as e:
-                raise FileNotFoundError(f'Indicator file suggested an invalid path: \n  {e.filename}')
-            to_do.extend(found_here['to do'])
-            failure.extend(found_here['failure'])
-
-        return {'to do': to_do, 'failure': failure}
-
-    def clean_old_indicators(self, indicated, logged_events):
-        """"""
-        relevant_events = []
-        for event in logged_events:
-            for indication in indicated:
-                if indication in event['uploaded']:
-                    relevant_events.append(event)
-                    break  # We can skip to the next event since this one is already saved
-        return relevant_events
-
-    def clean(self):
-        """Delete local copies of files that have already been uploaded"""
-        upload_log = self.load_state()
-
-        # Standard steps for cleaning up the upload state
-        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
-        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
-        kept_success = self.clean_old_success(upload_log['success'])
-
-        # Only save the events related to files that are still indicated
-        check_locations = self.parse_indicators()
-        relevant_success = self.clean_old_indicators(check_locations, kept_success)
-        relevant_failure = self.clean_old_indicators(check_locations, most_recent_fails)
-
-        self.save_state(relevant_success, relevant_failure)
