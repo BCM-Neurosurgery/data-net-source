@@ -64,7 +64,7 @@ class IndicatorTomlChecker(BaseIndicatorChecker):
             config = toml.load(f)
 
         check_locations = []
-        for indicated in config:
+        for patient_id, indicated in config.items():
             sub_path = indicated['path']
             check_locations.append(os.path.join(self.source_location['path'], sub_path))
 
