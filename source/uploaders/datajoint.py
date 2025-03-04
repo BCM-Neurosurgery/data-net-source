@@ -33,6 +33,17 @@ class DataJointUploader(BaseUploader, ABC):
 
 class EMUBlackrockDJUploader(DataJointUploader):
 
+    target_location = {
+        'sql-config': {
+            'host': 'localhost',
+            'username': '<USERNAME>',
+            'password': '<PASSWORD>',
+            'port': 0000,
+            'stores': {},
+        },
+        'patient_config': 'path/to/toml/with/patient/info'
+    }
+
     uploader_name = 'EMUNSPDataJointUploader'
     parsed_filetypes = ['nev', 'ns3', 'ns5']
     destination = None
@@ -50,6 +61,12 @@ class EMUBlackrockDJUploader(DataJointUploader):
             return matches[0]
         else:
             raise DataJointError(f'Lookup expected exactly one entry, found {len(matches)}!')
+
+    def get_patient_info(self, patient_emu_id):
+        import toml
+        with open(self.target_location['patient_config']) as f:
+            all_patient_info = toml.load(f)
+        return all_patient_info[patient_emu_id]
 
     def upload(self, ready):
 
@@ -73,11 +90,30 @@ class EMUBlackrockDJUploader(DataJointUploader):
             try:
                 # Get the patient ID in the database based on the EMU patient ID
                 patient = re.search(r'([A-Z]*)Datafile', filename).group(1)  # Patient name decoded from the file path
-                patient_id = self.lookup(
-                    schema.Patient(),
-                    ['patient_id'],
-                    f"emu_id='{patient}'"
-                )
+                try:
+                    patient_id = self.lookup(
+                        schema.Patient(),
+                        ['patient_id'],
+                        f"emu_id='{patient}'"
+                    )
+                except DataJointError as e:
+                    self.warning(f'Failed to look up patient: {e}')
+                    self.warning('Making a new patient+admission from the config file info')
+                    new_pid = len(schema.Patient())
+                    patient_info = self.get_patient_info(patient)
+                    schema.Patient().insert1({
+                        'patient_id': new_pid,
+                        'dob': patient_info['birthdate'],
+                        'emu_id': patient
+                    })
+
+                    query = (schema.Admission & f"patient_id='{new_pid}'")
+                    new_admission_pk = query.fetch('admission_id').size + 1
+                    schema.Admission().insert1({
+                        'patient_id': new_pid,
+                        'admission_id':new_admission_pk,
+                        'admission_date': patient_info['admitdate'],
+                    })
 
                 # Assume that we want the id of most recent admission
                 query = schema.Admission() & f"patient_id='{patient_id}'"
