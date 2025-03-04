@@ -58,9 +58,9 @@ class FileCheckerMixin(BaseChecker):
         if 'regex_filter' in self.source_location:
             search = re.search(self.source_location['regex_filter'], full_path)
             return search is not None
+        # Never skip files if not filter regex was passed
         else:
             return True
-
 
     def search_file_tree(self, source_dir=None, level=0):
         """Check only the individual files in a directory if they have been uploaded or not"""
@@ -80,7 +80,7 @@ class FileCheckerMixin(BaseChecker):
             if full_path in uploaded_files:
                 continue
 
-            # For any files besides the logfile check if they've been uploaded
+            # Explicitly check all the files against the optional regex and that they are not the state file
             if os.path.isfile(full_path):
                 if self.check_regex_filter(full_path) and item_here != self.state_filename:
                     to_upload.append(full_path)
