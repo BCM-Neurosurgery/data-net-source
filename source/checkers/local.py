@@ -42,8 +42,6 @@ class DirectoryCheckerMixin(BaseChecker):
 class FileCheckerMixin(BaseChecker):
     """
     Mixin to add a checker that recursively searches for new files
-
-
     """
     verbose_level = 2
     checker_name = "FileChecker"
@@ -54,6 +52,15 @@ class FileCheckerMixin(BaseChecker):
     def check(self):
         """Recursively search the entire file tree for un-uploaded files"""
         return self.search_file_tree()
+
+    def check_regex_filter(self, full_path):
+        """Check a filepath against the filter regex, returning True if a file should be uploaded"""
+        if 'regex_filter' in self.source_location:
+            search = re.search(self.source_location['regex_filter'], full_path)
+            return search is not None
+        else:
+            return True
+
 
     def search_file_tree(self, source_dir=None, level=0):
         """Check only the individual files in a directory if they have been uploaded or not"""
@@ -74,8 +81,9 @@ class FileCheckerMixin(BaseChecker):
                 continue
 
             # For any files besides the logfile check if they've been uploaded
-            if os.path.isfile(full_path) and item_here != self.state_filename:
-                to_upload.append(full_path)
+            if os.path.isfile(full_path):
+                if self.check_regex_filter(full_path) and item_here != self.state_filename:
+                    to_upload.append(full_path)
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
