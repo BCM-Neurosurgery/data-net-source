@@ -100,7 +100,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 except DataJointError as e:
                     self.warning(f'Failed to look up patient: {e}')
                     self.warning('Making a new patient+admission from the config file info')
-                    new_pid = len(schema.Patient())
+                    new_pid = len(schema.Patient() + 1)
                     patient_info = self.get_patient_info(patient)
                     schema.Patient().insert1({
                         'patient_id': new_pid,
