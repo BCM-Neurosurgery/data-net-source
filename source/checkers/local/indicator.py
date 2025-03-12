@@ -2,7 +2,7 @@ import os
 import re
 import toml
 
-from source.checkers.local import FileCheckerMixin
+from source.checkers.local.base import FileCheckerMixin
 
 
 class BaseIndicatorChecker(FileCheckerMixin):

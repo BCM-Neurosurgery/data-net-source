@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from source.checkers.local import FileCheckerMixin
+from source.checkers.local.base import FileCheckerMixin
 
 
 class StreamedFileCheckerMixin(FileCheckerMixin):
