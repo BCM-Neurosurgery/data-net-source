@@ -76,6 +76,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
         from emu24 import schema
 
         for filename in ready['to upload']:
+            self.debug('Processing file {}'.format(filename))
 
             # TODO: move these to checkers after we merge with oura-updates and config file improvements
             # Skip files that are not in a DATA directory
