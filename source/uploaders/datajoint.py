@@ -190,21 +190,27 @@ class TRBDDJUploader(DataJointUploader):
     uploader_name = 'TRBDSPDataJointUploader'
     parsed_filetypes = ['json']
     destination = None
-    schema = importlib.import_module("trbd.schema")
-    filename2schema = {
-        "daily_sleep.json": schema.DailySleepFile,
-        "sleep.json": schema.SleepFile,
-        "daily_stress.json": schema.DailyStressFile,
-        "daily_activity.json": schema.DailyActivityFile,
-        "daily_readiness.json": schema.DailyReadinessFile,
-        "daily_resilience.json": schema.DailyResilienceFile,
-        "daily_spo2.json": schema.DailySpO2File,
-        "rest_mode_period.json": schema.RestModePeriodFile,
-        "session.json": schema.SessionFile,
-        "vO2_max.json": schema.VO2MaxFile,
-        "workout.json": schema.WorkoutFile,
-        "heartrate.json": schema.HeartRateFile,
+
+    @property
+    def filename2schema(self):
+        return {
+        "daily_sleep.json": self.schema.DailySleepFile,
+        "sleep.json": self.schema.SleepFile,
+        "daily_stress.json": self.schema.DailyStressFile,
+        "daily_activity.json": self.schema.DailyActivityFile,
+        "daily_readiness.json": self.schema.DailyReadinessFile,
+        "daily_resilience.json": self.schema.DailyResilienceFile,
+        "daily_spo2.json": self.schema.DailySpO2File,
+        "rest_mode_period.json": self.schema.RestModePeriodFile,
+        "session.json": self.schema.SessionFile,
+        "vO2_max.json": self.schema.VO2MaxFile,
+        "workout.json": self.schema.WorkoutFile,
+        "heartrate.json": self.schema.HeartRateFile,
     }
+
+    @property
+    def schema(self):
+        return importlib.import_module("trbd.schema")
 
     def lookup(self, dj_table, primary_keys, search, squash=True):
         """Search for and return the primary keys for one entry in a table"""
