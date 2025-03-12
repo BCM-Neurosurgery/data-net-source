@@ -107,6 +107,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
                         'dob': patient_info['birthdate'],
                         'emu_id': patient
                     })
+                    patient_id = new_pid
 
                     query = (schema.Admission & f"patient_id='{new_pid}'")
                     new_admission_pk = query.fetch('admission_id').size + 1
