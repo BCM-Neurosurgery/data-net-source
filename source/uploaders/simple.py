@@ -45,11 +45,11 @@ class CopyUploaderMixin(FileSystemUploader):
 
     def check_exists(self, target_file):
         """Return True if this file already exists in the destination filesystem"""
-        return os.path.exists(target_file)
+        return target_file.exists()
 
     def make_folders(self, target_directory):
         """Ensure that the target directory exists"""
-        if not os.path.exists(target_directory):
+        if not target_directory.exists():
             os.makedirs(target_directory)
 
     def do_move(self, filename, destination):
