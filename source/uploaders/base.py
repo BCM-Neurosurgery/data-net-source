@@ -96,11 +96,11 @@ class FileSystemUploader(BaseUploader, ABC):
 
     def destination_filepath(self, filename):
         """Return the absolute path to the file in the planned destination location"""
-        return os.path.join(self.target_location['path'], self.ready_relative_filepath(filename))
+        return Path(self.target_location['path']) / self.ready_relative_filepath(filename)
 
     def destination_dirpath(self, filename):
         """Return the deepest level directory of the file in the planned destination location"""
-        return os.path.dirname(self.destination_filepath(filename))
+        return self.destination_filepath(filename).parent
 
     @staticmethod
     def time_upload(upload_func, filename, *args, **kwargs):
