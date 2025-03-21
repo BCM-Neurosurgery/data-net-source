@@ -1,0 +1,44 @@
+# Dynamically assemble a parser that will check a local directory for files and copy them over to a destination
+[parser.class]
+type = "dynamic"
+name = "ExampleLocalCopyParser"     # Change to a meaningful unique name
+parts = [
+    ["checkers.local", "StreamedFileCheckerMixin"],
+    ["uploaders.simple", "CopyUploaderMixin"]
+]
+
+# Specify the required initialization parameters for this particular source parser
+[parser.init]
+
+# All parsers require a state path. This is where the parser will store a file keeping track of its upload state
+state_path = "/path/to/directory/where/to/store/state/info"
+
+
+[parser.init.source]  # Where to look for new data
+path = "/path/to/look/for/new/data"
+
+
+[parser.init.target]  # Where to place the discovered data
+path = "/path/put/ready/data"
+# Set up how to re-arrange filepath in the destination
+rebuild_filepath.source_regex = '([A-Z_-]+)/([0-9]{3})/(.*)'       # Regex to parse relative source path of each file
+rebuild_filepath.path_elements = ["modality", "patient", "sub_path"]    # Names of each group paresed out of the regex
+rebuild_filepath.new_format = 'percept/{patient}/{modality}/{sub_path}'     # python format string of the output path
+
+
+[parser.settings]   # Additional settings
+delete_age_hours = -1   # Never delete files for now (change to 48 once verified)
+streamed_files = "*"    # Upload all discovered filetypes, but only after a while
+stream_rate = 60        # Only upload files if unmodified for 60 seconds
+
+# Enable logging to a local file using the python's built-in logging.RotatingFileHandler
+[logging.file]
+level = 0             # level of events to include in this logger
+max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
+max_files = 5         # Max number of files to keep before deleting the oldest
+
+
+[dependencies]
+pip = [
+  "numpy"
+]
