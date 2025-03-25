@@ -63,8 +63,8 @@ class FileCheckerMixin(BaseChecker):
         :param default: default boolean result to use if the key is not in the settings
         :return: boolean, whether the regex matched
         """
-        if 'regex_filter' in self.source_location:
-            search = re.search(self.source_location['regex_filter'], full_path)
+        if pattern_key in self.source_location:
+            search = re.search(self.source_location[pattern_key], full_path)
             return search is not None   # True if our regex matched
         # Never skip files if not filter regex was passed
         else:
