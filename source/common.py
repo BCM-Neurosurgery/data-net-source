@@ -1,3 +1,4 @@
+import os
 import logging
 from abc import ABC, abstractmethod
 
@@ -141,8 +142,16 @@ class ParserCommon(ABC):
             from logging.handlers import RotatingFileHandler
             file_logger = logging.getLogger('file')
             file_logger.setLevel(log_config['file']['level'])
+
+            if 'filepath' in log_config['file']:
+                filepath = log_config['file']['filepath']
+            elif 'filename' in log_config['file']:
+                filepath = os.path.join(self.state_path, log_config['file']['filename'])
+            else:
+                filepath = os.path.join(self.state_path, 'upload_log.txt')
+
             handler = RotatingFileHandler(
-                log_config['file']['filepath'],
+                filepath,
                 maxBytes=log_config['file']['max_size'],
                 backupCount=log_config['file']['max_files']
             )
