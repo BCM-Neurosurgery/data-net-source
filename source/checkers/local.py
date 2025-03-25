@@ -53,14 +53,30 @@ class FileCheckerMixin(BaseChecker):
         """Recursively search the entire file tree for un-uploaded files"""
         return self.search_file_tree()
 
-    def check_regex_filter(self, full_path):
-        """Check a filepath against the filter regex, returning True if a file should be uploaded"""
+    def check_regex(self, full_path, pattern_key, default=False):
+        """
+        Check the filepath against a regex pattern in the source settings
+
+        :param full_path: full absolute path to the file
+        :param pattern_key: keyname of the regex pattern to use in the parser.init.source settings table
+        :param default: default boolean result to use if the key is not in the settings
+        :return: boolean, whether the regex matched
+        """
         if 'regex_filter' in self.source_location:
             search = re.search(self.source_location['regex_filter'], full_path)
-            return search is not None
+            return search is not None   # True if our regex matched
         # Never skip files if not filter regex was passed
         else:
-            return True
+            return default
+
+    def check_regex_filter(self, full_path):
+        """Check a filepath against the filter regex, returning True if a file should be uploaded"""
+        return self.check_regex(full_path, pattern_key='regex_filter', default=True)
+
+    def check_regex_exclude(self, full_path):
+        """Check a filepath against the filter regex, returning True if a file should be skipped"""
+        return self.check_regex(full_path, pattern_key='regex_exclude', default=False)
+
 
     def search_file_tree(self, source_dir=None, level=0):
         """Check only the individual files in a directory if they have been uploaded or not"""
@@ -82,7 +98,7 @@ class FileCheckerMixin(BaseChecker):
 
             # Explicitly check all the files against the optional regex and that they are not the state file
             if os.path.isfile(full_path):
-                if self.check_regex_filter(full_path) and item_here != self.state_filename:
+                if self.check_regex_filter(full_path) and not self.check_regex_exclude(full_path):
                     to_upload.append(full_path)
 
             # For any directories that have not been marked as completed, process recursively
