@@ -135,8 +135,9 @@ class FileSystemUploader(BaseUploader, ABC):
             try:
                 # Make sure we want to perform the copy
                 target_file = self.destination_filepath(filename)
-                if 'allow-overwrite' in self.target_location and self.target_location['block-overwrite']:
-                    self.check_exists(target_file)
+                if 'allow-overwrite' in self.target_location and not self.target_location['allow-overwrite']:
+                    if self.check_exists(target_file):
+                        raise FileExistsError(f"{filename} already exists!")
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
