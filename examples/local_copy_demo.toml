@@ -3,7 +3,7 @@
 type = "dynamic"
 name = "ExampleLocalCopyParser"     # Change to a meaningful unique name
 parts = [
-    ["checkers.local", "StreamedFileCheckerMixin"],
+    ["checkers.local.stream", "StreamedFileCheckerMixin"],
     ["uploaders.simple", "CopyUploaderMixin"]
 ]
 
@@ -16,7 +16,8 @@ state_path = "/path/to/directory/where/to/store/state/info"
 
 [parser.init.source]  # Where to look for new data
 path = "/path/to/look/for/new/data"
-
+regex_filter = "."   # Select only files that contain a match to this regex
+# regex_exclude =    # Select only files that do not contain a match to this regex
 
 [parser.init.target]  # Where to place the discovered data
 path = "/path/put/ready/data"
