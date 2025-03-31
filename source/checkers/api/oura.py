@@ -100,24 +100,37 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
         Oura does not support a good way for querying new data. So we need to download the data and parse it locally
         """
         self.format_today()
+        errors = []
 
         all_paths = []
         for patient, token in self.patients.items():
             headers = {'Authorization': f'Bearer {token}'}
 
             for collection in self.source_location['collections']:
-                all_oura_data = self.fetch_collection_data(collection, headers)
-                new_data = self.cross_check(patient, collection, all_oura_data)
+                try:
+                    all_oura_data = self.fetch_collection_data(collection, headers)
+                    new_data = self.cross_check(patient, collection, all_oura_data)
 
-                for day, day_data in new_data.items():
-                    out_dir = os.path.join(self.source_location['path'], patient)
-                    os.makedirs(out_dir, exist_ok=True)
-                    filepath = os.path.join(out_dir, f'{collection}_{day}.json')
-                    with open(filepath, 'w') as day_json:
-                        json.dump(day_data, day_json)
-                    all_paths.append(filepath)
+                    for day, day_data in new_data.items():
+                        out_dir = os.path.join(self.source_location['path'], patient)
+                        os.makedirs(out_dir, exist_ok=True)
+                        filepath = os.path.join(out_dir, f'{collection}_{day}.json')
+                        with open(filepath, 'w') as day_json:
+                            json.dump(day_data, day_json)
+                        all_paths.append(filepath)
+                except Exception as e:
+                    import sys, traceback
+                    error_dict = {
+                        'type': 'API query failure',
+                        'query_location': f'https://api.ouraring.com/v2/usercollection',
+                        'query_details': f'patient: {patient}  collection: {collection}',
+                        'error': str(e),
+                        'trace': traceback.format_exception(*sys.exc_info())
+                    }
+                    errors.append(error_dict)
+                    self.warning(f'An API query failed! \n {json.dumps(error_dict, skipkeys=True, indent=2)}')
 
-        return {'to do': all_paths, 'failure': []}
+        return {'to do': all_paths, 'failure': errors}
 
     def save(self, completed):
         pass
@@ -169,7 +182,7 @@ class OuraAPIDocumentChecker(OuraAPIBaseChecker):
 
         if response.status_code != 200:
             # Per Oura ring docs any response code besides 200 should be an error
-            self.error(f'Oura returned an error code ({response.status_code})')
+            self.error(f'Oura returned an error code ({response.status_code}) for {collection}')
             return {}
 
         return response.json()['data']
