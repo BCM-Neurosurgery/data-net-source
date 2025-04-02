@@ -71,24 +71,48 @@ class FileSystemUploader(BaseUploader, ABC):
     Parent class for all uploaders that are transferring files to a filesystem
 
     This class implements a generic upload function. Subclasses should instead implement the following upload steps:
-        check_exists: check whether this file already exists in the destination filesystem
-        make_folders: make sure that all parent directories exist in the destination filesystem
-        do_move: actually move the file to the destination filesystem.
-            It may be convenient for this function to be a wrapper for time_upload, to collect information about how
-            long each file upload took and at what rate the transfer was performed.
+        - check_exists: check whether this file already exists in the destination filesystem
+        - make_folders: make sure that all parent directories exist in the destination filesystem
+        - do_move: actually move the file to the destination filesystem.
+
+    When implementing these functions, it is advisable to not explicitly manipulate the file paths, but instead make use
+    of three existing functions:
+        self.ready_relative_filepath(filename)
+        self.destination_filepath(filename)
+        self.destination_dirpath(filename)
+    See each function's docstring for more information
     """
 
     @abstractmethod
     def check_exists(self, target_file):
-        """Return True if this file already exists in the destination filesystem"""
+        """
+        Return True if this file already exists in the destination filesystem
+
+        :param target_file: absolute path in the destination filesystem of where the file should be stored
+        :returns: True if this file already exists in the destination filesystem
+        """
 
     @abstractmethod
     def make_folders(self, target_directory):
-        """Ensure that the target directory exists"""
+        """
+        Ensure that the target directory exists
+
+        :param target_directory: absolute path to the directory on the destination filesystem where the current file
+            should be stored
+        """
 
     @abstractmethod
     def do_move(self, filename, destination):
-        """Copy the source file to the target filesystem at destination"""
+        """
+        Copy the source file to the target filesystem at destination
+
+        It may be convenient for this function to be a wrapper for time_upload, to collect information about how
+        long each file upload took and at what rate the transfer was performed.
+
+        :param filename: absolute path in the source (aka local) filesystem of where the file should be stored
+        :param destination: absolute path in the destination filesystem of where the file should be stored
+        :returns: (optional) tuple of the file size in MB and transfer rate in MB/s
+        """
 
     def ready_relative_filepath(self, filename):
         """Return the final path to this file, relative to the source directory and rebuilt as needed"""
@@ -125,6 +149,18 @@ class FileSystemUploader(BaseUploader, ABC):
         return upload_size, rate
 
     def upload(self, ready):
+        """
+        This function is responsible for the entire process of transferring files to the destination filesystem
+        FileSystemUploader subclasses should not override this function in general but instead implement the individual
+        steps of the upload process. See the docstrings on the stub definition of each for more details
+            - check_exists: check whether this file already exists in the destination filesystem
+            - make_folders: make sure that all parent directories exist in the destination filesystem
+            - do_move: actually move the file to the destination filesystem.
+        Note that check_exists will only be called if 'allow-overwrite' is False (default behaviour).
+
+        :param ready: dict with a list of filepaths to upload and a list of dicts describing failures
+        :return: dict with a list of dicts describing successful uploads and a list of dicts describing failures
+        """
 
         errors = ready["failure"]
         successes = []
