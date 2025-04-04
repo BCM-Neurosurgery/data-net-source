@@ -192,7 +192,7 @@ class FileSystemUploader(BaseUploader, ABC):
                 error_dict = {
                     "type": "upload failure",
                     "filename": filename,
-                    "destination": destination,
+                    "destination": destination.as_posix(),
                     "error": str(e),
                     "trace": traceback.format_exception(*sys.exc_info()),
                 }
