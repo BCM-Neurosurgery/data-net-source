@@ -175,7 +175,7 @@ class FileSystemUploader(BaseUploader, ABC):
                     self.debug('Overwrite allowed. Skipping existence check')
                 else:
                     if self.check_exists(destination):
-                        raise FileExistsError(f"{filename} already exists!")
+                        raise FileExistsError(f"{filename} already exists! Skipping upload.")
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
