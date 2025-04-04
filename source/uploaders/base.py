@@ -191,10 +191,12 @@ class FileSystemUploader(BaseUploader, ABC):
                     self.debug(f"  Done.")
 
             except Exception as e:
+                if destination != "Failed to determine!":
+                    destination = destination.as_posix()
                 error_dict = {
                     "type": "upload failure",
                     "filename": filename,
-                    "destination": destination.as_posix(),
+                    "destination": destination,
                     "error": str(e),
                     "trace": traceback.format_exception(*sys.exc_info()),
                 }
