@@ -84,7 +84,7 @@ class FileCheckerMixin(BaseChecker):
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
-        successes = self.load_successes()
+        successes = self.load_non_failure()
         uploaded_files = [success['uploaded'] for success in successes]
 
         # Determine which of the files here need to be uploaded
