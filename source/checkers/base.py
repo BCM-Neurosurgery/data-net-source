@@ -33,6 +33,14 @@ class BaseChecker(ABC):
         uploaded = self.load_state()['success']
         return uploaded
 
+    def load_skipped(self):
+        """Load all tasks that were skipped during the upload process"""
+        return self.load_state()['skipped']
+
+    def load_non_failure(self):
+        """Load the list of all tasks that did not result in a failure"""
+        return self.load_successes() + self.load_skipped()
+
     def write_state(self, state_data):
         """
         Write the passed state of successes and failures to file for later reference
