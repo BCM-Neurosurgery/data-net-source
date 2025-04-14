@@ -170,17 +170,18 @@ class FileSystemUploader(BaseUploader, ABC):
             destination = "Failed to determine!"
             try:
                 # Make sure we want to perform the copy
-                target_file = self.destination_filepath(filename)
-                if 'allow-overwrite' in self.target_location and not self.target_location['allow-overwrite']:
-                    if self.check_exists(target_file):
-                        raise FileExistsError(f"{filename} already exists!")
+                destination = self.destination_filepath(filename)
+                if "allow-overwrite" in self.target_location and self.target_location['allow-overwrite']:
+                    self.debug('Overwrite allowed. Skipping existence check')
+                else:
+                    if self.check_exists(destination):
+                        raise FileExistsError(f"{filename} already exists! Skipping upload.")
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
                 self.make_folders(folder_path)
 
                 # Perform the file copy
-                destination = self.destination_filepath(filename)
                 self.info(f"Copying to {destination}")
                 timing_info = self.do_move(filename, destination)
                 if timing_info:
@@ -189,6 +190,8 @@ class FileSystemUploader(BaseUploader, ABC):
                     self.debug(f"  Done.")
 
             except Exception as e:
+                if destination != "Failed to determine!":
+                    destination = destination.as_posix()
                 error_dict = {
                     "type": "upload failure",
                     "filename": filename,
