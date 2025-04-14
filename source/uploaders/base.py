@@ -164,6 +164,7 @@ class FileSystemUploader(BaseUploader, ABC):
 
         errors = ready["failure"]
         successes = []
+        skipped = []
         all_rates = []
 
         for filename in ready["to upload"]:
@@ -175,7 +176,13 @@ class FileSystemUploader(BaseUploader, ABC):
                     self.debug('Overwrite allowed. Skipping existence check')
                 else:
                     if self.check_exists(destination):
-                        raise FileExistsError(f"{filename} already exists! Skipping upload.")
+                        skip_dict = {
+                            "type": "RemoteFileExists",
+                            "filename": filename,
+                            "destination": destination,
+                            "timestamp": datetime.now()
+                        }
+                        skipped.append(skip_dict)
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
@@ -198,6 +205,7 @@ class FileSystemUploader(BaseUploader, ABC):
                     "destination": destination,
                     "error": str(e),
                     "trace": traceback.format_exception(*sys.exc_info()),
+                    "timestamp": datetime.now()
                 }
                 errors.append(error_dict)
                 self.warning(
@@ -216,7 +224,7 @@ class FileSystemUploader(BaseUploader, ABC):
             self.debug(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
         else:
             self.info(f"No files transferred.")
-        return {"success": successes, "failure": errors}
+        return {"success": successes, "failure": errors, "skipped": skipped}
 
     def rebuild_filepath(self, old_file_path):
         """
