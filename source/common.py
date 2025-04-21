@@ -138,6 +138,7 @@ class ParserCommon(ABC):
         """Prepare the python loggers to manage user notifications and log messages"""
         logging.basicConfig(level=logging.DEBUG, )
 
+        # Dump detailed log to a log file on the system
         if 'file' in log_config:
             from logging.handlers import RotatingFileHandler
             file_logger = logging.getLogger('file')
@@ -163,6 +164,25 @@ class ParserCommon(ABC):
             )
             file_logger.addHandler(handler)
             self.loggers.append(file_logger)
+
+        # Check in regularly with a healthchecks.io server which should (separately) be listening for this task
+        if 'healthchecks' in log_config:
+            hc_config = log_config['healthchecks']
+            server_url = hc_config['url']
+
+            # Build the full url to where to send
+            # Prefer uuid over ping-key + slug
+            if 'uuid' in hc_config:
+                uuid = hc_config['uuid']
+                full_hc_url = f'{server_url}/{uuid}'
+            elif 'ping-key' in hc_config:
+                ping_key = hc_config['ping_key']
+                # If specified, use the custom slug, otherwise use the simplified parser name as a slug
+                slug = hc_config['slug'] if 'slug' in hc_config else self.__class__.__name__.lower()
+                full_hc_url = f'{server_url}/{ping_key}/{slug}'
+            else:
+                raise KeyError("Must specify either 'uuid' or a 'ping_key' for healthchecks logging to work!")
+
 
         if 'sentry' in log_config:
             import sentry_sdk as sentry
