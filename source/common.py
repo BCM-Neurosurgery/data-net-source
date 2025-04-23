@@ -69,7 +69,7 @@ class ParserCommon(ABC):
             self.clean()
         # Always send an end notification
         except Exception as e:
-            self.end_notify(1)
+            self.end_notify(1) #TODO: upgrade to send more meaningful exit codes
             raise e
         else:
             self.end_notify(0)
@@ -217,27 +217,35 @@ class ParserCommon(ABC):
             # Create a handler that sends logs to Healthchecks.io
             class HealthchecksHandler(logging.Handler):
                 def emit(self, record):
-                    log_entry = self.format(record)
-                    # Use /error endpoint log entries at error level
-                    if record.levelno >= logging.ERROR:
+                    headers = {'Content-Type': 'text/plain; charset=utf-8'}
+                    log_entry = self.format(record).encode('utf-8')
+                    if record.levelno >= logging.ERROR:  # Use /error endpoint log entries at error level
                         endpoint = f"{full_hc_url}/error"
-                    # Use /log for all other entries
-                    else:
+                    else:  # Use /log for all other entries
                         endpoint = f"{full_hc_url}/log"
                     try:
-                        requests.post(endpoint, data=log_entry)
+                        requests.post(endpoint, data=log_entry, headers=headers)
                     except requests.exceptions.RequestException as e:
                         print(f"Error sending log to Healthchecks: {e}")
 
             hc_logger = logging.getLogger('healthchecks')
             hc_logger.setLevel(log_config['healthchecks']['level'])
-            hc_logger.addHandler(HealthchecksHandler())
+            hc_handler = HealthchecksHandler()
+            hc_handler.setFormatter(
+                logging.Formatter(
+                    fmt='%(asctime)s %(levelname)-8s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S'
+                )
+            )
+            hc_logger.addHandler(hc_handler)
             self.loggers.append(hc_logger)
 
+            # Append a start function that sends a genetic start ping on parser startup
             def hc_start_notify():
                 requests.post(f'{full_hc_url}/start')
             self.start_notifiers.append(hc_start_notify)
 
+            # Append a end function that sends a ping with the exit code (0/1 = success/failure)
             def hc_end_notify(status_code: int):
                 requests.post(f'{full_hc_url}/{status_code}')
             self.end_notifiers.append(hc_end_notify)
