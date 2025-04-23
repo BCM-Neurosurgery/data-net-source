@@ -219,10 +219,7 @@ class ParserCommon(ABC):
                 def emit(self, record):
                     headers = {'Content-Type': 'text/plain; charset=utf-8'}
                     log_entry = self.format(record).encode('utf-8')
-                    if record.levelno >= logging.ERROR:  # Use /error endpoint log entries at error level
-                        endpoint = f"{full_hc_url}/error"
-                    else:  # Use /log for all other entries
-                        endpoint = f"{full_hc_url}/log"
+                    endpoint = f"{full_hc_url}/log"
                     try:
                         requests.post(endpoint, data=log_entry, headers=headers)
                     except requests.exceptions.RequestException as e:
