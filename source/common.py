@@ -31,6 +31,12 @@ class ParserCommon(ABC):
         self.state_path = state_path
         self.loggers = []
 
+        #: List of functions that send a startup notification
+        self.start_notifiers = []
+
+        #: List of functions that send an end notification. Should accept a unix-style exit code
+        self.end_notifiers = []
+
         if source is None:
             raise ValueError("Source configuration must be set!")
         else:
@@ -48,28 +54,25 @@ class ParserCommon(ABC):
             self.target_location = target
 
     def process(self):
-        self.info("STARTING PARSER")
-        to_do = self.check()
-        self.info(f'Found {len(to_do["to do"])} new tasks...')
-        if to_do:
-            ready = self.transform(to_do)
-            complete = self.upload(ready)
+        self.start_notify()
+        try:
+            to_do = self.check()
+            self.info(f'Found {len(to_do["to do"])} new tasks...')
+            if to_do:
+                ready = self.transform(to_do)
+                complete = self.upload(ready)
+            else:
+                complete = None
+            self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
+            self.save(complete)
+            self.info('Performing cleanup')
+            self.clean()
+        # Always send an end notification
+        except Exception as e:
+            self.end_notify(1)
+            raise e
         else:
-            complete = None
-        self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
-        self.save(complete)
-        self.info('Performing cleanup')
-        self.clean()
-        self.info("FINISHED\n")
-
-    def describe_parser(self):
-        return {
-            "git commit": "commitHash",  # TODO: implement commit hashing
-            "base": str(type(self)),
-            "checker": self.checker_name,
-            "transformer": self.transformer_name,  # Defined in the TransformerMixin
-            "uploader": self.uploader_name  # Defined in the UploaderMixin
-        }
+            self.end_notify(0)
 
     def check(self):
         """
@@ -116,6 +119,33 @@ class ParserCommon(ABC):
     @abstractmethod
     def clean(self):
         """Do cleanup actions"""
+
+    def describe_parser(self):
+        return {
+            "git commit": "commitHash",  # TODO: implement commit hashing
+            "base": str(type(self)),
+            "checker": self.checker_name,
+            "transformer": self.transformer_name,  # Defined in the TransformerMixin
+            "uploader": self.uploader_name  # Defined in the UploaderMixin
+        }
+
+    def start_notify(self):
+        """Call each of the start notification functions created as part of logging setup"""
+        self.info("STARTING PARSER")
+        for func in self.start_notifiers:
+            func()
+
+    def end_notify(self, status_code):
+        """
+        Call each of the end notification functions created as part of logging setup
+
+        Note that errors as a result of upload failures are not considered a parser failure, as the parser completed
+        its primary task (running) successfully even if there are upload failures. These individual uplaod failures
+        should be sent independently as individual error log messages.
+        """
+        for func in self.end_notifiers:
+            func(status_code)
+        self.info(f"FINISHED with status code ({status_code})\n")
 
     def log(self, message, level=logging.INFO):
         """Generic method to forward logging to all loggers saved for parser"""
@@ -167,6 +197,7 @@ class ParserCommon(ABC):
 
         # Check in regularly with a healthchecks.io server which should (separately) be listening for this task
         if 'healthchecks' in log_config:
+            import requests
             hc_config = log_config['healthchecks']
             server_url = hc_config['url']
 
@@ -183,6 +214,33 @@ class ParserCommon(ABC):
             else:
                 raise KeyError("Must specify either 'uuid' or a 'ping_key' for healthchecks logging to work!")
 
+            # Create a handler that sends logs to Healthchecks.io
+            class HealthchecksHandler(logging.Handler):
+                def emit(self, record):
+                    log_entry = self.format(record)
+                    # Use /error endpoint log entries at error level
+                    if record.levelno >= logging.ERROR:
+                        endpoint = f"{full_hc_url}/error"
+                    # Use /log for all other entries
+                    else:
+                        endpoint = f"{full_hc_url}/log"
+                    try:
+                        requests.post(endpoint, data=log_entry)
+                    except requests.exceptions.RequestException as e:
+                        print(f"Error sending log to Healthchecks: {e}")
+
+            hc_logger = logging.getLogger('healthchecks')
+            hc_logger.setLevel(log_config['healthchecks']['level'])
+            hc_logger.addHandler(HealthchecksHandler())
+            self.loggers.append(hc_logger)
+
+            def hc_start_notify():
+                requests.post(f'{full_hc_url}/start')
+            self.start_notifiers.append(hc_start_notify)
+
+            def hc_end_notify(status_code: int):
+                requests.post(f'{full_hc_url}/{status_code}')
+            self.end_notifiers.append(hc_end_notify)
 
         if 'sentry' in log_config:
             import sentry_sdk as sentry
