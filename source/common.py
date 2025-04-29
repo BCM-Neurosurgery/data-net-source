@@ -255,12 +255,12 @@ class ParserCommon(ABC):
 
             # Append a start function that sends a genetic start ping on parser startup
             def hc_start_notify():
-                requests.post(f'{full_hc_url}/start?rid={run_id}&create=1')
+                requests.post(f'{full_hc_url}/start?rid={run_id}&create=1', verify=hc_config['verify_cert'])
             self.start_notifiers.append(hc_start_notify)
 
-            # Append a end function that sends a ping with the exit code (0/1 = success/failure)
+            # Append an end function that sends a ping with the exit code (0/1 = success/failure)
             def hc_end_notify(status_code: int):
-                requests.post(f'{full_hc_url}/{status_code}?rid={run_id}')
+                requests.post(f'{full_hc_url}/{status_code}?rid={run_id}', verify=hc_config['verify_cert'])
             self.end_notifiers.append(hc_end_notify)
 
         if 'sentry' in log_config:
