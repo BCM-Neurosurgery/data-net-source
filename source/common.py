@@ -1,6 +1,9 @@
 import os
 import logging
+import random
+import string
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 
 class ParserCommon(ABC):
@@ -206,7 +209,7 @@ class ParserCommon(ABC):
             if 'uuid' in hc_config:
                 uuid = hc_config['uuid']
                 full_hc_url = f'{server_url}/{uuid}'
-            elif 'ping-key' in hc_config:
+            elif 'ping_key' in hc_config:
                 ping_key = hc_config['ping_key']
                 # If specified, use the custom slug, otherwise use the simplified parser name as a slug
                 slug = hc_config['slug'] if 'slug' in hc_config else self.__class__.__name__.lower()
@@ -214,14 +217,26 @@ class ParserCommon(ABC):
             else:
                 raise KeyError("Must specify either 'uuid' or a 'ping_key' for healthchecks logging to work!")
 
+            # Set up the functions to send data to the logging endpoints
+            rand_key = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(16)])
+            run_id = datetime.now().strftime('%Y%m%d%H%M%S') + '-' + rand_key
+            headers = {'Content-Type': 'text/plain; charset=utf-8'}
+            endpoint = f"{full_hc_url}/log?rid={run_id}"
+            if 'verify_cert' in hc_config:
+                def send(encoded_data):
+                    result = requests.post(endpoint, data=encoded_data, headers=headers, verify=hc_config['verify_cert'])
+                    return result
+            else:
+                def send(encoded_data):
+                    result = requests.post(endpoint, data=encoded_data, headers=headers)
+                    return result
+
             # Create a handler that sends logs to Healthchecks.io
             class HealthchecksHandler(logging.Handler):
                 def emit(self, record):
-                    headers = {'Content-Type': 'text/plain; charset=utf-8'}
                     log_entry = self.format(record).encode('utf-8')
-                    endpoint = f"{full_hc_url}/log"
                     try:
-                        requests.post(endpoint, data=log_entry, headers=headers)
+                        send(log_entry)
                     except requests.exceptions.RequestException as e:
                         print(f"Error sending log to Healthchecks: {e}")
 
@@ -239,12 +254,12 @@ class ParserCommon(ABC):
 
             # Append a start function that sends a genetic start ping on parser startup
             def hc_start_notify():
-                requests.post(f'{full_hc_url}/start')
+                requests.post(f'{full_hc_url}/start?rid={run_id}&create=1')
             self.start_notifiers.append(hc_start_notify)
 
             # Append a end function that sends a ping with the exit code (0/1 = success/failure)
             def hc_end_notify(status_code: int):
-                requests.post(f'{full_hc_url}/{status_code}')
+                requests.post(f'{full_hc_url}/{status_code}?rid={run_id}')
             self.end_notifiers.append(hc_end_notify)
 
         if 'sentry' in log_config:
