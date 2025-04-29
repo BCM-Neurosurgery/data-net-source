@@ -134,9 +134,10 @@ class ParserCommon(ABC):
 
     def start_notify(self):
         """Call each of the start notification functions created as part of logging setup"""
-        self.info("STARTING PARSER")
         for func in self.start_notifiers:
             func()
+        self.info("STARTING PARSER")
+
 
     def end_notify(self, status_code):
         """
@@ -146,9 +147,9 @@ class ParserCommon(ABC):
         its primary task (running) successfully even if there are upload failures. These individual uplaod failures
         should be sent independently as individual error log messages.
         """
+        self.info(f"FINISHED with status code ({status_code})\n")
         for func in self.end_notifiers:
             func(status_code)
-        self.info(f"FINISHED with status code ({status_code})\n")
 
     def log(self, message, level=logging.INFO):
         """Generic method to forward logging to all loggers saved for parser"""
