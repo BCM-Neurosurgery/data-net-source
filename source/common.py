@@ -203,6 +203,7 @@ class ParserCommon(ABC):
         if 'healthchecks' in log_config:
             import requests
             import uuid
+            from urllib.parse import urljoin
             hc_config = log_config['healthchecks']
             server_url = hc_config['url']
             log_level = hc_config['level'] if 'level' in hc_config else logging.WARNING
@@ -212,19 +213,19 @@ class ParserCommon(ABC):
             # Prefer uuid over ping-key + slug
             if 'uuid' in hc_config:
                 uuid = hc_config['uuid']
-                full_hc_url = f'{server_url}/{uuid}'
+                full_hc_url = urljoin(server_url, uuid)
             elif 'ping_key' in hc_config:
                 ping_key = hc_config['ping_key']
                 # If specified, use the custom slug, otherwise use the simplified parser name as a slug
                 slug = hc_config['slug'] if 'slug' in hc_config else self.__class__.__name__.lower()
-                full_hc_url = f'{server_url}/ping/{ping_key}/{slug}'
+                full_hc_url = urljoin(server_url, f'ping/{ping_key}/{slug}')
             else:
                 raise KeyError("Must specify either 'uuid' or a 'ping_key' for healthchecks logging to work!")
 
             # Set up the functions to send data to the logging endpoints
             run_id = uuid.uuid4()
             headers = {'Content-Type': 'text/plain; charset=utf-8'}
-            endpoint = f"{full_hc_url}/log?rid={run_id}"
+            endpoint = f"{urljoin(full_hc_url, 'log')}?rid={run_id}"
             if 'verify_cert' in hc_config:
                 def send(encoded_data):
                     result = requests.post(endpoint, data=encoded_data, headers=headers, verify=hc_config['verify_cert'])
@@ -257,7 +258,7 @@ class ParserCommon(ABC):
             # Append a start function that sends a genetic start ping on parser startup
             def hc_start_notify():
                 result = requests.post(
-                    f'{full_hc_url}/start',
+                    urljoin(full_hc_url, 'start'),
                     params={'rid': run_id, 'create': create_check},
                     verify=hc_config['verify_cert'])
                 return result
@@ -265,7 +266,7 @@ class ParserCommon(ABC):
 
             # Append an end function that sends a ping with the exit code (0/1 = success/failure)
             def hc_end_notify(status_code: int):
-                requests.post(f'{full_hc_url}/{status_code}?rid={run_id}', verify=hc_config['verify_cert'])
+                requests.post(f'{urljoin(full_hc_url, str(status_code))}?rid={run_id}', verify=hc_config['verify_cert'])
             self.end_notifiers.append(hc_end_notify)
 
         if 'sentry' in log_config:
@@ -276,7 +277,7 @@ class ParserCommon(ABC):
                 dsn=log_config['sentry']['dsn'],
                 integrations=[
                     sentry.integrations.logging.LoggingIntegration(
-                        level=log_level,  # Capture info and above as breadcrumbs
+                        level=log_config['sentry']['level'],  # Capture info and above as breadcrumbs
                         event_level=log_config['sentry']['event_level']  # Send records as events
                     ),
                 ],
