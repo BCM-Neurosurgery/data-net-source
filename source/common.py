@@ -246,8 +246,7 @@ class ParserCommon(ABC):
             hc_handler = HealthchecksHandler()
             hc_handler.setFormatter(
                 logging.Formatter(
-                    fmt='%(asctime)s %(levelname)-8s %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S'
+                    fmt='%(levelname)-8s %(message)s'
                 )
             )
             hc_logger.addHandler(hc_handler)
