@@ -206,6 +206,7 @@ class ParserCommon(ABC):
             hc_config = log_config['healthchecks']
             server_url = hc_config['url']
             log_level = hc_config['level'] if 'level' in hc_config else logging.WARNING
+            create_check = hc_config['create'] if 'create' in hc_config else True
 
             # Build the full url to where to send
             # Prefer uuid over ping-key + slug
@@ -257,7 +258,7 @@ class ParserCommon(ABC):
             def hc_start_notify():
                 result = requests.post(
                     f'{full_hc_url}/start',
-                    params={'rid': run_id, 'create': 1},
+                    params={'rid': run_id, 'create': create_check},
                     verify=hc_config['verify_cert'])
                 return result
             self.start_notifiers.append(hc_start_notify)
