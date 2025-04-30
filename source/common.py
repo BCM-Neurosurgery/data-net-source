@@ -243,7 +243,7 @@ class ParserCommon(ABC):
                         print(f"Error sending log to Healthchecks: {e}")
 
             hc_logger = logging.getLogger('healthchecks')
-            hc_logger.setLevel(log_config['healthchecks']['level'])
+            hc_logger.setLevel(log_level)
             hc_handler = HealthchecksHandler()
             hc_handler.setFormatter(
                 logging.Formatter(
