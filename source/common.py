@@ -225,7 +225,7 @@ class ParserCommon(ABC):
             # Set up the functions to send data to the logging endpoints
             run_id = uuid.uuid4()
             headers = {'Content-Type': 'text/plain; charset=utf-8'}
-            endpoint = f"{urljoin(full_hc_url, 'log')}?rid={run_id}"
+            endpoint = f"{full_hc_url}/log?rid={run_id}"
             if 'verify_cert' in hc_config:
                 def send(encoded_data):
                     result = requests.post(endpoint, data=encoded_data, headers=headers, verify=hc_config['verify_cert'])
@@ -258,15 +258,15 @@ class ParserCommon(ABC):
             # Append a start function that sends a genetic start ping on parser startup
             def hc_start_notify():
                 result = requests.post(
-                    urljoin(full_hc_url, 'start'),
-                    params={'rid': run_id, 'create': create_check},
+                    f'{full_hc_url}/start',
+                    params={'rid': run_id, 'create': int(create_check)},
                     verify=hc_config['verify_cert'])
                 return result
             self.start_notifiers.append(hc_start_notify)
 
             # Append an end function that sends a ping with the exit code (0/1 = success/failure)
             def hc_end_notify(status_code: int):
-                requests.post(f'{urljoin(full_hc_url, str(status_code))}?rid={run_id}', verify=hc_config['verify_cert'])
+                requests.post(f'{full_hc_url}/{status_code}?rid={run_id}', verify=hc_config['verify_cert'])
             self.end_notifiers.append(hc_end_notify)
 
         if 'sentry' in log_config:
