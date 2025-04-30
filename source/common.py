@@ -205,6 +205,7 @@ class ParserCommon(ABC):
             import uuid
             hc_config = log_config['healthchecks']
             server_url = hc_config['url']
+            log_level = hc_config['level'] if 'level' in hc_config else logging.WARNING
 
             # Build the full url to where to send
             # Prefer uuid over ping-key + slug
@@ -274,7 +275,7 @@ class ParserCommon(ABC):
                 dsn=log_config['sentry']['dsn'],
                 integrations=[
                     sentry.integrations.logging.LoggingIntegration(
-                        level=log_config['sentry']['level'],  # Capture info and above as breadcrumbs
+                        level=log_level,  # Capture info and above as breadcrumbs
                         event_level=log_config['sentry']['event_level']  # Send records as events
                     ),
                 ],
