@@ -202,6 +202,7 @@ class ParserCommon(ABC):
         # Check in regularly with a healthchecks.io server which should (separately) be listening for this task
         if 'healthchecks' in log_config:
             import requests
+            import uuid
             hc_config = log_config['healthchecks']
             server_url = hc_config['url']
 
@@ -214,13 +215,12 @@ class ParserCommon(ABC):
                 ping_key = hc_config['ping_key']
                 # If specified, use the custom slug, otherwise use the simplified parser name as a slug
                 slug = hc_config['slug'] if 'slug' in hc_config else self.__class__.__name__.lower()
-                full_hc_url = f'{server_url}/{ping_key}/{slug}'
+                full_hc_url = f'{server_url}/ping/{ping_key}/{slug}'
             else:
                 raise KeyError("Must specify either 'uuid' or a 'ping_key' for healthchecks logging to work!")
 
             # Set up the functions to send data to the logging endpoints
-            rand_key = ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(16)])
-            run_id = datetime.now().strftime('%Y%m%d%H%M%S') + '-' + rand_key
+            run_id = uuid.uuid4()
             headers = {'Content-Type': 'text/plain; charset=utf-8'}
             endpoint = f"{full_hc_url}/log?rid={run_id}"
             if 'verify_cert' in hc_config:
@@ -255,7 +255,11 @@ class ParserCommon(ABC):
 
             # Append a start function that sends a genetic start ping on parser startup
             def hc_start_notify():
-                requests.post(f'{full_hc_url}/start?rid={run_id}&create=1', verify=hc_config['verify_cert'])
+                result = requests.post(
+                    f'{full_hc_url}/start',
+                    params={'rid': run_id, 'create': 1},
+                    verify=hc_config['verify_cert'])
+                return result
             self.start_notifiers.append(hc_start_notify)
 
             # Append an end function that sends a ping with the exit code (0/1 = success/failure)
