@@ -1,0 +1,54 @@
+[parser]
+
+# Specify the python class that defines the source parser to run
+[parser.class]
+
+type = "dynamic" # Create a new Parser class using the elements specified in 'parts'
+# List of Mixins to use to dynamically create a parser class. Each mixin should be specified as a 2-element list,
+# where the first element is the import path to the module containing the desired class, and the second is the name
+# of the class to use. Must include a Checker and an Uploader; Transformer is optional
+name = 'MyCustomParser'  # Name to use for the new class
+parts = [
+  ["checkers.local", "StreamedFileCheckerMixin"],
+  ["uploaders.ssh", "SCPUploaderMixin"]
+]
+
+# Specify the required initialization parameters for this particular source parser
+[parser.init]
+
+# All parsers require a state path. This is where the parser will store a file keeping track of its upload state
+state_path = "/path/to/save/upload/state/"
+
+# Specify settings needed by the CheckerMixin, which define where to look for new data.
+# Should always include a 'path' but each Checker may have different requirements
+[parser.init.source]
+path = "/path/to/check/for/data/"
+
+# Specify settings needed by the UploaderMixin, which define where to place the newly discovered data.
+# Should always include a 'path' but each Uploader may have different requirements
+[parser.init.target]
+path = "/path/to/destination/"
+
+# Specify any additional optional settings for the Parser
+# Each Mixin may check different settings, check the Mixins in use for a list of available settings
+[parser.settings]
+
+# Enable logging to a local file using the python's built-in logging.RotatingFileHandler
+[logging.file]
+filepath = "path/to/the/log/file.txt"
+level = 0             # level of events to include in this logger
+max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
+max_files = 5         # Max number of files to keep before deleting the oldest
+
+# Enable logging to Sentry using the Sentry SDK API
+[logging.sentry]
+dsn = "placeholder"
+level = 10
+event_level = 30
+
+[dependencies]
+pip = [
+  "numpy",
+  "paramiko==1.0.3",
+  "brpylib @ git+ssh://git@github.com/BlackrockNeurotech/bypylib.git@main"
+]
