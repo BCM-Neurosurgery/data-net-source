@@ -4,8 +4,6 @@ import json
 from datetime import datetime
 
 from source.checkers.base import BaseChecker
-from source.checkers.local.stream import StreamedFileCheckerMixin
-from source.checkers.local.indicator import IndicatorFileCheckerMixin, IndicatorTomlChecker
 
 
 class DirectoryCheckerMixin(BaseChecker):
