@@ -12,6 +12,7 @@ class DirectoryCheckerMixin(BaseChecker):
     """
     Mixin to a parser that checks whether an entire directory has already been uploaded or not
     """
+
     checker_name = "DirectoryChecker"
 
     def check(self):
@@ -37,6 +38,10 @@ class DirectoryCheckerMixin(BaseChecker):
 
     def save(self, completed):
         # TODO: Implement a save
+        pass
+
+    def clean(self):
+        # TODO: Implement cleanup
         pass
 
 
