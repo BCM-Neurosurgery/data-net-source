@@ -76,6 +76,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
         from emu24 import schema
 
         for filename in ready['to upload']:
+            self.debug('Processing file {}'.format(filename))
 
             # TODO: move these to checkers after we merge with oura-updates and config file improvements
             # Skip files that are not in a DATA directory
@@ -99,13 +100,14 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 except DataJointError as e:
                     self.warning(f'Failed to look up patient: {e}')
                     self.warning('Making a new patient+admission from the config file info')
-                    new_pid = len(schema.Patient())
+                    new_pid = len(schema.Patient()) + 1
                     patient_info = self.get_patient_info(patient)
                     schema.Patient().insert1({
                         'patient_id': new_pid,
                         'dob': patient_info['birthdate'],
                         'emu_id': patient
                     })
+                    patient_id = new_pid
 
                     query = (schema.Admission & f"patient_id='{new_pid}'")
                     new_admission_pk = query.fetch('admission_id').size + 1
@@ -190,21 +192,27 @@ class TRBDDJUploader(DataJointUploader):
     uploader_name = 'TRBDSPDataJointUploader'
     parsed_filetypes = ['json']
     destination = None
-    schema = importlib.import_module("trbd.schema")
-    filename2schema = {
-        "daily_sleep.json": schema.DailySleepFile,
-        "sleep.json": schema.SleepFile,
-        "daily_stress.json": schema.DailyStressFile,
-        "daily_activity.json": schema.DailyActivityFile,
-        "daily_readiness.json": schema.DailyReadinessFile,
-        "daily_resilience.json": schema.DailyResilienceFile,
-        "daily_spo2.json": schema.DailySpO2File,
-        "rest_mode_period.json": schema.RestModePeriodFile,
-        "session.json": schema.SessionFile,
-        "vO2_max.json": schema.VO2MaxFile,
-        "workout.json": schema.WorkoutFile,
-        "heartrate.json": schema.HeartRateFile,
+
+    @property
+    def filename2schema(self):
+        return {
+        "daily_sleep.json": self.schema.DailySleepFile,
+        "sleep.json": self.schema.SleepFile,
+        "daily_stress.json": self.schema.DailyStressFile,
+        "daily_activity.json": self.schema.DailyActivityFile,
+        "daily_readiness.json": self.schema.DailyReadinessFile,
+        "daily_resilience.json": self.schema.DailyResilienceFile,
+        "daily_spo2.json": self.schema.DailySpO2File,
+        "rest_mode_period.json": self.schema.RestModePeriodFile,
+        "session.json": self.schema.SessionFile,
+        "vO2_max.json": self.schema.VO2MaxFile,
+        "workout.json": self.schema.WorkoutFile,
+        "heartrate.json": self.schema.HeartRateFile,
     }
+
+    @property
+    def schema(self):
+        return importlib.import_module("trbd.schema")
 
     def lookup(self, dj_table, primary_keys, search, squash=True):
         """Search for and return the primary keys for one entry in a table"""
