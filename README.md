@@ -13,21 +13,33 @@ any format of data collection, with a particular emphasis on the research enviro
 #### Citing Data Net:
 
 ## Table of Contents
-  - [Quick Start](#quick-start)
-    - [Overview](#overview)
+- [Data Net Source](#data-net-source)
+      - [Publication:](#publication)
+      - [License:](#license)
+      - [Citing Data Net:](#citing-data-net)
+  - [Table of Contents](#table-of-contents)
+- [Quick Start](#quick-start)
+  - [Overview](#overview)
     - [Installation](#installation)
+  - [Usage](#usage)
     - [Running Parsers](#running-parsers)
-  - [Source Parsers](#source-parsers)
-    - [Checkers](#checkers)
-    - [Transformers](#transformers)
-    - [Uploaders](#uploaders)
-  - [The Config File](#the-config-file)
-    - [Parser Definition](#parser-definition)
-      - [Class Specification](#class)
-      - [Initialization](#initiation)
-      - [Optional Settings](#settings)
-    - [Logging](#logging)
-    - [Dependencies](#dependencies-)
+    - [Managing Parsers](#managing-parsers)
+- [Source Parsers](#source-parsers)
+  - [Checkers](#checkers)
+  - [Transformers](#transformers)
+  - [Uploaders](#uploaders)
+- [The Config File](#the-config-file)
+  - [Parser Definition](#parser-definition)
+    - [Class](#class)
+      - [Assembling Parsers](#assembling-parsers)
+      - [Existing Parsers](#existing-parsers)
+    - [Initiation](#initiation)
+    - [Settings](#settings)
+  - [Logging](#logging)
+      - [File](#file)
+      - [Sentry](#sentry)
+  - [Dependencies](#dependencies)
+      - [Pip](#pip)
 
 
 # Quick Start
@@ -55,7 +67,7 @@ To ensure proper tracking, ensure that git is installed, and clone the source co
 ```bash
 git clone git@github.com:BCM-Neurosurgery/data-net-source.git
 ```
-Once you're in the directory of the newly cloned code, install the minimal basic dependencies using
+Once you're in the directory of the newly cloned code, install the minimal basic dependencies using pip.
 If you're using a virtual environment of any kind, make sure it is activated.
 
 ```bash
@@ -125,7 +137,7 @@ of file paths, each of which indicates a data file to be processed and uploaded.
 
 Once the parser has successfully run, the SourceParser will report to the checkers
 save() method the list of all files that were successfully uploaded, as well as those for
-which processing failed at some point in the pipeline, along with the appropriate metadate. 
+which processing failed at some point in the pipeline, along with the appropriate metadata. 
 These should then be saved in the state file.
 
 When writing a custom Checker, you must inherit from `source.checkers.base.BaseChecker`.
@@ -137,11 +149,11 @@ TransformerMixins are responsible for providing the transform() method.
 Most parsers that collect raw data from remote sources should avoid implementing 
 complicated transform() methods, unless required for security of privacy purposes. 
 This is to maximize robustness of the source parsers. However, they allow the SourceParsers
-to be a powerful tool for automating secondary data processing a
+to be a powerful tool for automating secondary data processing.
 
 ## Uploaders
 Uploader mixins are responsible for sending all discovered data to it's next destination, 
-whatever that may be. They must implement the upload method(). 
+whatever that may be. They must implement the upload() method. 
 When given a list of new files to process, this method must perform the entire
 upload process and return back the success or failure metadata for each file.
 
@@ -149,7 +161,7 @@ upload process and return back the success or failure metadata for each file.
 The config file is responsible for specifying everything about a parser, and 
 should be the only thing that needs to be customized for each deployment.
 
-Config file is broken down into sections as follows
+Config file is broken down into sections as follows:
 
 ## Parser Definition
 `[parser]`
@@ -157,13 +169,13 @@ Config file is broken down into sections as follows
 ### Class
 `[parser.class]`
 
-The class element of the parser configuration defines the python class, and therefore
+The class element of the parser configuration defines the python class, and
 thereby the Checker() Transformer() and Uploader() to use when running this parser.
 These can be specified in one of two ways
 
 #### Assembling Parsers
-If the "type" set on the parser class is "dynamic" then the parser class will be assembeld 
-dynamically from the specified Mixins. This is the simplest way of specifying a parsers
+If the "type" set on the parser class is "dynamic" then the parser class will be assembled 
+dynamically from the specified Mixins. This is the simplest way of specifying a parser
 and allows creating of custom parsers without having to run any python code.
 
 In this case, you must give the name to use for the new class, as well as a list of
@@ -216,8 +228,9 @@ filesystem where the parser should store the upload state.
 
 In particular, these are broken down into `source`, `middle`, and `target`.
   - `[parser.init.source]` specifies settings for where the Checker should look for new files.
-  - `[parser.init.target]` specifies settings for where the uploader should move the data.
   - `[parser.init.middle]` specifies an intermediate storage location for files during processing,
+  - `[parser.init.target]` specifies settings for where the uploader should move the data.
+
 as well as any additional settings needed by the transformer.
 
 If no middle location is given, then the Uploader will use the information
@@ -265,7 +278,7 @@ the sentry SDK.
 Available options are:
   - `dsn`: domain service name provided by sentry to send events to
   - `event_level`: python logging level as an integer. All log entries above this 
-        level are sent to sentry as discreet events (ie errors)
+        level are sent to sentry as discrete events (ie errors)
   - `level`: python logging level as an integer. All log entries above this level
         are sent to sentry to be used as breadcrumbs to help track down the cause of events
   - `release`: release name of this code. Useful to be able to separate out events from 
