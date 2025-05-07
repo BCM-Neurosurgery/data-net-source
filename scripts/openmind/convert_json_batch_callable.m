@@ -19,6 +19,7 @@ function failures = convert_json_batch_callable(input_dir)
 
 dataset_dir = input_dir;
 new_dataset_dir = [dataset_dir, '_csv'];
+% new_dataset_dir = dataset_dir + '_csv';
 mkdir(new_dataset_dir)
 date_list = dir(dataset_dir);
 date_list = date_list(~ismember({date_list.name},{'.','..','.DS_Store'}));
@@ -38,7 +39,7 @@ for date = 1:length(date_list)
         % process the data into a combined data table
         session_dir = session_list(session).name;
         save_location = new_date_dir;
-        session_dir = fullfile(date_dir, session_dir);
+        session_dir = char(fullfile(date_dir, session_dir));
         try
             save_session_as_csv(session_dir, save_location)
         catch
@@ -69,6 +70,7 @@ try
 catch
 
     session_dir(end-40:end)
+
 end
 % Prep save location
 switch metaData.INSimplantLocation
@@ -76,6 +78,8 @@ switch metaData.INSimplantLocation
         hemisphere = {'left'};
     case 'Right chest'
         hemisphere = {'right'};
+    case 'Undefined'
+        hemisphere = {'undefinedHemisphere'};
 end
 if ~isempty(timeDomainData)
     rec_start = num2str(unifiedDerivedTimes(1));
