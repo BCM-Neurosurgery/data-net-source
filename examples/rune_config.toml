@@ -24,15 +24,15 @@ path = "/Users/tpk/Documents/Research/data/rune"
 # The code loops over self.patients.items(), so we define a table for each patient
 [parser.init.source.patients]
 
-# [parser.init.source.patients.sai_test]
-# rune_id = "b79e9da25bd048008322a1d8d185fccd"
+[parser.init.source.patients.sai_test]
+rune_id = "b79e9da25bd048008322a1d8d185fccd"
 
 [parser.init.source.patients.thomas_test]
 rune_id = "c2e72a4bc7004b19be199ab5c325bcfd"
 
 [parser.settings]
 # Optional settings for the parser or checker
-look_back_duration = "5D"
+# look_back_duration = None
 categories = ['sleep', 'motion', 'vitals', 'device_info', 'environment']
 
 [parser.init.target]
