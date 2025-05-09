@@ -183,7 +183,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
             rune_patients_config = json.load(file)
 
 
-        for patient_name, patient_id in rune_patients_config.items():
+        for patient_name, patient_id in rune_patients_config[self.project_name].items():
             try:
                 patient = get_patient_stream_metadata(patient_id, client=self.graph_client)
             except Exception as e:

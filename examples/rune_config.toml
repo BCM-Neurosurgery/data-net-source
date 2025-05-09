@@ -17,23 +17,19 @@ state_path = "/Users/tpk/Documents/Research/data/rune"
 # Path to the Rune configuration file used by runeq.Config()
 rune_config = "/Users/tpk/.rune/config"
 
+# Path to the Rune configuration file used by runeq.Config()
+rune_patients_config = "/Volumes/settings/DBSPsych-56119/rune_ids_config.json"
+
 # Local directory where the checker should store downloaded data
 path = "/Users/tpk/Documents/Research/data/rune"
-
-# Define patients and their associated device configurations
-# The code loops over self.patients.items(), so we define a table for each patient
-[parser.init.source.patients]
-
-[parser.init.source.patients.sai_test]
-rune_id = "b79e9da25bd048008322a1d8d185fccd"
-
-[parser.init.source.patients.thomas_test]
-rune_id = "c2e72a4bc7004b19be199ab5c325bcfd"
 
 [parser.settings]
 # Optional settings for the parser or checker
 # look_back_duration = None
 categories = ['sleep', 'motion', 'vitals', 'device_info', 'environment']
+
+# string for project name specifies which patients data will be pulled
+project_name = 'trbd'
 
 [parser.init.target]
 path = "/Users/tpk/Documents/Research/data/rune-upload"
