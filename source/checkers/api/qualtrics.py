@@ -7,15 +7,27 @@ from pathlib import Path
 from datetime import datetime, timezone
 import os
 import time
+import shutil
 
 class QualtricsAPICheckerMixin(BaseAPIChecker):
     checker_name = "QualtricsAPIChecker"
     surveys_to_skip = [
     'TEST'
     ]
+    look_back_duration = None # modifiable in config file
 
 
     def clean(self):
+        path = self.source_location['path']
+        for filename in os.listdir(path):
+            file_path = os.path.join(path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)  # remove file or symlink
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)  # remove directory
+            except Exception as e:
+                print(f'Failed to delete {file_path}. Reason: {e}')
         pass
 
     def save(self, completed):
@@ -26,14 +38,13 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
         Starts downloading survey response data
         '''
 
-
         url = f'https://iad1.qualtrics.com/API/v3/surveys/{survey_id}/export-responses/'
         header = {'X-API-TOKEN': token, "content-type": "application/json"}
         data = {'format':'csv', 'compress':False, 'sortByLastModifiedDate':True, 'startDate': startDate} 
-        print(startDate)
+        self.debug(f'Checking all data since {startDate}') #log this
         response = requests.post(url, json=data, headers=header)
         responsedata = response.json()
-        print(responsedata)
+        self.log(responsedata)
         progressId = responsedata['result']['progressId'] # need to fix when there is no 'result'
 
         return progressId
@@ -78,8 +89,13 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
         # log file import
         logs = self.load_state()
         logs_success = logs['success']
-        # pull last response date/time from log file
-        last_run_time = logs_success[-1]['time_of_run'] if (len(logs['success']) > 0) else '1970-01-01T01:00:00Z'
+
+    
+        # pull last response date/time from log file - if look_back_duration is defined it will override
+        if self.look_back_duration:
+            last_run_time = (pd.Timestamp.utcnow() - pd.Timedelta(self.look_back_duration)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        else:
+            last_run_time = logs_success[-1]['time_of_run'] if (len(logs['success']) > 0) else '1970-01-01T01:00:00Z'
         print(last_run_time)
 
         # surveys to skip (from toml config file)
@@ -90,7 +106,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
             config = json.load(file)
         
         token = config['token'] # api token
-        patient_ids = config['patient_ids'] # dict of patients and qualtrics IDs
+        # patient_ids = config['patient_ids'] # dict of patients and qualtrics IDs
         patient_contact_ids = config['patient_contact_ids']
         survey_ids = config["survey_ids"] # dict of survey IDs
 
@@ -135,20 +151,24 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
                             filename = f"{survey_name}_{date_str}_{row['ResponseId']}.csv"
                             
                             # Create full directory path
-                            output_dir = Path(self.source_location['path']) / patient_contact_ids[contact_id] / survey_name / str(year)
-                            output_dir.mkdir(parents=True, exist_ok=True)
-                            out_file = os.path.join(
-                                output_dir, 
-                                filename
-                            )
-                            
-                            # Save the single-row DataFrame
-                            row_df = row.to_frame().T  # Convert Series to DataFrame
-                            combined_df = pd.concat([meta_df, row_df], ignore_index=True)
-                            combined_df.to_csv(out_file, index=False)
-                            print('Saved data in ',output_dir,' --- Date: ',date_str)
+                            if contact_id in patient_contact_ids:
+                                output_dir = Path(self.source_location['path']) / patient_contact_ids[contact_id] / survey_name / str(year) #self.warn if patient isn't in list
+                                output_dir.mkdir(parents=True, exist_ok=True)
+                                out_file = os.path.join(
+                                    output_dir, 
+                                    filename
+                                )
+                                
+                                # Save the single-row DataFrame
+                                row_df = row.to_frame().T  # Convert Series to DataFrame
+                                combined_df = pd.concat([meta_df, row_df], ignore_index=True)
+                                combined_df.to_csv(out_file, index=False)
+                                print('Saved data in ',output_dir,' --- Date: ',date_str)
 
-                            tasks.append(out_file)
+                                tasks.append(out_file)
+                            else:
+                                self.warn(f'Patient Contact ID {contact_id} not recognized - need to add patient to config file')
+
 
                     # log last response time
                     df['EndDate'] = pd.to_datetime(df['EndDate'])
