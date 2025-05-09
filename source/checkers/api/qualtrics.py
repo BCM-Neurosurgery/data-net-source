@@ -107,7 +107,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
         
         token = config['token'] # api token
         # patient_ids = config['patient_ids'] # dict of patients and qualtrics IDs
-        patient_contact_ids = config['patient_contact_ids']
+        patient_contact_ids = config[self.project_name]
         survey_ids = config["survey_ids"] # dict of survey IDs
 
         # pull and save new data by survey (patient/month_year/surveyname_datetime.csv)
@@ -139,35 +139,36 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
                     for idx, row in df.iterrows():
                         if idx > 0:
                             contact_id = row['ContactID']
-                            # Parse date info from 'EndDate'.
-                            if 'InputDate' in row and pd.notna(row['InputDate']):
-                                endDate = pd.to_datetime(row['InputDate']) # if there is a manual input date in the survey, then that overrides the normal date (which is then assumed to be the response date)
-                            else:
-                                endDate = pd.to_datetime(row['EndDate'])
-                            year = endDate.year
-                            date_str = endDate.strftime('%Y-%m-%d')
+                            if contact_id in patient_contact_ids: # checking if patient is in specified project
+                                # Parse date info from 'EndDate'.
+                                if 'InputDate' in row and pd.notna(row['InputDate']):
+                                    endDate = pd.to_datetime(row['InputDate']) # if there is a manual input date in the survey, then that overrides the normal date (which is then assumed to be the response date)
+                                else:
+                                    endDate = pd.to_datetime(row['EndDate'])
+                                year = endDate.year
+                                date_str = endDate.strftime('%Y-%m-%d')
 
-                            # Compose filename
-                            filename = f"{survey_name}_{date_str}_{row['ResponseId']}.csv"
-                            
-                            # Create full directory path
-                            if contact_id in patient_contact_ids:
-                                output_dir = Path(self.source_location['path']) / patient_contact_ids[contact_id] / survey_name / str(year) #self.warn if patient isn't in list
-                                output_dir.mkdir(parents=True, exist_ok=True)
-                                out_file = os.path.join(
-                                    output_dir, 
-                                    filename
-                                )
+                                # Compose filename
+                                filename = f"{survey_name}_{date_str}_{row['ResponseId']}.csv"
                                 
-                                # Save the single-row DataFrame
-                                row_df = row.to_frame().T  # Convert Series to DataFrame
-                                combined_df = pd.concat([meta_df, row_df], ignore_index=True)
-                                combined_df.to_csv(out_file, index=False)
-                                print('Saved data in ',output_dir,' --- Date: ',date_str)
+                                # Create full directory path
+                                if contact_id in patient_contact_ids:
+                                    output_dir = Path(self.source_location['path']) / patient_contact_ids[contact_id] / survey_name / str(year) #self.warn if patient isn't in list
+                                    output_dir.mkdir(parents=True, exist_ok=True)
+                                    out_file = os.path.join(
+                                        output_dir, 
+                                        filename
+                                    )
+                                    
+                                    # Save the single-row DataFrame
+                                    row_df = row.to_frame().T  # Convert Series to DataFrame
+                                    combined_df = pd.concat([meta_df, row_df], ignore_index=True)
+                                    combined_df.to_csv(out_file, index=False)
+                                    print('Saved data in ',output_dir,' --- Date: ',date_str)
 
-                                tasks.append(out_file)
-                            else:
-                                self.warn(f'Patient Contact ID {contact_id} not recognized - need to add patient to config file')
+                                    tasks.append(out_file)
+                                else:
+                                    self.warn(f'Patient Contact ID {contact_id} not recognized - need to add patient to config file')
 
 
                     # log last response time
