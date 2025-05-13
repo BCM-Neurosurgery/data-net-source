@@ -287,6 +287,7 @@ class RemoteFilesystemUploader(FileSystemUploader, ABC):
         """Wrapper around the generic filesystem upload function that additionally makes and closes a connection"""
         self.make_connection()
         try:
-            super().upload(ready)
+            complete = super().upload(ready)
         finally:
             self.close_connection()
+        return complete
