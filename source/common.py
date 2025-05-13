@@ -5,6 +5,12 @@ import string
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+EMPTY_LOG = {
+    "success": [],
+    "failure": []
+}
+
+
 
 class ParserCommon(ABC):
 
@@ -65,7 +71,7 @@ class ParserCommon(ABC):
                 ready = self.transform(to_do)
                 complete = self.upload(ready)
             else:
-                complete = None
+                complete = EMPTY_LOG
             self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
             self.save(complete)
             self.info('Performing cleanup')
@@ -285,4 +291,5 @@ class ParserCommon(ABC):
             )
             self.loggers.append(logging.getLogger('sentry_sdk.errors'))
             self.loggers.append(logging.getLogger('sentry_sdk'))
+
 

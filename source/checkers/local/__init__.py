@@ -45,9 +45,18 @@ class DirectoryCheckerMixin(BaseChecker):
 
 class FileCheckerMixin(BaseChecker):
     """
-    Mixin to add a checker that recursively searches for new files
+    This Checker mix-in class provides functionalities to check for files in a file tree, often used as a base class for
+    more purpose-specific Checker classes. Implements commonly used functionality such as recursive directory traversal,
+    regex-based filtering, and logging of successful and failed uploads.
 
-
+    :ivar verbose_level: Controls the verbosity of the output during recursive file searches. Specifically, determines
+        how many levels of directories will be printed during the recursive search.
+    :type verbose_level: int
+    :ivar checker_name: Name of the checker mixin. Used to identify the checker in the upload log.
+    :type checker_name: str
+    :ivar delete_age_hours: (default -1) Time in hours to retain local copies of files post-upload before deletion. The
+        default value of -1 disables deletion of local copies.
+    :type delete_age_hours: int
     """
     verbose_level = 2
     checker_name = "FileChecker"
@@ -84,8 +93,20 @@ class FileCheckerMixin(BaseChecker):
         return self.check_regex(full_path, pattern_key='regex_exclude', default=False)
 
     def search_file_tree(self, source_dir=None, level=0):
-        """Check only the individual files in a directory if they have been uploaded or not"""
+        """
+        Recursively searches through a file tree starting at the specified directory and
+        determines which files need to be uploaded. The method considers previously logged
+        successes, applies inclusion and exclusion filters, and processes nested directories if needed.
 
+        :param source_dir: The directory from which to start the search. Must be provided via the config file
+        :type source_dir: str
+        :param level: The depth level of recursion. Defaults to 0, only used to track depth for verbose output.
+        :type level: int
+        :return: A dictionary containing two keys:
+                 - 'to do': A list of files to be uploaded.
+                 - 'failure': list of directories that could not be processed due to an error.
+        :rtype: dict
+        """
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
@@ -94,6 +115,7 @@ class FileCheckerMixin(BaseChecker):
 
         # Determine which of the files here need to be uploaded
         to_upload = []
+        failures = []
         for item_here in os.listdir(source_dir):
             full_path = os.path.join(source_dir, item_here)
 
@@ -108,12 +130,21 @@ class FileCheckerMixin(BaseChecker):
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
-                check_inside = self.search_file_tree(full_path, level=level + 1)
+                try:
+                    check_inside = self.search_file_tree(full_path, level=level + 1)
+                except Exception as e:
+                    failures.append({
+                        'type': 'file',
+                        'checked': full_path,
+                        'status': 'checker error',
+                        'error': f'{e}',
+                        'timestamp': datetime.now().timestamp()
+                    })
                 to_upload.extend(check_inside['to do'])
 
         if level and level < self.verbose_level:
             self.info(f'Checked everything in {source_dir}')
-        return {'to do': to_upload, 'failure': []}
+        return {'to do': to_upload, 'failure': failures}
 
     def build_log_entry(self, entry_data):
         return {
@@ -146,7 +177,15 @@ class FileCheckerMixin(BaseChecker):
             json.dump(logged_data, log, indent=2)
 
     def clean(self):
-        """Delete local copies of files that have already been uploaded"""
+        """
+        Cleans upload logs by removing fixed failures, duplicate failures, and old successes
+        from the log data. Updates the state after performing all cleaning operations.
+
+        :raises KeyError: If the required keys ('success', 'failure') are not found in the
+            upload log.
+
+        :return: None
+        """
         upload_log = self.load_state()
 
         unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])

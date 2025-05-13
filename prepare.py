@@ -7,14 +7,8 @@ import json
 import argparse
 import subprocess
 import sys
-from run import load_config, load_parser
-
-
-EMPTY_LOG = {
-    "success": [],
-    "failure": []
-}
-
+from run import load_config
+from source.common import EMPTY_LOG
 
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser()
