@@ -1,0 +1,48 @@
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "QualtricsDataParser"
+parts = [
+  ["checkers.api.qualtrics", "QualtricsAPICheckerMixin"],
+  ["uploaders.simple", "CopyUploaderMixin"]
+]
+
+[parser.init]
+state_path = "/Users/tpk/Documents/Research/data/qualtrics"
+
+# The source section will contain the parameters the checker expects
+[parser.init.source]
+
+# The Qualtrics config will be saved in Elias "settings" - contains relevant Qualtrics IDs and API token
+qualtrics_config = "/Volumes/settings/DBSPsych-56119/qualtrics-ema-config.json"
+
+# Local directory where the checker should store downloaded data
+path = "/Users/tpk/Documents/Research/data/qualtrics"
+
+[parser.settings]
+# Optional settings for the parser or checker
+look_back_duration = "14D"
+surveys_to_skip = [
+  'TEST',
+  'Short_Response'
+]
+
+project_name = 'trbd' # or 'dbsocd'
+
+[parser.init.target]
+path = "/Users/tpk/Documents/Research/data/qualtrics-upload"
+
+[logging.file]
+filepath = "/Users/tpk/Documents/Research/data/qualtrics/log.txt"
+level = 0
+max_size = 21048576
+max_files = 5
+
+[dependencies]
+pip = [
+  "http",
+  "json",
+  "urllib",
+  "requests"
+]
