@@ -35,7 +35,10 @@ class SCPUploaderMixin(RemoteFilesystemUploader):
         self.ssh.close()
 
     def check_exists(self, target_file):
-        return self.ssh.exec_command(f'test -f {target_file}')
+        stdin, stdout, stderr = self.ssh.exec_command(f'test -e {target_file}')
+        response = stdout.read()
+        self.debug(f'stdout: {response}')
+        return response
 
     def make_folders(self, target_directory):
         self.ssh.exec_command(f'mkdir -p {target_directory.as_posix()}')
