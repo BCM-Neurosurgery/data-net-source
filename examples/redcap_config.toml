@@ -1,0 +1,44 @@
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "RedcapDataParser"
+parts = [
+  ["checkers.api.redcap", "RedcapAPICheckerMixin"],
+  ["uploaders.simple", "CopyUploaderMixin"]
+]
+
+[parser.init]
+
+state_path = "/Users/tpk/Documents/research/clinical/"
+
+
+[parser.init.source]
+path = "/Users/tpk/Documents/Research/data/redcap"
+redcap_config = "/Volumes/settings/DBSPsych-56119/redcap_config.json"
+
+# Specify settings needed by the UploaderMixin, which define where to place the newly discovered data.
+# Should always include a 'path' but each Uploader may have different requirements
+[parser.init.target]
+path = "/Users/tpk/Documents/Research/data/redcap-upload"
+
+# Specify any additional optional settings for the Parser
+# Each Mixin may check different settings, check the Mixins in use for a list of available settings
+[parser.settings]
+
+# specify study id (eg percept, adbs, dbsocd)
+study_id = 'percept'
+
+
+[logging.file]
+filepath = "/Users/tpk/Documents/Research/data/redcap/log.txt"
+level = 0             # level of events to include in this logger
+max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
+max_files = 5         # Max number of files to keep before deleting the oldest
+
+[dependencies]
+pip = [
+  "http",
+  "json",
+  "requests"
+]
