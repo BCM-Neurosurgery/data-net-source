@@ -44,7 +44,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
         self.debug(f'Checking all data since {startDate}') #log this
         response = requests.post(url, json=data, headers=header)
         responsedata = response.json()
-        self.log(responsedata)
+        self.debug(responsedata)
         progressId = responsedata['result']['progressId'] # need to fix when there is no 'result'
 
         return progressId
@@ -95,7 +95,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
         if self.look_back_duration:
             last_run_time = (pd.Timestamp.utcnow() - pd.Timedelta(self.look_back_duration)).strftime('%Y-%m-%dT%H:%M:%SZ')
         else:
-            last_run_time = logs_success[-1]['time_of_run'] if (len(logs['success']) > 0) else '1970-01-01T01:00:00Z'
+            last_run_time = logs_success[-1]['timestamp'] if (len(logs['success']) > 0) else '1970-01-01T01:00:00Z'
         print(last_run_time)
 
         # surveys to skip (from toml config file)
@@ -107,7 +107,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
         
         token = config['token'] # api token
         # patient_ids = config['patient_ids'] # dict of patients and qualtrics IDs
-        patient_contact_ids = config[self.project_name]
+        patient_contact_ids = config['contact_ids']
         survey_ids = config["survey_ids"] # dict of survey IDs
 
         # pull and save new data by survey (patient/month_year/surveyname_datetime.csv)
@@ -123,7 +123,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
                 except Exception as e:
                     failure = {
                         'survey': survey_name,
-                        'time_of_run': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
                         "error": str(e)
                     }
                     failures.append(failure)
@@ -153,7 +153,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
                                 
                                 # Create full directory path
                                 if contact_id in patient_contact_ids:
-                                    output_dir = Path(self.source_location['path']) / patient_contact_ids[contact_id] / survey_name / str(year) #self.warn if patient isn't in list
+                                    output_dir = Path(self.source_location['path']) / patient_contact_ids[contact_id] / 'qualtrics' / survey_name / str(year) #self.warn if patient isn't in list
                                     output_dir.mkdir(parents=True, exist_ok=True)
                                     out_file = os.path.join(
                                         output_dir, 
@@ -164,22 +164,21 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
                                     row_df = row.to_frame().T  # Convert Series to DataFrame
                                     combined_df = pd.concat([meta_df, row_df], ignore_index=True)
                                     combined_df.to_csv(out_file, index=False)
-                                    print('Saved data in ',output_dir,' --- Date: ',date_str)
+                                    self.debug('Saved data in ',output_dir,' --- Date: ',date_str)
 
                                     tasks.append(out_file)
+
+                                    if idx == 1:
+                                        df['EndDate'] = pd.to_datetime(df['EndDate'])
+                                        new_last_response_time = df['EndDate'].max()
+                                        state = {
+                                            'survey': survey_name,
+                                            'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                                            'last_response_time': new_last_response_time
+                                        }
+                                        logs['success'].append(state)                                        
                                 else:
                                     self.warn(f'Patient Contact ID {contact_id} not recognized - need to add patient to config file')
-
-
-                    # log last response time
-                    df['EndDate'] = pd.to_datetime(df['EndDate'])
-                    new_last_response_time = df['EndDate'].max()
-                    state = {
-                        'survey': survey_name,
-                        'time_of_run': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-                        'last_response_time': new_last_response_time
-                    }
-                    logs['success'].append(state)
                     
 
                 # Convert datetime objects in _state to ISO format before saving

@@ -28,8 +28,6 @@ surveys_to_skip = [
   'Short_Response'
 ]
 
-project_name = 'trbd' # or 'dbsocd'
-
 [parser.init.target]
 path = "/Users/tpk/Documents/Research/data/qualtrics-upload"
 
@@ -41,8 +39,6 @@ max_files = 5
 
 [dependencies]
 pip = [
-  "http",
-  "json",
-  "urllib",
+  "pandas",
   "requests"
 ]
