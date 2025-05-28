@@ -2,9 +2,6 @@ import os.path
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from runeq import initialize
-initialize()
-
 from source.checkers.api.base import BaseAPIChecker
 from runeq.resources.patient import get_patient, get_device
 from runeq.resources.client import Config, StreamClient, GraphClient
@@ -96,7 +93,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         filtered_df = filtered_df[filtered_df['category'].isin(self.categories)]
 
         if filtered_df.empty:
-            self.info(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}")  
+            self.warning(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}") 
         
         return filtered_df
 

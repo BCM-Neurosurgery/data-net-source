@@ -102,7 +102,7 @@ class RedcapAPICheckerMixin(BaseAPIChecker):
                     # Compose filename
                     filename = f"{patient_id}_redcap_raw.csv"
                     
-                    output_dir = Path(self.source_location['path']) / patient_id
+                    output_dir = Path(self.source_location['path']) / patient_id / 'redcap'
                     output_dir.mkdir(parents=True, exist_ok=True)
                     for _, row in df.iterrows():
                         event = row['redcap_event_name']
