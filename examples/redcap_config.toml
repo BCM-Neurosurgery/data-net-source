@@ -26,9 +26,6 @@ path = "/Users/tpk/Documents/Research/data/redcap-upload"
 # Each Mixin may check different settings, check the Mixins in use for a list of available settings
 [parser.settings]
 
-# specify study id (eg percept, adbs, dbsocd)
-study_id = 'percept'
-
 
 [logging.file]
 filepath = "/Users/tpk/Documents/Research/data/redcap/log.txt"
@@ -38,7 +35,5 @@ max_files = 5         # Max number of files to keep before deleting the oldest
 
 [dependencies]
 pip = [
-  "http",
-  "json",
   "requests"
 ]

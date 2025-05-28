@@ -149,6 +149,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 out_path = os.path.join(
                     self.source_location['path'],
                     patient_name,
+                    'rune',
                     day_str,
                     stream['measurement']
                 )
@@ -183,7 +184,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
             rune_patients_config = json.load(file)
 
 
-        for patient_name, patient_id in rune_patients_config[self.project_name].items():
+        for patient_name, patient_id in rune_patients_config['patient_ids'].items():
             try:
                 patient = get_patient_stream_metadata(patient_id, client=self.graph_client)
             except Exception as e:
@@ -215,7 +216,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                         self._state.append({
                             'id':stream['id'],
                             'logged_end':stream['max_time'],
-                            'log_time':datetime.now(),
+                            'timestamp':datetime.now(),
                             'failed_dates':[]
                         })
                         tasks.extend(stream_tasks)
