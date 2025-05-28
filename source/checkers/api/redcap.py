@@ -107,7 +107,8 @@ class RedcapAPICheckerMixin(BaseAPIChecker):
                     for _, row in df.iterrows():
                         event = row['redcap_event_name']
                         filename = f"{patient_id}_{event}_redcap_raw.csv"
-                        out_file = output_dir / 'redcap' / filename
+
+                        out_file = output_dir / filename
 
                         # Save the single-row DataFrame
                         pd.DataFrame([row]).to_csv(out_file, index=False)
