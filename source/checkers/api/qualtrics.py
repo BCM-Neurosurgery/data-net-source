@@ -164,7 +164,7 @@ class QualtricsAPICheckerMixin(BaseAPIChecker):
                                     row_df = row.to_frame().T  # Convert Series to DataFrame
                                     combined_df = pd.concat([meta_df, row_df], ignore_index=True)
                                     combined_df.to_csv(out_file, index=False)
-                                    self.debug('Saved data in ',output_dir,' --- Date: ',date_str)
+                                    self.debug(f'Saved data in {output_dir} --- Date: {date_str}')
 
                                     tasks.append(out_file)
 

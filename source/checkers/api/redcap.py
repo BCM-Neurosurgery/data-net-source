@@ -46,7 +46,7 @@ class RedcapAPICheckerMixin(BaseAPIChecker):
             config = json.load(file)
 
         token = config['token'] # api token
-        redcap_ids = config[self.study_id]
+        redcap_ids = config['patient_ids']
         
         tasks = []
         failures = []
@@ -60,7 +60,7 @@ class RedcapAPICheckerMixin(BaseAPIChecker):
                     'type': 'flat',
                     'csvDelimiter': '',
 
-                    'records[0]': redcap_ids[patient_id],
+                    'records[0]': redcap_id,
 
                     'rawOrLabel': 'raw',
                     'rawOrLabelHeaders': 'raw',
@@ -107,7 +107,7 @@ class RedcapAPICheckerMixin(BaseAPIChecker):
                     for _, row in df.iterrows():
                         event = row['redcap_event_name']
                         filename = f"{patient_id}_{event}_redcap_raw.csv"
-                        out_file = output_dir / filename
+                        out_file = output_dir / 'redcap' / filename
 
                         # Save the single-row DataFrame
                         pd.DataFrame([row]).to_csv(out_file, index=False)
@@ -115,7 +115,7 @@ class RedcapAPICheckerMixin(BaseAPIChecker):
                                         
                     state = {
                         'patient': patient_id,
-                        'time_of_run': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
                         'last_date': max_df_date
                     }
                     logs['success'].append(state)
