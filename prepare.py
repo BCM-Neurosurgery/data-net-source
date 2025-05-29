@@ -12,7 +12,8 @@ from run import load_config, load_parser
 
 EMPTY_LOG = {
     "success": [],
-    "failure": []
+    "skipped": [],
+    "failure": [],
 }
 
 
@@ -43,6 +44,25 @@ if __name__ == '__main__':
         print('Making an empty upload state file')
         with open(state_filepath, 'w') as statefile:
             json.dump(EMPTY_LOG, statefile)
+
+    # Otherwise make sure that the state file has all the required
+    else:
+        print('Verifying state file.')
+        try:
+            with open(state_filepath, 'r') as statefile:
+                state = json.load(statefile)
+        except json.decoder.JSONDecodeError as e:
+            print("Error opening the JSON file, it may be corrupt!")
+            raise e
+        else:
+            for key in EMPTY_LOG.keys():
+                if key not in state:
+                    print(f'Adding missing key {key} to state file.')
+                    state[key] = []
+            print('State file validated.')
+            with open(state_filepath, 'w') as statefile:
+                json.dump(state, statefile)
+            print('Updated state file saved.')
 
     print('Done.')
 
