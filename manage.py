@@ -59,7 +59,7 @@ def match_event(event, after=0, before=float('inf'), upload_match=None):
     return in_time and upload
 
 
-def iter_saved(config, success=True, failure=True, **kwargs):
+def iter_saved(config, success=True, failure=True, skipped=True, **kwargs):
     """
     Generator that yields a tuple for each event matching all the given conditions
 
@@ -69,6 +69,7 @@ def iter_saved(config, success=True, failure=True, **kwargs):
     :param config: Config file for the parser we're working with. Must specify the state path to find the state file
     :param success: If true, the list of 'success' events will be included in the iteration
     :param failure: If true, the list of 'failure' events will be included in the iteration
+    :param skipped: If true, the list of 'skipped' events will be included in the iteration
     :param kwargs: Additional search condition key word arguments, passed to match_event()
     """
     all_events = []
@@ -80,6 +81,8 @@ def iter_saved(config, success=True, failure=True, **kwargs):
         all_events.extend(event_tuples('success', state_data))
     if failure:
         all_events.extend(event_tuples('failure', state_data))
+    if skipped:
+        all_events.extend(event_tuples('skipped', state_data))
 
     for category, event in all_events:
         if match_event(event, **kwargs):
@@ -105,16 +108,17 @@ def get_time_range(config, **kwargs):
         print(f'Found no events matching the given criteria!')
 
 
-def forget(config, success=False, failure=False, **kwargs):
+def forget(config, success=False, failure=False, skipped=False, **kwargs):
     """Remove all matching events from the saved state"""
 
     remembered = []
     forgetting = []
     for category, event in iter_saved(config):
 
-        is_category = (success and category == 'success') or (failure and category == 'failure')
+        is_category = ((success and category == 'success')
+                       or (failure and category == 'failure')
+                       or (skipped and category == 'skipped'))
         matches = is_category and match_event(event, **kwargs)
-        # print(category, match_event(event, **kwargs))
 
         # Only remember the events that do not match the forget selection
         if matches:
@@ -130,7 +134,7 @@ def forget(config, success=False, failure=False, **kwargs):
 
 def format_state_data(events):
     """Re-organize a list of event tuples back into the state dictionary format"""
-    state_data = {'success': [], 'failure': []}
+    state_data = {'success': [], 'failure': [], 'skipped': []}
     for category, event in events:
         state_data[category].append(event)
     return state_data
@@ -239,6 +243,11 @@ if __name__ == '__main__':
         help='Include failure events in the search'
     )
     arg_parser.add_argument(
+        '--skipped',
+        action='store_true',
+        help='Include skipped events in the search'
+    )
+    arg_parser.add_argument(
         '--all-events',
         action='store_true',
         help='Include all events in the search'
@@ -266,9 +275,11 @@ if __name__ == '__main__':
     # Only include successes/failures if all-events or the relevant flag is set to true
     filter_kwargs['success'] = args.success
     filter_kwargs['failure'] = args.failure
+    filter_kwargs['skipped'] = args.skipped
     if args.all_events:
         filter_kwargs['success'] = True
         filter_kwargs['failure'] = True
+        filter_kwargs['skipped'] = True
 
     # Send processing off to the appropriate function based on the command given
     if args.command == 'count':
