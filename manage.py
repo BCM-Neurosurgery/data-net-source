@@ -166,7 +166,7 @@ def decide_action(config, new_events):
         print(f'The new state file contents will be:')
         print(json.dumps(state_data, indent=2))
         decide_action(config, state_data)
-    elif choice == 'yes':
+    elif choice == 'write':
         print('Saving to primary file...')
         state_filepath = os.path.join(state_path, 'upload_state.json')
         with open(state_filepath, 'w') as state_file:
