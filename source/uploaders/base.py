@@ -180,7 +180,7 @@ class FileSystemUploader(BaseUploader, ABC):
                             "type": "RemoteFileExists",
                             "filename": filename,
                             "destination": destination,
-                            "timestamp": datetime.now()
+                            "timestamp": datetime.now().timestamp()
                         }
                         skipped.append(skip_dict)
 
