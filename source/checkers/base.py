@@ -89,7 +89,10 @@ class BaseChecker(ABC):
 
         def iter_state(key, state_dict):
             for obj in state_dict[key]:
-                yield obj['filename'], obj
+                if 'filename' in obj:
+                    yield obj['filename'], obj
+                elif 'uploaded' in obj:
+                    yield obj['uploaded'], obj
 
         # Re-organize the state dictionary to be easier to compare age of events per file
         re_organized = {}
@@ -102,13 +105,13 @@ class BaseChecker(ABC):
         # For each unique filename, save only the most recent event
         reduced = copy.deepcopy(EMPTY_LOG)
         for filename, entries in re_organized.items():
-            if len(entries[1]) > 1:    # If there are multiple entries sort them in time
+            if len(entries) > 1:    # If there are multiple entries sort them in time
                 entries = sorted(entries, key=lambda x: x[1]['timestamp'])
-                self.info(f'Saving only {entries[-1][0]} for {filename} (will drop {len(entries) - 1} entries)')
+                self.info(f'Saving only "{entries[-1][0]}" for {filename} (will drop {len(entries) - 1} entries)')
                 for to_drop in entries[:-1]:
                     timestamp = datetime.fromtimestamp(to_drop[1]['timestamp'])
                     elapsed = (datetime.now() - timestamp).total_seconds() / 3600
-                    self.debug(f'  - {to_drop[0]} at {timestamp} ({elapsed:.1f} hours ago)')
+                    self.debug(f'  Dropping {to_drop[0]} at {timestamp} ({elapsed:.1f} hours ago)')
             cat, event = entries[-1]
             reduced[cat].append(event)
 
