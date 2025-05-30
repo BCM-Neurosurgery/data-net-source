@@ -26,7 +26,7 @@ class BaseIndicatorChecker(FileCheckerMixin):
         return {'to do': to_do, 'failure': failure}
 
     def clean_old_indicators(self, indicated, saved_state):
-        """"""
+        """Remove events related to indicator files/entries that no longer exist"""
         relevant_events = {}
         for category, logged_events in saved_state:
             for event in logged_events:
