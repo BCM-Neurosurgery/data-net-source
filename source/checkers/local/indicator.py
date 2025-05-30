@@ -25,14 +25,15 @@ class BaseIndicatorChecker(FileCheckerMixin):
 
         return {'to do': to_do, 'failure': failure}
 
-    def clean_old_indicators(self, indicated, logged_events):
+    def clean_old_indicators(self, indicated, saved_state):
         """"""
-        relevant_events = []
-        for event in logged_events:
-            for indication in indicated:
-                if indication in event['uploaded']:
-                    relevant_events.append(event)
-                    break  # We can skip to the next event since this one is already saved
+        relevant_events = {}
+        for category, logged_events in saved_state:
+            for event in logged_events:
+                for indication in indicated:
+                    if indication in event['uploaded']:
+                        relevant_events[category] = event
+                        break  # We can skip to the next event since this one is already saved
         return relevant_events
 
     def clean(self):
@@ -45,10 +46,9 @@ class BaseIndicatorChecker(FileCheckerMixin):
 
         # Only save the events related to files that are still indicated
         check_locations = self.parse_indicators()
-        relevant_success = self.clean_old_indicators(check_locations, kept_success)
-        relevant_failure = self.clean_old_indicators(check_locations, most_recent_fails)
+        still_relevant = self.clean_old_indicators(check_locations, kept_success)
 
-        self.save_state(relevant_success, relevant_failure)
+        self.save_state(**still_relevant)
 
 class IndicatorTomlChecker(BaseIndicatorChecker):
     """"""
