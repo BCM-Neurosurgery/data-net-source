@@ -120,7 +120,7 @@ class FileCheckerMixin(BaseChecker):
             'timestamp': datetime.now().timestamp()
         }
 
-    def save_state(self, success, failure, skipped):
+    def save_state(self, success=None, failure=None, skipped=None):
         """Write the upload state json file which records the current state of all uploads"""
         new_log = {'success': success, 'failure': failure, 'skipped': skipped}
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
@@ -146,6 +146,6 @@ class FileCheckerMixin(BaseChecker):
 
         reduced_log = self.clean_outdated(upload_log)
         kept_success = self.clean_old_success(reduced_log)
-        reduced_log['success'] = kept_success
+        reduced_log['success'] = kept_success['success']
 
         self.save_state(**reduced_log)
