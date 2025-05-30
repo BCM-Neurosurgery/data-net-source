@@ -83,9 +83,7 @@ class BaseChecker(ABC):
         """
 
     def clean_outdated(self, full_state):
-        """
-        Remove all the entries for a particular source file except for the most recent one.
-        """
+        """Remove all the entries for a particular source file except for the most recent one."""
 
         def iter_state(key, state_dict):
             for obj in state_dict[key]:
@@ -116,41 +114,6 @@ class BaseChecker(ABC):
             reduced[cat].append(event)
 
         return reduced
-
-    def clean_fixed_failures(self, successes, failures):
-        """Remove failures in the upload state that were later replaced by successes"""
-        unfixed_failures = []
-        for failure in failures:
-            for success in successes:
-                if success['uploaded'] == failure['uploaded'] and success['timestamp'] > failure['timestamp']:
-                    self.info(f'File was uploaded later successfully {failure["uploaded"]}')
-                    break
-            else:
-                self.info(f'File never uploaded {failure["uploaded"]}')
-                unfixed_failures.append(failure)
-        return unfixed_failures
-
-    def clean_duplicate_failures(self, failures):
-        """Remove all but the most recent error for every file"""
-        most_recent_errors = []
-        checked_files = []
-        for error in failures:
-            if error['uploaded'] in checked_files:
-                pass  # The most recent error for this file was already selected
-            else:
-                # Get and save only the most recent error out of all errors for this file
-                all_matching = [err for err in failures if err['uploaded'] == error['uploaded']]
-                youngest = error
-                for match in all_matching:
-                    if match['timestamp'] < youngest['timestamp']:
-                        youngest = match
-                if len(all_matching) > 1:
-                    self.info(f'Trimmed {len(all_matching) - 1} errors for {error["uploaded"]}')
-                most_recent_errors.append(youngest)
-
-                # We won't check errors for this file again
-                checked_files.append(error['uploaded'])
-        return most_recent_errors
 
     def clean_old_success(self, state):
         """Delete files that have been successfully uploaded long enough ago"""
