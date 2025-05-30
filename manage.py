@@ -140,9 +140,7 @@ def move(config, success=False, failure=False, skipped=False, **kwargs):
     # that events to be moved will be sourced from
     print('Loading unaffected events... ')
     unaffected = iter_saved(config, success=(not success), failure=(not failure), skipped=(not skipped))
-    base = copy.deepcopy(EMPTY_LOG)
-    for cat, event in unaffected:
-        base[cat].append(event)
+    base = list(unaffected)
 
     print('Searching for events to move... ')
     potential = iter_saved(config, success=success, failure=failure, skipped=skipped)
@@ -151,9 +149,12 @@ def move(config, success=False, failure=False, skipped=False, **kwargs):
         if match_event(event, **kwargs):
             to_move.append(event)
         else:
-            base[cat].append(event)
+            base.append((cat, event))
 
     print(f'Found {len(to_move)} matching events to move')
+    if len(to_move) == 0:
+        print('No events to move! Exiting...')
+        exit(0)
     target = get_input(
         {
             'success': 'Show the new state without saving',
@@ -163,8 +164,8 @@ def move(config, success=False, failure=False, skipped=False, **kwargs):
         'Where would you like to move these ?\n'
     )
     print(f'Moving {len(to_move)} events to {target}...')
-    for category, event in to_move:
-        base[target].append(event)
+    for event in to_move:
+        base.append((target, event))
 
     decide_action(config, base)
 
@@ -185,7 +186,7 @@ def decide_action(config, new_events):
     :param new_events: List of tuples of all the new events that should be saved
     """
     state_data = format_state_data(new_events)
-    print(f'New state file will have {len(new_events)} events with:\n '
+    print(f'New state file will have {len(new_events)} events with:\n'
           f'  - {len(state_data["success"])} successes\n'
           f'  - {len(state_data["failure"])} failures\n'
           f'  - {len(state_data["skipped"])} skips')
@@ -255,7 +256,7 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         'command',
         type=str,
-        choices=['count', 'forget', 'time-range'],
+        choices=['count', 'forget', 'time-range', 'move'],
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
