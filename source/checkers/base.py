@@ -1,7 +1,10 @@
+import copy
 import os
 import json
 from datetime import datetime
 from abc import ABC, abstractmethod
+
+from prepare import EMPTY_LOG
 
 
 class BaseChecker(ABC):
@@ -78,6 +81,38 @@ class BaseChecker(ABC):
         that have already been uploaded are deleted from local storage.
         There are several commonly used actions implemented that you can call if it makes sense for your parser
         """
+
+    def clean_outdated(self, full_state):
+        """
+        Remove all the entries for a particular source file except for the most recent one.
+        """
+
+        def iter_state(key, state_dict):
+            for obj in state_dict[key]:
+                yield obj['filename'], obj
+
+        # Re-organize the state dictionary to be easier to compare age of events per file
+        re_organized = {}
+        for category in full_state:
+            for filename, event in iter_state(category, full_state):
+                if filename not in re_organized:
+                    re_organized[filename] = []
+                re_organized[filename].append((category, event))
+
+        # For each unique filename, save only the most recent event
+        reduced = copy.deepcopy(EMPTY_LOG)
+        for filename, entries in re_organized.items():
+            if len(entries[1]) > 1:    # If there are multiple entries sort them in time
+                entries = sorted(entries, key=lambda x: x[1]['timestamp'])
+                print(f'Saving only {entries[-1][0]} for {filename} (will drop {len(entries) - 1} entries)')
+                for to_drop in entries[:-1]:
+                    timestamp = datetime.fromtimestamp(to_drop[1]['timestamp'])
+                    elapsed = (datetime.now() - timestamp).total_seconds() / 3600
+                    print(f'  - {to_drop[0]} at {timestamp} ({elapsed:.1f} hours ago)')
+            cat, event = entries[-1]
+            reduced[cat].append(event)
+
+        return reduced
 
     def clean_fixed_failures(self, successes, failures):
         """Remove failures in the upload state that were later replaced by successes"""
