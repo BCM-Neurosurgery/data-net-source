@@ -145,7 +145,7 @@ class FileCheckerMixin(BaseChecker):
         upload_log = self.load_state()
 
         reduced_log = self.clean_outdated(upload_log)
-        kept_success = self.clean_old_success(reduced_log['success'])
+        kept_success = self.clean_old_success(reduced_log)
         reduced_log['success'] = kept_success
 
         self.save_state(*reduced_log)

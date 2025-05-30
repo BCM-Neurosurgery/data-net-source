@@ -152,8 +152,9 @@ class BaseChecker(ABC):
                 checked_files.append(error['uploaded'])
         return most_recent_errors
 
-    def clean_old_success(self, successes):
+    def clean_old_success(self, state):
         """Delete files that have been successfully uploaded long enough ago"""
+        successes = state['success']
         kept_success = []
         now = datetime.now().timestamp()
         has_delete = hasattr(self, 'delete_age_hours')
@@ -167,4 +168,6 @@ class BaseChecker(ABC):
                     self.warning(f'File was already deleted!')
             else:
                 kept_success.append(uploaded)
-        return kept_success
+        new_log = copy.deepcopy(state)
+        new_log['success'] = kept_success
+        return new_log

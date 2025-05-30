@@ -40,9 +40,8 @@ class BaseIndicatorChecker(FileCheckerMixin):
         upload_log = self.load_state()
 
         # Standard steps for cleaning up the upload state
-        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
-        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
-        kept_success = self.clean_old_success(upload_log['success'])
+        most_recent = self.clean_outdated(upload_log)
+        kept_success = self.clean_old_success(most_recent)
 
         # Only save the events related to files that are still indicated
         check_locations = self.parse_indicators()
