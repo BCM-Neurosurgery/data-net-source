@@ -104,11 +104,11 @@ class BaseChecker(ABC):
         for filename, entries in re_organized.items():
             if len(entries[1]) > 1:    # If there are multiple entries sort them in time
                 entries = sorted(entries, key=lambda x: x[1]['timestamp'])
-                print(f'Saving only {entries[-1][0]} for {filename} (will drop {len(entries) - 1} entries)')
+                self.info(f'Saving only {entries[-1][0]} for {filename} (will drop {len(entries) - 1} entries)')
                 for to_drop in entries[:-1]:
                     timestamp = datetime.fromtimestamp(to_drop[1]['timestamp'])
                     elapsed = (datetime.now() - timestamp).total_seconds() / 3600
-                    print(f'  - {to_drop[0]} at {timestamp} ({elapsed:.1f} hours ago)')
+                    self.debug(f'  - {to_drop[0]} at {timestamp} ({elapsed:.1f} hours ago)')
             cat, event = entries[-1]
             reduced[cat].append(event)
 
