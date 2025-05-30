@@ -205,7 +205,7 @@ class FileSystemUploader(BaseUploader, ABC):
                     "destination": destination,
                     "error": str(e),
                     "trace": traceback.format_exception(*sys.exc_info()),
-                    "timestamp": datetime.now()
+                    "timestamp": datetime.now().timestamp()
                 }
                 errors.append(error_dict)
                 self.warning(
