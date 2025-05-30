@@ -217,6 +217,7 @@ class FileSystemUploader(BaseUploader, ABC):
                         "type": "upload success",
                         "filename": filename,
                         "destination": destination,
+                        "timestamp": datetime.now().timestamp()
                     }
                 )
 
@@ -224,6 +225,7 @@ class FileSystemUploader(BaseUploader, ABC):
             self.debug(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
         else:
             self.info(f"No files transferred.")
+
         return {"success": successes, "failure": errors, "skipped": skipped}
 
     def rebuild_filepath(self, old_file_path):
@@ -295,6 +297,7 @@ class RemoteFilesystemUploader(FileSystemUploader, ABC):
         """Wrapper around the generic filesystem upload function that additionally makes and closes a connection"""
         self.make_connection()
         try:
-            super().upload(ready)
+            results = super().upload(ready)
         finally:
             self.close_connection()
+        return results
