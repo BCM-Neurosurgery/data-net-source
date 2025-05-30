@@ -170,6 +170,28 @@ def move(config, success=False, failure=False, skipped=False, **kwargs):
     decide_action(config, base)
 
 
+def clean(config, success=False, failure=False, skipped=False, **kwargs):
+    """Apply any of the library of cleaning functions defined for the parser"""
+    import inspect
+
+    # Load the source parser and find all available cleaning functions
+    source_parser = load_parser(config['parser'])
+    if 'logging' in config:
+        source_parser.make_loggers(config['logging'])
+    methods = inspect.getmembers(source_parser, predicate=inspect.ismethod)
+    cleaners = {name: func for name, func in methods if name.startswith('clean_')}
+
+    options = {name: func.__doc__ for name, func in cleaners.items()}
+    cleaner_name = get_input(options, 'Which cleaning function would you like to run?\n')
+
+    state = source_parser.load_state()
+    cleaned = cleaners[cleaner_name](state)
+
+    ready = []
+    for category in cleaned.keys():
+        ready.extend(event_tuples(category, cleaned))
+
+    decide_action(config, ready)
 
 def format_state_data(events):
     """Re-organize a list of event tuples back into the state dictionary format"""
@@ -256,7 +278,7 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         'command',
         type=str,
-        choices=['count', 'forget', 'time-range', 'move'],
+        choices=['count', 'forget', 'time-range', 'move', 'clean'],
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
@@ -331,5 +353,7 @@ if __name__ == '__main__':
         forget(config_json, **filter_kwargs)
     elif args.command == 'move':
         move(config_json, **filter_kwargs)
+    elif args.command == 'clean':
+        clean(config_json, **filter_kwargs)
     else:
         raise KeyError(f'Unrecognized command: {args.command}')
