@@ -12,6 +12,7 @@ Currently implemented sub-commands:
 
 If the sub-command makes changes to the state file, this tool will ask for confirmation before over-writing
 """
+import copy
 import json
 import argparse
 import os.path
@@ -19,6 +20,7 @@ import re
 import shutil
 
 from run import load_config, load_parser
+from prepare import EMPTY_LOG
 
 
 def get_input(options, instructions=None):
@@ -132,13 +134,48 @@ def forget(config, success=False, failure=False, skipped=False, **kwargs):
     decide_action(config, remembered)
 
 
+def move(config, success=False, failure=False, skipped=False, **kwargs):
+
+    # Build up a base dictionary of unaffected events, by collecting all events that are not in one of the categories
+    # that events to be moved will be sourced from
+    print('Loading unaffected events... ')
+    unaffected = iter_saved(config, success=(not success), failure=(not failure), skipped=(not skipped))
+    base = copy.deepcopy(EMPTY_LOG)
+    for cat, event in unaffected:
+        base[cat].append(event)
+
+    print('Searching for events to move... ')
+    potential = iter_saved(config, success=success, failure=failure, skipped=skipped)
+    to_move = []
+    for cat, event in potential:
+        if match_event(event, **kwargs):
+            to_move.append(event)
+        else:
+            base[cat].append(event)
+
+    print(f'Found {len(to_move)} matching events to move')
+    target = get_input(
+        {
+            'success': 'Show the new state without saving',
+            'skipped': 'Save these changes directly to the primary state file',
+            'failure': 'Save changes to primary file, but cache the old state file'
+        },
+        'Where would you like to move these ?\n'
+    )
+    print(f'Moving {len(to_move)} events to {target}...')
+    for category, event in to_move:
+        base[target].append(event)
+
+    decide_action(config, base)
+
+
+
 def format_state_data(events):
     """Re-organize a list of event tuples back into the state dictionary format"""
     state_data = {'success': [], 'failure': [], 'skipped': []}
     for category, event in events:
         state_data[category].append(event)
     return state_data
-
 
 def decide_action(config, new_events):
     """
@@ -148,8 +185,11 @@ def decide_action(config, new_events):
     :param new_events: List of tuples of all the new events that should be saved
     """
     state_data = format_state_data(new_events)
-    print(f'New state file will have {len(new_events)} events'
-          f' with {len(state_data["success"])} successes and {len(state_data["failure"])} failures')
+    print(f'New state file will have {len(new_events)} events with:\n '
+          f'  - {len(state_data["success"])} successes\n'
+          f'  - {len(state_data["failure"])} failures\n'
+          f'  - {len(state_data["skipped"])} skips')
+
     choice = get_input(
         {
             'show': 'Show the new state without saving',
@@ -288,3 +328,7 @@ if __name__ == '__main__':
         get_time_range(config_json, **filter_kwargs)
     elif args.command == 'forget':
         forget(config_json, **filter_kwargs)
+    elif args.command == 'move':
+        move(config_json, **filter_kwargs)
+    else:
+        raise KeyError(f'Unrecognized command: {args.command}')
