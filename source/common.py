@@ -56,7 +56,8 @@ class ParserCommon(ABC):
             complete = self.upload(ready)
         else:
             complete = None
-        self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
+        self.info(f'Saving {len(complete["success"])} successes {len(complete["skipped"])} skips '
+                  f'and {len(complete["failure"])} failures')
         self.save(complete)
         self.info('Performing cleanup')
         self.clean()
