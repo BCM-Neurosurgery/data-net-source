@@ -111,7 +111,7 @@ class FileCheckerMixin(BaseChecker):
         return {'to do': to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
-        return {
+        log_entry = {
             'type': 'file',
             'checked': self.source_location['path'],
             'uploaded': entry_data['filename'],
@@ -119,6 +119,7 @@ class FileCheckerMixin(BaseChecker):
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
+        return log_entry
 
     def save_state(self, success=None, failure=None, skipped=None):
         """Write the upload state json file which records the current state of all uploads"""
@@ -131,11 +132,16 @@ class FileCheckerMixin(BaseChecker):
         # TODO: make this work with the method of passing around dicts
         logged_data = self.load_state()
 
-        new_success = [self.build_log_entry(success) for success in completed['success']]
-        logged_data['success'].extend(new_success)
+        # Make sure all the completed states will be saved
+        for key in completed.keys():
+            if key not in logged_data:
+                self.warn(f'Saved state was missing key "{key}". Will be added')
+                logged_data[key] = []
 
-        new_failure = [self.build_log_entry(failure) for failure in completed['failure']]
-        logged_data['failure'].extend(new_failure)
+        # For all logged categories, make sure all the data is neatly formatted
+        for category in logged_data.keys():
+            cat_data = [self.build_log_entry(event) for event in completed[category]]
+            logged_data[category].extend(cat_data)
 
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)

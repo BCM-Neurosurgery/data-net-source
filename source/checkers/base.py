@@ -131,6 +131,9 @@ class BaseChecker(ABC):
                     self.warning(f'File was already deleted!')
             else:
                 kept_success.append(uploaded)
+
+        # Keep all non-success entries the same
         new_log = copy.deepcopy(state)
         new_log['success'] = kept_success
+
         return new_log
