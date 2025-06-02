@@ -182,7 +182,9 @@ class FileSystemUploader(BaseUploader, ABC):
                             "destination": destination,
                             "timestamp": datetime.now().timestamp()
                         }
+                        self.debug(f'Skipping, already exists ({destination}) ')
                         skipped.append(skip_dict)
+                        continue
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
