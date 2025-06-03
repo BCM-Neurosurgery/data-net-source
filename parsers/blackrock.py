@@ -1,5 +1,5 @@
 from source.common import ParserCommon
-from source.checkers.local import StreamedFileCheckerMixin
+from source.checkers.local.stream import StreamedFileCheckerMixin
 from source.uploaders.simple import CopyUploaderMixin
 from source.uploaders.ssh import SCPUploaderMixin
 
