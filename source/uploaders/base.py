@@ -8,7 +8,6 @@ from pathlib import Path
 from abc import abstractmethod, ABC
 
 import numpy as np
-from jupyter_core.migrate import regex
 
 
 class BaseUploader(ABC):
