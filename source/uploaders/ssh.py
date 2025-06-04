@@ -35,7 +35,8 @@ class SCPUploaderMixin(RemoteFilesystemUploader):
         self.ssh.close()
 
     def check_exists(self, target_file):
-        stdin_, stdout_, stderr_ = self.ssh.exec_command(f'test -f "{target_file}" && echo "Exists" || echo "New"')
+        stdin_, stdout_, stderr_ = self.ssh.exec_command(
+            f'test -f "{target_file.as_posix()}" && echo "Exists" || echo "New"')
         error = "\n".join([line for line in iter(stderr_.readline, '')])
         if error:
             raise ChildProcessError(f'Received and error from Paramiko: \n{error}')
