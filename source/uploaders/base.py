@@ -8,6 +8,7 @@ from pathlib import Path
 from abc import abstractmethod, ABC
 
 import numpy as np
+from jupyter_core.migrate import regex
 
 
 class BaseUploader(ABC):
@@ -269,8 +270,12 @@ class FileSystemUploader(BaseUploader, ABC):
 
         old_match = re.search(old_re, old_path_unix)
         if old_match is None:
-            self.error('Given path regex did not match the source path!')
-            raise ValueError('Given path regex did not match the source')
+            detail = (f"File path did not match regex!"
+                       f"Expected path with elements {rebuild_info['path_elements']} "
+                       f"and matching {old_re}")
+
+            self.error(detail)
+            raise ValueError(detail)
 
         old_elements = {name: old_match.group(i+1) for i, name in enumerate(rebuild_info['path_elements'])}
         new_path = rebuild_info['new_format'].format(**old_elements)
