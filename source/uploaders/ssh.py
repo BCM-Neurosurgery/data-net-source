@@ -35,14 +35,15 @@ class SCPUploaderMixin(RemoteFilesystemUploader):
         self.ssh.close()
 
     def check_exists(self, target_file):
-        existence = self.ssh.exec_command(f'test -f "{target_file}" && echo "Exists"')
-        return existence[1].read().decode('utf-8').strip() == 'Exists'
+        stdin_, stdout_, stderr_ = self.ssh.exec_command(f'test -f "{target_file}" && echo "Exists" || echo "New"')
+        error = "\n".join([line for line in iter(stderr_.readline, '')])
+        if error:
+            raise ChildProcessError(f'Received and error from Paramiko: \n{error}')
+        output = "\n".join([line for line in iter(stdout_.readline, '')])
+        return output.strip() == 'Exists'
 
     def make_folders(self, target_directory):
-        stdin_, stdout_, stderr_ = self.ssh.exec_command(f'mkdir -p "{target_directory.as_posix()}"')
-        error = [line for line in iter(stderr_.readline, '')]
-        output = [line for line in iter(stdout_.readline, '')]
-        pass
+        self.ssh.exec_command(f'mkdir -p "{target_directory.as_posix()}"')
 
     def do_move(self, filename, destination):
         return self.time_upload(self.scp.put, filename, destination.as_posix())
