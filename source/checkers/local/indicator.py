@@ -37,7 +37,7 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
         indicated = self.parse_indicators()
 
         relevant_events = {}
-        for category, logged_events in saved_state:
+        for category, logged_events in saved_state.items():
             for event in logged_events:
                 for indication in indicated:
                     if indication in event['uploaded']:
