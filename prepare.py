@@ -8,13 +8,7 @@ import argparse
 import subprocess
 import sys
 from run import load_config, load_parser
-
-
-EMPTY_LOG = {
-    "success": [],
-    "skipped": [],
-    "failure": [],
-}
+from source.common import EMPTY_LOG
 
 
 if __name__ == '__main__':

@@ -2,10 +2,10 @@ import os
 import re
 import toml
 import copy
-
 from abc import ABC, abstractmethod
-from prepare import EMPTY_LOG
-from source.checkers.local import FileCheckerMixin
+
+from source.common import EMPTY_LOG
+from source.checkers.local.base import FileCheckerMixin
 
 
 class BaseIndicatorChecker(FileCheckerMixin, ABC):
@@ -13,7 +13,7 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
 
     @abstractmethod
     def parse_indicators(self):
-        """Return a list of directories to check based the indicator(s) loaded from disk"""
+        """Implement this to determine which sub-directories in the source directory to include in the check"""
         pass
 
 

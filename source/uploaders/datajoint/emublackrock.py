@@ -55,6 +55,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
         from emu24 import schema
 
         for filename in ready['to upload']:
+            self.debug('Processing file {}'.format(filename))
 
             # TODO: move these to checkers after we merge with oura-updates and config file improvements
             # Skip files that are not in a DATA directory
@@ -78,13 +79,14 @@ class EMUBlackrockDJUploader(DataJointUploader):
                 except DataJointError as e:
                     self.warning(f'Failed to look up patient: {e}')
                     self.warning('Making a new patient+admission from the config file info')
-                    new_pid = len(schema.Patient())
+                    new_pid = len(schema.Patient()) + 1
                     patient_info = self.get_patient_info(patient)
                     schema.Patient().insert1({
                         'patient_id': new_pid,
                         'dob': patient_info['birthdate'],
                         'emu_id': patient
                     })
+                    patient_id = new_pid
 
                     query = (schema.Admission & f"patient_id='{new_pid}'")
                     new_admission_pk = query.fetch('admission_id').size + 1
