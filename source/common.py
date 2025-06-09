@@ -7,7 +7,8 @@ from datetime import datetime
 
 EMPTY_LOG = {
     "success": [],
-    "failure": []
+    "failure": [],
+    "skipped": []
 }
 
 
@@ -72,7 +73,8 @@ class ParserCommon(ABC):
                 complete = self.upload(ready)
             else:
                 complete = EMPTY_LOG
-            self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
+            cat_lengths = [f'{len(events)} {cat} events' for cat, events in complete.items()]
+            self.info("Saving state with: " + ", ".join(cat_lengths))
             self.save(complete)
             self.info('Performing cleanup')
             self.clean()
@@ -291,5 +293,4 @@ class ParserCommon(ABC):
             )
             self.loggers.append(logging.getLogger('sentry_sdk.errors'))
             self.loggers.append(logging.getLogger('sentry_sdk'))
-
 

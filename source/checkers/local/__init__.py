@@ -110,7 +110,7 @@ class FileCheckerMixin(BaseChecker):
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
-        successes = self.load_successes()
+        successes = self.load_non_failure()
         uploaded_files = [success['uploaded'] for success in successes]
 
         # Determine which of the files here need to be uploaded
@@ -147,7 +147,7 @@ class FileCheckerMixin(BaseChecker):
         return {'to do': to_upload, 'failure': failures}
 
     def build_log_entry(self, entry_data):
-        return {
+        log_entry = {
             'type': 'file',
             'checked': self.source_location['path'],
             'uploaded': entry_data['filename'],
@@ -155,10 +155,11 @@ class FileCheckerMixin(BaseChecker):
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
+        return log_entry
 
-    def save_state(self, successes, failures):
+    def save_state(self, success=None, failure=None, skipped=None):
         """Write the upload state json file which records the current state of all uploads"""
-        new_log = {'success': successes, 'failure': failures}
+        new_log = {'success': success, 'failure': failure, 'skipped': skipped}
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(new_log, log, indent=2)
 
@@ -167,11 +168,16 @@ class FileCheckerMixin(BaseChecker):
         # TODO: make this work with the method of passing around dicts
         logged_data = self.load_state()
 
-        new_success = [self.build_log_entry(success) for success in completed['success']]
-        logged_data['success'].extend(new_success)
+        # Make sure all the completed states will be saved
+        for key in completed.keys():
+            if key not in logged_data:
+                self.warn(f'Saved state was missing key "{key}". Will be added')
+                logged_data[key] = []
 
-        new_failure = [self.build_log_entry(failure) for failure in completed['failure']]
-        logged_data['failure'].extend(new_failure)
+        # For all logged categories, make sure all the data is neatly formatted
+        for category in logged_data.keys():
+            cat_data = [self.build_log_entry(event) for event in completed[category]]
+            logged_data[category].extend(cat_data)
 
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(logged_data, log, indent=2)
@@ -188,7 +194,8 @@ class FileCheckerMixin(BaseChecker):
         """
         upload_log = self.load_state()
 
-        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
-        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
-        kept_success = self.clean_old_success(upload_log['success'])
-        self.save_state(kept_success, most_recent_fails)
+        reduced_log = self.clean_outdated(upload_log)
+        kept_success = self.clean_old_success(reduced_log)
+        reduced_log['success'] = kept_success['success']
+
+        self.save_state(**reduced_log)

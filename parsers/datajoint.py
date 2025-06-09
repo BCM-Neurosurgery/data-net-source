@@ -1,7 +1,7 @@
 from source.common import ParserCommon
 from parsers.blackrock import BlackrockChecker
 from source.checkers.local.indicator import IndicatorTomlChecker
-from source.uploaders.datajoint import EMUBlackrockDJUploader
+from source.uploaders.datajoint.emublackrock import EMUBlackrockDJUploader
 
 
 class DatalakeBRKChecker(IndicatorTomlChecker, BlackrockChecker):
