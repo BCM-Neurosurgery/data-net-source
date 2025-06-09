@@ -2,11 +2,18 @@ import os
 import re
 import toml
 
+from abc import ABC, abstractmethod
 from source.checkers.local import FileCheckerMixin
 
 
-class BaseIndicatorChecker(FileCheckerMixin):
+class BaseIndicatorChecker(FileCheckerMixin, ABC):
     """"""
+
+    @abstractmethod
+    def parse_indicators(self):
+        """Return a list of directories to check based the indicator(s) loaded from disk"""
+        pass
+
 
     def check(self):
         """Recursively check the contents of a subset of the directories in the given path"""
@@ -17,7 +24,7 @@ class BaseIndicatorChecker(FileCheckerMixin):
 
         for directory in to_check:
             try:
-                found_here = super(IndicatorFileCheckerMixin, self).search_file_tree(source_dir=directory, level=1)
+                found_here = super(BaseIndicatorChecker, self).search_file_tree(source_dir=directory, level=1)
             except FileNotFoundError as e:
                 raise FileNotFoundError(f'Indicator file suggested an invalid path: \n  {e.filename}')
             to_do.extend(found_here['to do'])
