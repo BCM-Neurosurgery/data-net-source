@@ -32,8 +32,10 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
 
         return {'to do': to_do, 'failure': failure}
 
-    def clean_old_indicators(self, indicated, saved_state):
+    def clean_old_indicators(self, saved_state):
         """Remove events related to indicator files/entries that no longer exist"""
+        indicated = self.parse_indicators()
+
         relevant_events = {}
         for category, logged_events in saved_state:
             for event in logged_events:
@@ -49,11 +51,10 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
 
         # Standard steps for cleaning up the upload state
         most_recent = self.clean_outdated(upload_log)
-        kept_success = self.clean_old_success(most_recent)
+        trimmed = self.clean_old_success(most_recent)
 
         # Only save the events related to files that are still indicated
-        check_locations = self.parse_indicators()
-        still_relevant = self.clean_old_indicators(check_locations, kept_success)
+        still_relevant = self.clean_old_indicators(trimmed)
 
         self.save_state(**still_relevant)
 
