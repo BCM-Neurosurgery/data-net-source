@@ -49,7 +49,7 @@ class EMUBlackrockDJUploader(DataJointUploader):
 
     def upload(self, ready):
 
-        successes, errors = [], []
+        successes, errors, skipped = [], [], []
         self.connect_to_database()
         # Define the schema to use by importing the appropriate script
         from emu24 import schema
@@ -140,7 +140,14 @@ class EMUBlackrockDJUploader(DataJointUploader):
                     })
                     self.info(f'Added: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
                 except DuplicateError:
-                    self.info(f'Already in DB: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}')
+                    msg = f'Already in DB: {filetype} for {patient} at {toc_name} NSP{nsp_id} chunk {chunk_id}'
+                    self.info(msg)
+                    skipped.append({
+                        'type': 'Already in DB',
+                        'filename': filename,
+                        'destination': self.destination,
+                        'info': msg
+                    })
 
             except Exception as e:
                 error_dict = {
@@ -160,5 +167,5 @@ class EMUBlackrockDJUploader(DataJointUploader):
                     'destination': self.destination,
                 })
         return {
-            'success': successes, 'failure': errors
+            'success': successes, 'failure': errors, 'skipped': skipped
         }
