@@ -5,7 +5,7 @@ import copy
 from abc import ABC, abstractmethod
 
 from source.common import EMPTY_LOG
-from source.checkers.local.base import FileCheckerMixin
+from source.checkers.local import FileCheckerMixin
 
 
 class BaseIndicatorChecker(FileCheckerMixin, ABC):

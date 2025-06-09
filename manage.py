@@ -20,7 +20,6 @@ import re
 import shutil
 
 from run import load_config, load_parser
-from prepare import EMPTY_LOG
 
 
 def get_input(options, instructions=None):

@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from abc import ABC, abstractmethod
 
-from prepare import EMPTY_LOG
+from source.common import EMPTY_LOG
 
 
 class BaseChecker(ABC):
