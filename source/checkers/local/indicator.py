@@ -1,8 +1,10 @@
 import os
 import re
 import toml
+import copy
 
 from abc import ABC, abstractmethod
+from prepare import EMPTY_LOG
 from source.checkers.local import FileCheckerMixin
 
 
@@ -36,13 +38,14 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
         """Remove events related to indicator files/entries that no longer exist"""
         indicated = self.parse_indicators()
 
-        relevant_events = {}
+        relevant_events = copy.deepcopy(EMPTY_LOG)
         for category, logged_events in saved_state.items():
             for event in logged_events:
                 for indication in indicated:
                     if indication in event['uploaded']:
-                        relevant_events[category] = event
-                        break  # We can skip to the next event since this one is already saved
+                        relevant_events[category].append()
+                    else:
+                        self.debug(f'Dropping non-indicated event: {event["uploaded"]}')
         return relevant_events
 
     def clean(self):
