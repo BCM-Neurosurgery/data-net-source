@@ -80,8 +80,11 @@ class ParserCommon(ABC):
             self.clean()
         # Always send an end notification
         except Exception as e:
+            import sys, traceback
+            self.error(e)
+            self.error(f'Encountered {str(e)}')
+            self.debug(traceback.format_exception(*sys.exc_info()))
             self.end_notify(1) #TODO: upgrade to send more meaningful exit codes
-            raise e
         else:
             self.end_notify(0)
 

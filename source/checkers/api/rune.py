@@ -78,8 +78,8 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         # if the last log time is earlier than the look_back_timestamp, replace it with the look_back_timestamp
         # print(merged_df)
         # print(look_back_timestamp)
-        self.log(f'{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}')
-        print(f'{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}')
+        self.log(f"{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}")
+        print(f"{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}")
         
         merged_df['logged_end'].mask(merged_df['logged_end'] < look_back_timestamp, look_back_timestamp, inplace=True)
         # Replace NaN values in 'logged_end' with the look-back timestamp: if there is no upload state, go by look back duration
