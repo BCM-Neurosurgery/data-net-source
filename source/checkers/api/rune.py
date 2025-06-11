@@ -55,15 +55,15 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         """Check whether there is any new data for a specific patient"""
         logs = self.load_state()
         
+        streams_df = patient_stream_data.to_dataframe()
+
         # Ensure log_df exists with required columns
-        if not logs.get('success'):
+        if len(logs.get('success')) == 0:
             log_df = pd.DataFrame(columns=['id', 'logged_end'])
         else:
             log_df = pd.DataFrame(logs['success'])
             log_df = log_df.sort_values('logged_end').drop_duplicates(subset='id', keep='last') # pick out maximum log time per stream
-
-        streams_df = patient_stream_data.to_dataframe()
-
+        
         # Merge device stream metadata with the upload_state data to then filter out old data to check
         merged_df = streams_df.merge(
             log_df[['id', 'logged_end']],
@@ -72,21 +72,14 @@ class RuneAPICheckerMixin(BaseAPIChecker):
             how='left'
         )
 
-        if self.look_back_duration:
+        if self.look_back_duration is not None:
             look_back_days = int(self.look_back_duration[:-1])  # Extract number of days
             look_back_timestamp = (datetime.utcnow() - timedelta(days=look_back_days)).timestamp()
-        else:
-            look_back_timestamp = merged_df['logged_end'].min()
+            merged_df['logged_end'].mask(merged_df['logged_end'] < look_back_timestamp, look_back_timestamp, inplace=True)
+            merged_df['logged_end'].fillna(look_back_timestamp, inplace=True)
 
-        # if the last log time is earlier than the look_back_timestamp, replace it with the look_back_timestamp
-        # print(merged_df)
-        # print(look_back_timestamp)
-        self.log(f'{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}')
-        print(f'{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}')
-        
-        merged_df['logged_end'].mask(merged_df['logged_end'] < look_back_timestamp, look_back_timestamp, inplace=True)
-        # Replace NaN values in 'logged_end' with the look-back timestamp: if there is no upload state, go by look back duration
-        merged_df['logged_end'].fillna(look_back_timestamp, inplace=True)
+        print(merged_df['max_time'].describe(), merged_df['logged_end'].describe())
+        merged_df['logged_end'] = merged_df['logged_end'].fillna(merged_df['min_time'])
 
         # Filtering only for new data
         filtered_df = merged_df[
@@ -96,7 +89,9 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         filtered_df = filtered_df[filtered_df['category'].isin(self.categories)]
 
         if filtered_df.empty:
-            self.info(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}")  
+            self.info(f"No info available for patient {streams_df['patient_id'].iloc[0]}")  
+
+        self.log(f'{len(filtered_df)} streams getting updated out of {len(merged_df)}')
         
         return filtered_df
 
@@ -183,9 +178,10 @@ class RuneAPICheckerMixin(BaseAPIChecker):
             rune_patients_config = json.load(file)
 
 
-        for patient_name, patient_id in rune_patients_config[self.project_name].items():
+        for patient_name, patient_id in rune_patients_config['patient_ids'].items():
             try:
                 patient = get_patient_stream_metadata(patient_id, client=self.graph_client)
+                print(patient)
             except Exception as e:
                 error_dict = {
                     "type": "checker failure",
