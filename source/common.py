@@ -74,7 +74,7 @@ class ParserCommon(ABC):
             else:
                 complete = EMPTY_LOG
             cat_lengths = [f'{len(events)} {cat} events' for cat, events in complete.items()]
-            self.info("Saving state with: " + ", ".join(cat_lengths))
+            self.info("During this run we had: " + ", ".join(cat_lengths))
             self.save(complete)
             self.info('Performing cleanup')
             self.clean()

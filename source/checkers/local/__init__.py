@@ -163,6 +163,9 @@ class FileCheckerMixin(BaseChecker):
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(new_log, log, indent=2)
 
+        cat_lengths = [f'{len(events)} {cat} events' for cat, events in new_log.items()]
+        self.info("Saved state file with: " + ", ".join(cat_lengths))
+
     def save(self, completed):
         """Log the files the that have been uploaded, along with all errors"""
         # TODO: make this work with the method of passing around dicts
