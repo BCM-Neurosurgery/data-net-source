@@ -43,7 +43,7 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
             for event in logged_events:
                 for indication in indicated:
                     if indication in event['uploaded']:
-                        relevant_events[category].append()
+                        relevant_events[category].append(event)
                     else:
                         self.debug(f'Dropping non-indicated event: {event["uploaded"]}')
         return relevant_events
