@@ -22,7 +22,7 @@ state_path = "/path/to/save/upload/state/"
 # Specify settings needed by the CheckerMixin, which define where to look for new data.
 # Should always include a 'path' but each Checker may have different requirements
 [parser.init.source]
-bucket = "bucket-name" # The S3 bucket to check for new files
+bucket = "source-bucket-name" # The S3 bucket to check for new files
 prefix = "" # Optional: the 'folder' inside the source bucket to check
 
 # ADDED: A middle section may be needed for the S3-to-S3 workflow.
@@ -33,7 +33,7 @@ path = "/path/to/local/temp/"
 # Specify settings needed by the UploaderMixin, which define where to place the newly discovered data.
 # Should always include a 'path' but each Uploader may have different requirements
 [parser.init.target]
-bucket = "bucket-name" # The destination S3 bucket to upload files. 
+bucket = "destination-bucket-name" # The destination S3 bucket to upload files. 
 prefix = "processed_files" # Optional: the 'folder' inside the destination bucket
 
 # Specify any additional optional settings for the Parser
