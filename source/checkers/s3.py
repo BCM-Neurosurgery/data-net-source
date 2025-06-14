@@ -1,0 +1,1 @@
+# The checker code for S3 bucket access goes here.
