@@ -1,16 +1,16 @@
 from source.common import ParserCommon
 from parsers.blackrock import BlackrockChecker
-from source.checkers.local import IndicatorFileCheckerMixin
-from source.uploaders.datajoint import EMUBlackrockDJUploader
+from source.checkers.local.indicator import IndicatorTomlChecker
+from source.uploaders.datajoint.emublackrock import EMUBlackrockDJUploader
 
 
-class DatalakeBRKChecker(IndicatorFileCheckerMixin, BlackrockChecker):
+class DatalakeBRKChecker(IndicatorTomlChecker, BlackrockChecker):
     """
     """
 
     def check(self):
         """Use the Indicator Checker to get the list of all files, and then sub select only the NSP files"""
-        all_files = IndicatorFileCheckerMixin.check(self)
+        all_files = IndicatorTomlChecker.check(self)
 
         failure = all_files['failure']
         to_do = self.filter_streamed_files(all_files['to do'])

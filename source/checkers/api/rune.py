@@ -167,6 +167,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 out_path = os.path.join(
                     self.source_location['path'],
                     patient_name,
+                    'rune',
                     day_str,
                     stream['measurement']
                 )

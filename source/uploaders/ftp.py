@@ -4,10 +4,11 @@ import ftplib
 import pathlib
 import traceback
 from ftputil import FTPHost
-from source.uploaders.base import BaseUploader
+from ftputil.error import FTPError
+from source.uploaders.base import RemoteFilesystemUploader
 
 
-class FTPUploader(BaseUploader):
+class FTPUploader(RemoteFilesystemUploader):
     """
     Uploader that users FTP (with TLS by default) to transfer files to an FTP server
     """
@@ -25,61 +26,33 @@ class FTPUploader(BaseUploader):
 
     use_tls = True
 
-    def upload(self, ready):
+    def make_connection(self):
         """
-        Upload a file to the remote server using FTP
-
-        :param ready:
-        :return:
+        Establish a connection to the remote filesystem
+        Connection reference should be stored as instance variables
         """
-
-        errors = ready['failure']
-        success = []
-
         ftp_backend = ftplib.FTP_TLS if self.use_tls else ftplib.FTP
+        self.ftp = FTPHost(**self.target_location['ftp'], session_factory=ftp_backend)
 
-        with FTPHost(**self.target_location['ftp'], session_factory=ftp_backend) as ftp:
+    def close_connection(self):
+        """"""
+        self.ftp.close()
 
-            remote_base = self.target_location['path']
-            local_base = self.middle_location['path']
+    def check_exists(self, target_file):
+        """Check if the file exists by trying to retrieve it's size. Error indicates file does not exist"""
+        try:
+            size = self.ftp.stat(target_file)
+        except FTPError as e:
+            exists = False
+        else:
+            exists = True
+        return exists
 
-            for file in ready['to upload']:
+    def make_folders(self, target_directory):
+        self.ftp.makedirs(pathlib.Path(target_directory).as_posix(), exist_ok=True)
 
-                try:
-                    old_rel_path = os.path.relpath(file, local_base)
-                    relative_path = self.rebuild_filepath(old_rel_path)
-                    remote_path = os.path.join(remote_base, relative_path)
+    def do_move(self, filename, destination):
+        return self.time_upload(self.ftp.upload, filename, destination.as_posix())
 
-                    remote_dir = os.path.dirname(remote_path)
-                    ftp.makedirs(pathlib.Path(remote_dir).as_posix(), exist_ok=True)
-
-                    file_size = os.path.getsize(file)
-                    self.info(f'  Moving to {remote_path}')
-                    upload_rate = self.time_upload(
-                        file_size,
-                        ftp.upload,
-                        pathlib.Path(file).as_posix(),
-                        pathlib.Path(remote_path).as_posix()
-                    )
-                except Exception as e:
-                    self.error(e)
-                    error_dict = {
-                        'type': 'upload failure',
-                        'location': self.uploader_name,
-                        'filename': str(file),
-                        'destination': str(remote_path),
-                        'error': str(e),
-                        'trace': traceback.format_exception(*sys.exc_info())
-                    }
-                    errors.append(error_dict)
-                else:
-                    self.info(f'  Upload complete. ({round(file_size, 2)} MB at {round(upload_rate, 2)} MB/s)')
-                    success.append({
-                        'type': 'upload success',
-                        'filename': file,
-                        'destination': remote_path,
-                        'transfer rate': upload_rate
-                    })
-        return {'success': success, 'failure': errors}
 
 
