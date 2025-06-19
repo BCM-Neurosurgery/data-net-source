@@ -42,59 +42,79 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         """Prepare both the metadata and stream data clients for use by this checker"""
         # Load the Rune config from the specified rune config file
         rune_config = Config(self.source_location['rune_config'])
-
+        
         # These will be set directly on the ParserCommon class.
         # TODO: Is there a better way to safely store these? without using rune's globals.
         self.stream_client = StreamClient(rune_config)
         self.graph_client = GraphClient(rune_config)
 
-    def check_streams(self, patient_stream_data):
-        """Check whether there is any new data for a specific patient"""
+    def check_streams(self, patient_stream_data, start_date):
+        """
+        Check whether there is any new data for a specific patient.
+
+        Parameters
+        ----------
+        patient_stream_data : object
+            An object with a `.to_dataframe()` method producing a DataFrame
+            containing at least the columns ['id', 'min_time', 'max_time', 'category'].
+        start_date : str or datetime
+            Earliest timestamp (inclusive) to fetch data from; enforced as a lower bound
+            on `logged_end`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Subset of the merged streams DataFrame containing only rows where
+            `max_time > logged_end` and `category` is in self.categories.
+        """
+        # 1) Parse and enforce the start_date boundary
+        start_ts = pd.to_datetime(start_date).timestamp()
+
+        # 2) Load previous state and convert incoming streams to DataFrame
         logs = self.load_state()
-        
-        # Ensure log_df exists with required columns
+        streams_df = patient_stream_data.to_dataframe()
+
+        # 3) Build a log_df of last successful 'logged_end' per stream
         if not logs.get('success'):
             log_df = pd.DataFrame(columns=['id', 'logged_end'])
         else:
-            log_df = pd.DataFrame(logs['success'])
-            log_df = log_df.sort_values('logged_end').drop_duplicates(subset='id', keep='last') # pick out maximum log time per stream
+            log_df = (
+                pd.DataFrame(logs['success'])
+                .sort_values('logged_end')
+                .drop_duplicates(subset='id', keep='last')
+            )
 
-        streams_df = patient_stream_data.to_dataframe()
-
-        # Merge device stream metadata with the upload_state data to then filter out old data to check
+        # 4) Merge to get a working DataFrame with min_time, max_time, category, and logged_end
         merged_df = streams_df.merge(
             log_df[['id', 'logged_end']],
-            left_on='id',
-            right_on='id',
+            on='id',
             how='left'
         )
 
+        # 5) Fill missing logged_end with min_time
+        merged_df['logged_end'] = merged_df['logged_end'].fillna(merged_df['min_time'])
+
+        # 6) Enforce the user-specified start_date
+        merged_df['logged_end'] = merged_df['logged_end'].clip(lower=start_ts)
+
+        # 7) Optionally enforce a look-back duration if configured
         if self.look_back_duration:
-            look_back_days = int(self.look_back_duration[:-1])  # Extract number of days
-            look_back_timestamp = (datetime.utcnow() - timedelta(days=look_back_days)).timestamp()
-        else:
-            look_back_timestamp = merged_df['logged_end'].min()
+            days = int(self.look_back_duration.rstrip('D'))
+            look_back_ts = (datetime.utcnow() - timedelta(days=days)).timestamp()
+            merged_df['logged_end'] = merged_df['logged_end'].clip(lower=look_back_ts)
 
-        # if the last log time is earlier than the look_back_timestamp, replace it with the look_back_timestamp
-        # print(merged_df)
-        # print(look_back_timestamp)
-        self.log(f"{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}")
-        print(f"{merged_df['logged_end'].count()} streams with new data out of {len(merged_df['logged_end'])}")
-        
-        merged_df['logged_end'].mask(merged_df['logged_end'] < look_back_timestamp, look_back_timestamp, inplace=True)
-        # Replace NaN values in 'logged_end' with the look-back timestamp: if there is no upload state, go by look back duration
-        merged_df['logged_end'].fillna(look_back_timestamp, inplace=True)
+        # 8) Filter for any streams where there is new data
+        filtered_df = merged_df[merged_df['max_time'] > merged_df['logged_end']]
 
-        # Filtering only for new data
-        filtered_df = merged_df[
-            merged_df['max_time'] > merged_df['logged_end']
-        ]
-        
+        # 9) Keep only the categories of interest
         filtered_df = filtered_df[filtered_df['category'].isin(self.categories)]
 
+        # 10) Log if nothing to do, otherwise record how many streams will update
         if filtered_df.empty:
-            self.warning(f"No info available for patient {patient_stream_data['patient_id'].iloc[0]}") 
-        
+            patient_id = streams_df['patient_id'].iloc[0] if 'patient_id' in streams_df.columns else '<unknown>'
+            self.info(f"No new data for patient {patient_id}")
+        self.log(f"{len(filtered_df)} streams getting updated out of {len(merged_df)}")
+
         return filtered_df
 
     def deduplication(self, df):
@@ -184,6 +204,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         for patient_name, patient_id in rune_patients_config['patient_ids'].items():
             try:
                 patient = get_patient_stream_metadata(patient_id, client=self.graph_client)
+                print(patient)
             except Exception as e:
                 error_dict = {
                     "type": "checker failure",
@@ -192,7 +213,8 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 }
                 failures.append(error_dict)
             else:               
-                new_data_df = self.check_streams(patient)
+                start_date = rune_patients_config['start_dates'][patient_name]
+                new_data_df = self.check_streams(patient, start_date)
                 if new_data_df.empty:
                     pass
                 new_data_df = self.deduplication(new_data_df)
