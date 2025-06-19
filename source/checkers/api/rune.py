@@ -31,7 +31,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)  # remove directory
             except Exception as e:
-                self.info(f'Failed to delete {file_path}. Reason: {e}')
+                self.warn(f'Failed to delete {file_path}. Reason: {e}')
         pass
 
     checker_name = "RuneAPIChecker"
@@ -113,7 +113,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         # 10) Log if nothing to do, otherwise record how many streams will update
         if filtered_df.empty:
             patient_id = streams_df['patient_id'].iloc[0] if 'patient_id' in streams_df.columns else '<unknown>'
-            self.info(f"No new data for patient {patient_id}")
+            self.warn(f"No new data for patient {patient_id}")
         self.log(f"{len(filtered_df)} streams getting updated out of {len(merged_df)}")
 
         return filtered_df
@@ -268,7 +268,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                             state_entry['failed_dates'].append(date_str)
 
             except Exception as e:
-                self.info(f"Error processing path {path}: {e}")
+                self.warn(f"Error processing path {path}: {e}")
 
         state = self.load_state()
         state['success'].extend(self._state)
