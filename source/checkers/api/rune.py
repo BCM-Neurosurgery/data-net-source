@@ -2,9 +2,6 @@ import os.path
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from runeq import initialize
-initialize()
-
 from source.checkers.api.base import BaseAPIChecker
 from runeq.resources.patient import get_patient, get_device
 from runeq.resources.client import Config, StreamClient, GraphClient
@@ -169,6 +166,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 out_path = os.path.join(
                     self.source_location['path'],
                     patient_name,
+                    'rune',
                     day_str,
                     stream['measurement']
                 )

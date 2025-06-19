@@ -1,4 +1,4 @@
-from source.checkers.local import FileCheckerMixin
+from source.checkers.local.base import FileCheckerMixin
 from source.uploaders.ssh import SCPUploaderMixin
 from source.common import ParserCommon
 

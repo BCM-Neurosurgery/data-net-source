@@ -1,7 +1,10 @@
+import copy
 import os
 import json
 from datetime import datetime
 from abc import ABC, abstractmethod
+
+from source.common import EMPTY_LOG
 
 
 class BaseChecker(ABC):
@@ -32,6 +35,14 @@ class BaseChecker(ABC):
         """
         uploaded = self.load_state()['success']
         return uploaded
+
+    def load_skipped(self):
+        """Load all tasks that were skipped during the upload process"""
+        return self.load_state()['skipped']
+
+    def load_non_failure(self):
+        """Load the list of all tasks that did not result in a failure"""
+        return self.load_successes() + self.load_skipped()
 
     def write_state(self, state_data):
         """
@@ -71,43 +82,42 @@ class BaseChecker(ABC):
         There are several commonly used actions implemented that you can call if it makes sense for your parser
         """
 
-    def clean_fixed_failures(self, successes, failures):
-        """Remove failures in the upload state that were later replaced by successes"""
-        unfixed_failures = []
-        for failure in failures:
-            for success in successes:
-                if success['uploaded'] == failure['uploaded'] and success['timestamp'] > failure['timestamp']:
-                    self.info(f'File was uploaded later successfully {failure["uploaded"]}')
-                    break
-            else:
-                self.info(f'File never uploaded {failure["uploaded"]}')
-                unfixed_failures.append(failure)
-        return unfixed_failures
+    def clean_outdated(self, full_state):
+        """Remove all the entries for a particular source file except for the most recent one."""
 
-    def clean_duplicate_failures(self, failures):
-        """Remove all but the most recent error for every file"""
-        most_recent_errors = []
-        checked_files = []
-        for error in failures:
-            if error['uploaded'] in checked_files:
-                pass  # The most recent error for this file was already selected
-            else:
-                # Get and save only the most recent error out of all errors for this file
-                all_matching = [err for err in failures if err['uploaded'] == error['uploaded']]
-                youngest = error
-                for match in all_matching:
-                    if match['timestamp'] < youngest['timestamp']:
-                        youngest = match
-                if len(all_matching) > 1:
-                    self.info(f'Trimmed {len(all_matching) - 1} errors for {error["uploaded"]}')
-                most_recent_errors.append(youngest)
+        def iter_state(key, state_dict):
+            for obj in state_dict[key]:
+                if 'filename' in obj:
+                    yield obj['filename'], obj
+                elif 'uploaded' in obj:
+                    yield obj['uploaded'], obj
 
-                # We won't check errors for this file again
-                checked_files.append(error['uploaded'])
-        return most_recent_errors
+        # Re-organize the state dictionary to be easier to compare age of events per file
+        re_organized = {}
+        for category in full_state:
+            for filename, event in iter_state(category, full_state):
+                if filename not in re_organized:
+                    re_organized[filename] = []
+                re_organized[filename].append((category, event))
 
-    def clean_old_success(self, successes):
+        # For each unique filename, save only the most recent event
+        reduced = copy.deepcopy(EMPTY_LOG)
+        for filename, entries in re_organized.items():
+            if len(entries) > 1:    # If there are multiple entries sort them in time
+                entries = sorted(entries, key=lambda x: x[1]['timestamp'])
+                self.info(f'Saving only "{entries[-1][0]}" for {filename} (will drop {len(entries) - 1} entries)')
+                for to_drop in entries[:-1]:
+                    timestamp = datetime.fromtimestamp(to_drop[1]['timestamp'])
+                    elapsed = (datetime.now() - timestamp).total_seconds() / 3600
+                    self.debug(f'  Dropping {to_drop[0]} at {timestamp} ({elapsed:.1f} hours ago)')
+            cat, event = entries[-1]
+            reduced[cat].append(event)
+
+        return reduced
+
+    def clean_old_success(self, state):
         """Delete files that have been successfully uploaded long enough ago"""
+        successes = state['success']
         kept_success = []
         now = datetime.now().timestamp()
         has_delete = hasattr(self, 'delete_age_hours')
@@ -121,4 +131,9 @@ class BaseChecker(ABC):
                     self.warning(f'File was already deleted!')
             else:
                 kept_success.append(uploaded)
-        return kept_success
+
+        # Keep all non-success entries the same
+        new_log = copy.deepcopy(state)
+        new_log['success'] = kept_success
+
+        return new_log
