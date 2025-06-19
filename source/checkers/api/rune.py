@@ -3,8 +3,6 @@ import json
 import pandas as pd
 from datetime import datetime, timedelta
 from runeq import initialize
-initialize()
-
 from source.checkers.api.base import BaseAPIChecker
 from runeq.resources.patient import get_patient, get_device
 from runeq.resources.client import Config, StreamClient, GraphClient
@@ -33,7 +31,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)  # remove directory
             except Exception as e:
-                print(f'Failed to delete {file_path}. Reason: {e}')
+                self.info(f'Failed to delete {file_path}. Reason: {e}')
         pass
 
     checker_name = "RuneAPIChecker"
@@ -44,8 +42,8 @@ class RuneAPICheckerMixin(BaseAPIChecker):
     def setup_clients(self):
         """Prepare both the metadata and stream data clients for use by this checker"""
         # Load the Rune config from the specified rune config file
+        initialize(self.source_location['rune_config'])
         rune_config = Config(self.source_location['rune_config'])
-        
         # These will be set directly on the ParserCommon class.
         # TODO: Is there a better way to safely store these? without using rune's globals.
         self.stream_client = StreamClient(rune_config)
@@ -206,7 +204,6 @@ class RuneAPICheckerMixin(BaseAPIChecker):
         for patient_name, patient_id in rune_patients_config['patient_ids'].items():
             try:
                 patient = get_patient_stream_metadata(patient_id, client=self.graph_client)
-                print(patient)
             except Exception as e:
                 error_dict = {
                     "type": "checker failure",
@@ -270,7 +267,7 @@ class RuneAPICheckerMixin(BaseAPIChecker):
                             state_entry['failed_dates'].append(date_str)
 
             except Exception as e:
-                print(f"Error processing path {path}: {e}")
+                self.info(f"Error processing path {path}: {e}")
 
         state = self.load_state()
         state['success'].extend(self._state)
