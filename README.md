@@ -118,7 +118,7 @@ parser must also inherit from the respective mixin, as detailed below.
 Implementation details are available on the base class for each mixin family.
 
 ## Checkers
-A CheckerMixin, is responsible for providing the check() and save() methods.
+A CheckerMixin, is responsible for providing the check(), save(), and clen() methods.
 This method is responsible for interrogating the data source to find new data, by comparing
 against the upload_state. These are then returned to the SourceParser as a list
 of file paths, each of which indicates a data file to be processed and uploaded.
@@ -128,8 +128,29 @@ save() method the list of all files that were successfully uploaded, as well as 
 which processing failed at some point in the pipeline, along with the appropriate metadate. 
 These should then be saved in the state file.
 
-When writing a custom Checker, you must inherit from `source.checkers.base.BaseChecker`.
-You can then implement a customized check() method and optionally a save() method.
+### Checker subclasses
+There are several base classes for checkers which should be used to help enforce predictable behavior
+- `FileCheckerMixin`: (in `source.checkers.local`) checker for working with a generic filesystem, which provides some neat
+    filtering behavior using regex 
+- `StreamedFileChecker`: (in ) subtype of file checker that provides filtering by file last modified
+- `IndicatorFileChecker`: (in ) subtype of file checker that provides dynamic filtering by sub-directories
+- `BaseAPIChecker`: (in ) base class for 
+
+### The State File
+The state file should be used by the checker to keep track of which data has already 
+been processed, where errors occurred, and what data should be processed again. It is a json file with 
+a collection of entries organized by state.
+
+There are three kinds of states that should be supported:
+  - `success`: Entries that were downloaded, processed, and uploaded correctly
+  - `failure`: Entries that encountered an error somewhere in the processing or upload
+  - `skipped`: Entries that were processed nominally, but were not uploaded as the file already existed in the remote endpoint
+Of there three states, failure entries will be re-tried at every run.
+
+Each entry can have nearly any form, as is required by the checker to identify the data it relates two, however, all 
+entries have a few required elements:
+    - `timestamp`: The Unix UTC timestamp at which this event occurred
+Moreover, error type events, should include the error trace to aid in debugging
 
 ## Transformers
 TransformerMixins are responsible for providing the transform() method. 
