@@ -2,7 +2,7 @@
 
 import boto3
 import os
-from .base import BaseChecker  # Imports the abstract base class for checkers
+from .base import BaseChecker
 import json
 import logging
 
@@ -45,11 +45,56 @@ class S3ObjectCheckerMixin(BaseChecker):
         new_local_files = []
         self._s3_file_map.clear() 
 
-        #Add a paginator to handle large buckets with try and except for error handling
+        try:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=source_bucket, Prefix=source_prefix)
+
+            for page in pages:
+                if "Contents" not in page:
+                    continue
+                for obj in page['Contents']:
+                    object_key = obj['Key']
+                    object_etag = obj['ETag'] 
+
+                    if object_key.endswith('/'):
+                        continue
+
+                    if processed_objects.get(object_key) == object_etag:
+                        continue
+
+                    local_file_path = os.path.join(temp_dir, os.path.basename(object_key))
+                    logging.info(f"New S3 object found: {object_key}. Downloading to {local_file_path}")
+                    s3_client.download_file(source_bucket, object_key, local_file_path)
+
+                    self._s3_file_map[local_file_path] = {"key": object_key, "etag": object_etag}
+                    new_local_files.append(local_file_path)
+
+        except Exception as e:
+            logging.error(f"Failed to check for new files in S3 bucket {source_bucket}: {e}")
+
+        return {'to do': new_local_files, 'failure': []}
 
     def save(self, completed: dict):
-        pass
 
+        success_files = completed.get('success', [])
+        logging.info(f"Saving state for {len(success_files)} successfully processed files.")
+        
+        state_data = self._load_state_from_file()
+        if 'processed' not in state_data:
+            state_data['processed'] = {}
+            
+        for local_path in success_files:
+            if local_path in self._s3_file_map:
+                s3_details = self._s3_file_map[local_path]
+                s3_key = s3_details['key']
+                s3_etag = s3_details['etag']
+                state_data['processed'][s3_key] = s3_etag
+        
+        state_dir = os.path.dirname(self.state_path)
+        if not os.path.exists(state_dir):
+            os.makedirs(state_dir)
+        with open(self.state_path, 'w') as f:
+            json.dump(state_data, f, indent=4)
 
     def clean(self):
         pass
