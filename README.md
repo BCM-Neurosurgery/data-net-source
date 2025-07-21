@@ -29,8 +29,6 @@ any format of data collection, with a particular emphasis on the research enviro
     - [Logging](#logging)
     - [Dependencies](#dependencies)
   - [AWS Credentials Setup](#aws-credentials-setup)
-    - [Method-1](#method-1)
-    - [Method-2](#method-2)
 
 # Quick Start
 
@@ -314,7 +312,6 @@ To allow this application to interact with your AWS S3 buckets, you must configu
 The parser uses the standard AWS SDK, which automatically searches for credentials. The two most common methods for providing them are detailed below.
 
 ### Method 1:  AWS Credentials File
-`[method-1]`
 
 This method uses dedicated files in your home directory to store credentials securely, separate from your project code.
 
@@ -347,7 +344,6 @@ region = us-east-1
 `Note:` Replace us-east-1 with the actual region of your S3 bucket (e.g., us-west-2, ap-south-1, etc.).
 
 ### Method 2: Environment Variables
-`[method-2]`
 
 For automated environments like servers or CI/CD pipelines, using environment variables is a common alternative. These variables will override the [default] profile in the credentials file.
 
