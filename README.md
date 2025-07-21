@@ -29,8 +29,8 @@ any format of data collection, with a particular emphasis on the research enviro
     - [Logging](#logging)
     - [Dependencies](#dependencies)
   - [AWS Credentials Setup](#aws-credentials-setup)
-    - [Method-1](method-1)
-    - [Method-2](method-2)
+    - [Method-1](#method-1)
+    - [Method-2](#method-2)
 
 # Quick Start
 
