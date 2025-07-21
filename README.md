@@ -27,8 +27,10 @@ any format of data collection, with a particular emphasis on the research enviro
       - [Initialization](#initiation)
       - [Optional Settings](#settings)
     - [Logging](#logging)
-    - [Dependencies](#dependencies-)
-
+    - [Dependencies](#dependencies)
+  - [AWS Credentials Setup](#aws-credentials-setup)
+    - [Method-1](method-1)
+    - [Method-2](method-2)
 
 # Quick Start
 
@@ -303,3 +305,102 @@ For example:
 }
 ```
 This will install the newest version of numpy, version 1.0.3 of scipy, and the brpylib package directly from github
+
+# AWS Credentials Setup
+`[aws-credentials-setup]`
+
+To allow this application to interact with your AWS S3 buckets, you must configure your local machine with AWS credentials. This is a one-time setup required on each computer that will run the parser.
+
+The parser uses the standard AWS SDK, which automatically searches for credentials. The two most common methods for providing them are detailed below.
+
+### Method 1:  AWS Credentials File
+`[method-1]`
+
+This method uses dedicated files in your home directory to store credentials securely, separate from your project code.
+
+#### 1. Create the .aws Directory
+   
+First, create a folder named .aws in your user's home directory.
+
+- `Windows:`
+  Open File Explorer and navigate to C:\Users\YourUserName\. Create a new folder named exactly .aws. The final path will be C:\Users\YourUserName\.aws\
+  
+- `Linux:`
+  Open a terminal and run the command: mkdir ~/.aws
+
+#### 2. Create the credentials and config Files
+
+Inside the .aws folder, create two new plain text files: credentials and config (with no file extensions).
+
+- In the credentials file, add your access keys:
+```bash
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY_ID_HERE
+aws_secret_access_key = YOUR_SECRET_ACCESS_KEY_HERE
+```
+
+- In the config file, set your default AWS region:
+```bash
+[default]
+region = us-east-1
+```
+`Note:` Replace us-east-1 with the actual region of your S3 bucket (e.g., us-west-2, ap-south-1, etc.).
+
+### Method 2: Environment Variables
+`[method-2]`
+
+For automated environments like servers or CI/CD pipelines, using environment variables is a common alternative. These variables will override the [default] profile in the credentials file.
+
+- Windows(in PowerShell):
+```bash
+$Env:AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_ID_HERE"
+$Env:AWS_SECRET_ACCESS_KEY="YOUR_SECRET_ACCESS_KEY_HERE"
+$Env:AWS_DEFAULT_REGION="us-east-1"
+```
+
+- Linux and macOS (in bash/zsh):
+```bash
+export AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_ID_HERE"
+export AWS_SECRET_ACCESS_KEY="YOUR_SECRET_ACCESS_KEY_HERE"
+export AWS_DEFAULT_REGION="us-east-1"
+```
+
+#### Working with Multiple AWS Accounts (Named Profiles)
+
+For users who need to interact with multiple AWS accounts, you can configure "named profiles" in your credentials and config files.
+
+For example, to add a profile named development:
+- In your credentials file:
+  ```bash
+  [default]
+  aws_access_key_id = ...
+  aws_secret_access_key = ...
+
+  [development]
+  aws_access_key_id = YOUR_DEV_ACCOUNT_KEY_ID
+  aws_secret_access_key = YOUR_DEV_ACCOUNT_SECRET_KEY
+  ```
+
+- In your config file:
+```bash
+[default]
+region = us-east-1
+
+[profile development]
+region = us-west-2
+```
+(Notice the profile prefix for named profiles in the config file.)
+
+To use a named profile, set the AWS_PROFILE envionment variable in your terminal:
+- Windows (in PowerShell):
+```bash
+$Env:AWS_PROFILE="development"
+```
+
+- Linux and macOS (in bash/zsh):
+```bash
+export AWS_PROFILE="development"
+```
+The application will now use the credentials associated with the development profile.
+
+Once your credentials have been configured using one of these methods, the application will be able to securely authenticate and connect to your S3 buckets using the appropriate account.
