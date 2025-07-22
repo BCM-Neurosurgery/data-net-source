@@ -1,7 +1,7 @@
 import boto3
 import os
 from datetime import datetime
-from .base import BaseUploader  # Imports the abstract base class for uploaders
+from .base import BaseUploader
 import logging
 
 class S3UploaderMixin(BaseUploader):
@@ -13,20 +13,11 @@ class S3UploaderMixin(BaseUploader):
     2. Uploads each file to a specified AWS S3 destination bucket and prefix.
     3. Reliably returns a dictionary detailing the successes and failures, as required
        by the main processing loop.
-    4. Is responsible for cleaning up the temporary local files created by the checker.
     """
-    def __init__(self, **kwargs):
-        # Always call the parent's constructor.
-        super().__init__(**kwargs)
-        # A private list to hold file paths from the most recent `upload` call.
-        # This is necessary so the `clean` method knows which files to delete.
-        self._last_processed_files = []
-
     @property
     def uploader_name(self):
         """
-        Provides a user-friendly name for this uploader, satisfying the abstract
-        property in the BaseUploader.
+        Provides a user-friendly name for this uploader.
         """
         return "S3Uploader"
 
@@ -39,8 +30,6 @@ class S3UploaderMixin(BaseUploader):
         self.info("S3Uploader 'upload' method started.")
         # The framework passes a dictionary; we get the list of files from the 'to upload' key.
         files_to_process = ready.get('to upload', [])
-        # Cache this list of files so the clean() method can access it later.
-        self._last_processed_files = files_to_process
 
         s3_client = boto3.client('s3')
         # Retrieve the destination S3 bucket and prefix from the configuration.
@@ -75,7 +64,7 @@ class S3UploaderMixin(BaseUploader):
                 # Create a success record in the format expected by the framework's save() method.
                 success_record = {
                     "type": "upload success",
-                    "filename": local_file_path, # This is the original local path
+                    "filename": local_file_path,
                     "destination": f"s3://{target_bucket}/{s3_key}",
                     "timestamp": datetime.utcnow().timestamp()
                 }
@@ -97,19 +86,5 @@ class S3UploaderMixin(BaseUploader):
         return {'success': successes, 'failure': failures}
 
     def clean(self):
-        """
-        Called by the framework after the 'save' step. This method cleans up by
-        deleting the temporary local files that were downloaded by the checker.
-        """
-        self.info(f"Cleaning up {len(self._last_processed_files)} temporary files.")
-        # Iterate through the cached list of files from the last upload call.
-        for f in self._last_processed_files:
-            try:
-                # Check if the temporary file still exists before trying to delete it.
-                if os.path.exists(f):
-                    os.remove(f)
-            except OSError as e:
-                # Log an error if a file can't be removed, but don't crash.
-                self.error(f"Error cleaning up file {f}: {e}")
-        # Clear the list to free memory and prevent accidental re-deletion.
-        self._last_processed_files = []
+        
+        pass
