@@ -1,0 +1,43 @@
+# =======================================================
+# PARSER A: Local Filesystem to AWS S3
+# =======================================================
+# This parser watches a local directory for new files and uploads them
+# to an S3 bucket, preserving the subdirectory structure.
+
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "LocalToS3Parser"
+parts = [
+  # This checker watches the local filesystem.
+  ["checkers.local_to_s3", "StreamedFileCheckerMixin"],
+  # This is the S3 uploader we built that preserves file structure.
+  ["uploaders.local_to_s3", "S3UploaderMixin"]
+]
+
+[parser.init]
+# The state file for this specific parser.
+state_path = "/path/to/save/upload/state/"
+
+# [parser.init.source] -> Settings for the local file checker.
+# This path will also be used to determine the relative file path for uploads.
+[parser.init.source]
+path = "/path/to/check/for/data/"
+
+# [parser.init.target] -> Settings for the S3 uploader.
+[parser.init.target]
+bucket = "/path/to/destination/" # Your S3 bucket name
+prefix = "raw_from_local/"
+
+[dependencies]
+pip = [
+  "boto3"
+]
+
+[logging.file]
+# This path should point to a real directory.
+filepath = "path/to/the/log/file.txt"
+level = 10                # Level 20 is INFO, which is good for general messages.
+max_size = 10485760       # Max size in bytes (10MB) before creating a new log file.
+max_files = 5             # Max number of old log files to keep.
