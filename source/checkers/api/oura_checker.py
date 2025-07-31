@@ -13,7 +13,7 @@ class OuraCheckerMixin(BaseChecker):
     def make_connection(self): 
         self.source = self.source_location
         self.info("Connecting to remote SSH and setting up paths...")       
-        self.upload_state_path = Path(self.source["upload_state_path"])
+        self.state_path = Path(self.state_path)
         self.source_data_path = Path(self.source["source_data_path"])
         self.webhook_post_path = Path(self.source["webhook_post_path"])
         self.data_net_path = Path(self.source["data_net_path"])
@@ -29,21 +29,6 @@ class OuraCheckerMixin(BaseChecker):
                              username=self.ssh_config["username"], 
                              key_filename = self.ssh_config["key_filename"])
             self.sftp = self.ssh.open_sftp()
-            
-           
-    # load the state path for a memory of previously uploaded files    
-    def _load_upload_state(self):
-        try:
-            with self.sftp.open(str(self.upload_state_path), "r") as f:
-                state = json.load(f)
-        except IOError:
-            self.info("Upload state not found, initializing new state file")
-            state = {}
-
-            # Ensure keys exist
-        for section in ["success", "failure", "skipped"]:
-            state.setdefault(section, [])
-        return state
         
     # reads json file remotely via SSH
     def _read_json_file(self, path):
@@ -71,7 +56,16 @@ class OuraCheckerMixin(BaseChecker):
             self.make_connection()
 
         # get the upload state
-        self.upload_state = self._load_upload_state()
+        if not self.state_path.exists():
+            self.info("Local upload_state.json not found, creating new one")
+            state = {"success": [], "failure": [], "skipped": []}
+            with open(self.state_path, "w") as f:
+                json.dump(state, f, indent=2)
+        else:
+            with open(self.state_path, "r") as f:
+                state = json.load(f)
+        
+        self.upload_state = state
 
         # pass the state variables from function to function -> potentially avoiding self.?
         to_process = []
@@ -120,31 +114,28 @@ class OuraCheckerMixin(BaseChecker):
     def _handle_payload(self, payload, tokens, timestamp_clean):
         data_type = payload["data_type"]
         user_id = payload["user_id"]
-        event_time = payload["event_time"]
+        object_id = payload["object_id"]
 
         participant_id = self._map_user_to_participant(user_id)
         if not participant_id:
             return
 
         key = f"{participant_id}/{data_type}/{timestamp_clean}"
-        if key in self.upload_state:
-            self.info(f"Already processed: {key}")
-            return
+
+        #need to correctly mark successful uploads only here
 
         token = tokens.get(participant_id, {}).get("access_token")
         if not token:
             self.info(f"Skipping, no token for {participant_id}")
             return
 
-        date = event_time.split("T")[0]
-        url = f"https://api.ouraring.com/v2/usercollection/{data_type}"
+        url = f"https://api.ouraring.com/v2/usercollection/{data_type}/{object_id}"
         headers = {"Authorization": f"Bearer {token}"}
-        params = {"start_date": date, "end_date": date}
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers)
         self.info(f"Queried {url} for {participant_id}/{data_type}: {response.status_code}")
         response.raise_for_status()
         data = response.json()
-        self.info(f"Querying Oura for {participant_id} - {data_type} on {date}")
+
         dest_dir = self.data_net_path / participant_id / data_type
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest_file = dest_dir / timestamp_clean
@@ -175,13 +166,13 @@ class OuraCheckerMixin(BaseChecker):
             })
 
         # write once after all are added
-        with self.sftp.open(str(self.upload_state_path), "w") as f:
+        with open(self.state_path, "w") as f:
             json.dump(self.upload_state, f, indent=2)
 
     def clean(self):
         if not hasattr(self, "sftp"):
             self.make_connection()
-        with self.sftp.open(str(self.upload_state_path), "r") as f:
+        with open(self.state_path, "r") as f:
             self.upload_state = json.load(f)
         
         # clean outdated log entries
@@ -191,6 +182,6 @@ class OuraCheckerMixin(BaseChecker):
         final_log = super().clean_old_success(cleaned_log)
 
         # save cleaned upload log
-        with self.sftp.open(str(self.upload_state_path), "w") as f:
+        with open(self.state_path, "w") as f:
             json.dump(final_log, f, indent=2)
 
