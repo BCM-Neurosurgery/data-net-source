@@ -24,6 +24,8 @@ class JSONDocInjectorUploader(BaseUploader):
 
     """
 
+    uploader_name = "JSONDocInjectorUploader"
+
     config_stub = """
     [parser.init.target]
     path = '/base/path/for/all/jsons' 
