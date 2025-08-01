@@ -33,7 +33,7 @@ class JSONDocInjectorUploader(BaseUploader):
     doc_id_key = 'document_id'
     # relative path/filename of the JSON to inject data into (need not exist) as a python format string
     # Filled with context obtained from both the payload and the path metadata
-    new_format = {patient_id}/oura/{date}/{doc_type}.json
+    new_format = '{patient_id}/oura/{date}/{doc_type}.json'
     """
     target_location = toml.loads(config_stub)['parser']['init']['target']  # Load a default config for type hints
 
