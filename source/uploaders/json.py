@@ -1,4 +1,5 @@
 import copy
+import os
 import re
 import json
 from pathlib import Path
@@ -61,9 +62,8 @@ class JSONDocInjectorUploader(BaseUploader):
 
     def inject_payload(self, target_file, payload):
         """
-        :param target_file:
-        :param payload:
-        :return:
+        :param target_file: Path to (potentially extant) .json file on disk to inject the payload into
+        :param payload: the payload to be injected, identified by a unique document id
         """
 
         # If any data already exists, load it first as a reference
@@ -102,8 +102,15 @@ class JSONDocInjectorUploader(BaseUploader):
 
             destination = "Was not able to determine!"
             try:
+                # Extract the payload and important path metadata from the staged source file
                 payload, path_meta = self.load_source(filename)
-                destination = self.make_target_path(payload, **path_meta)
+
+                # Determine the destination filepath and optionally prepare folders
+                relative_target = self.make_target_path(payload, **path_meta)
+                destination = Path(self.target_location['path']) / relative_target
+                os.makedirs(destination.parent, exist_ok=True)
+
+                # Actally place the data
                 self.inject_payload(destination, payload)
             except Exception as e:
                 import sys, traceback
