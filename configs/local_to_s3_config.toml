@@ -11,7 +11,7 @@ type = "dynamic"
 name = "LocalToS3Parser"
 parts = [
   # This checker watches the local filesystem.
-  ["checkers.local_to_s3", "StreamedFileCheckerMixin"],
+  ["checkers.local_to_s3", "S3FileCheckerMixin"],
   # This is the S3 uploader we built that preserves file structure.
   ["uploaders.local_to_s3", "S3UploaderMixin"]
 ]
@@ -20,10 +20,13 @@ parts = [
 # The state file for this specific parser.
 state_path = "/path/to/save/upload/state/"
 
+
 # [parser.init.source] -> Settings for the local file checker.
 # This path will also be used to determine the relative file path for uploads.
 [parser.init.source]
 path = "/path/to/check/for/data/"
+# Set this to 'true' to upload empty directories, or 'false' to ignore them.
+include_empty_dirs = true
 
 # [parser.init.target] -> Settings for the S3 uploader.
 [parser.init.target]

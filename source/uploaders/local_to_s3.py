@@ -85,6 +85,4 @@ class S3UploaderMixin(BaseUploader):
         self.info(f"S3Uploader 'upload' method finished. Success: {len(successes)}, Failure: {len(failures)}")
         return {'success': successes, 'failure': failures}
 
-    def clean(self):
-        
-        pass
+

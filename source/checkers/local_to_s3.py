@@ -8,7 +8,7 @@ from .base import BaseChecker
 from source.common import EMPTY_LOG
 import logging
 
-class StreamedFileCheckerMixin(BaseChecker):
+class S3FileCheckerMixin(BaseChecker):
     """
     A Checker mixin that finds new or modified files and empty directories.
     It compares items against a state log based on their modification times.
@@ -18,7 +18,7 @@ class StreamedFileCheckerMixin(BaseChecker):
         """
         Provides a user-friendly name for this checker.
         """
-        return "StreamedFileChecker"
+        return "S3FileChecker"
 
     def check(self) -> dict:
         """
@@ -28,6 +28,10 @@ class StreamedFileCheckerMixin(BaseChecker):
         source_path = self.source_location.get('path')
         if not source_path:
             raise ValueError("Source path must be specified in the config for local checker.")
+
+        # Read the user setting from the config file to determine if empty directories should be included.
+        # This defaults to False if the setting is not present.
+        include_empty_dirs = self.source_location.get('include_empty_dirs', False)
 
         self.info(f"Starting check on directory: {source_path}")
         non_failure_events = self.load_non_failure()
@@ -69,9 +73,9 @@ class StreamedFileCheckerMixin(BaseChecker):
                     self.warning(f"File {full_path} found during walk but could not be accessed.")
                     continue
             
-            # An empty directory:
+            # An empty directory using boolean logic:
             # subdirectories (dirnames is empty) and no files (filenames is empty).
-            if not filenames and not dirnames:
+            if include_empty_dirs and not filenames and not dirnames:
                 self.debug(f"Discovered empty directory: {dirpath}")
                 try:
                     last_modified = os.path.getmtime(dirpath)
