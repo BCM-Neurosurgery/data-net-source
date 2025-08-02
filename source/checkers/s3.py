@@ -2,6 +2,7 @@ import boto3
 import os
 import json
 import copy
+import shutil # Import the shutil module for directory operations
 from datetime import datetime
 from .base import BaseChecker   # Imports the abstract base class for checkers
 from source.common import EMPTY_LOG # Imports the standard empty log structure
@@ -39,7 +40,7 @@ class S3ObjectCheckerMixin(BaseChecker):
         
         source_bucket = self.source_location.get('bucket')
         source_prefix = self.source_location.get('prefix', '')
-        temp_dir = self.middle_location.get('path')
+        temp_dir = self.source_location.get('path')
 
         if not source_bucket or not temp_dir:
             raise ValueError("Source bucket and middle path must be specified in the config.")
@@ -79,9 +80,16 @@ class S3ObjectCheckerMixin(BaseChecker):
                     if processed_objects.get(object_key) == object_etag:
                         continue
 
-                    local_file_path = os.path.join(temp_dir, os.path.basename(object_key))
+                    # Construct the full local path, mirroring the S3 object key.
+                    # We must first remove the source prefix from the key.
+                    relative_path = os.path.relpath(object_key, source_prefix)
+                    local_file_path = os.path.join(temp_dir, relative_path)
                     
                     try:
+                        # Ensure the local parent directory for the file exists before downloading.
+                        local_parent_dir = os.path.dirname(local_file_path)
+                        os.makedirs(local_parent_dir, exist_ok=True)
+
                         self.info(f"New S3 object found: {object_key}. Downloading...")
                         # Download the new file to the temporary local directory.
                         s3_client.download_file(source_bucket, object_key, local_file_path)
@@ -141,24 +149,27 @@ class S3ObjectCheckerMixin(BaseChecker):
     def clean(self):
         """
         Performs all cleanup actions:
-        1. Deletes the temporary local files that were downloaded during the 'check' phase.
+        1. Deletes the entire temporary local directory that was used for downloads.
         2. Cleans the state file using the helper methods from BaseChecker.
         """
-        # File Cleanup
-        self.info(f"Cleaning up {len(self.s3_file_map)} temporary files.")
-        for local_path in self.s3_file_map.keys():
+        self.info("Cleaning up temporary download directory.")
+        # Get the path to the temporary directory from the configuration.
+        temp_dir = self.source_location.get('path')
+        if temp_dir and os.path.isdir(temp_dir):
             try:
-                if os.path.exists(local_path):
-                    os.remove(local_path)
+                # Use shutil.rmtree to recursively delete the entire directory.
+                shutil.rmtree(temp_dir)
+                self.info(f"Successfully removed temporary directory: {temp_dir}")
             except OSError as e:
-                self.error(f"Error cleaning up file {local_path}: {e}")
+                self.error(f"Error removing temporary directory {temp_dir}: {e}")
+        
         # Clear the map after use.
         self.s3_file_map.clear()
         
-        # State File Cleanup 
+        # State File Cleanup Logic
         self.info("Cleaning state file...")
-        # This will now raise an exception if the state file is missing.
         current_state = self.load_state()
         cleaned_state = self.clean_outdated(current_state)
         self.write_state(cleaned_state)
         self.info("State file cleaned.")
+

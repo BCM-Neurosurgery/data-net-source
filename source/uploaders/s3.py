@@ -1,90 +1,119 @@
-import boto3
+# source/uploaders/ssh.py
+
 import os
 from datetime import datetime
-from .base import BaseUploader
+from pathlib import Path # Import the Path object for type checking
+from .base import RemoteFilesystemUploader # Inherits from the remote uploader base
 import logging
+import paramiko # The library for SSH and SCP
 
-class S3UploaderMixin(BaseUploader):
+class SCPUploaderMixin(RemoteFilesystemUploader):
     """
-    A mixin class for uploading files to an AWS S3 bucket.
+    An Uploader mixin that securely sends files to a remote server using SCP.
+    It preserves the relative directory structure from the temporary folder.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sftp = None
+        self.ssh = None
 
-    This uploader:
-    1. Takes a list of local file paths ready for processing.
-    2. Uploads each file to a specified AWS S3 destination bucket and prefix.
-    3. Reliably returns a dictionary detailing the successes and failures, as required
-       by the main processing loop.
-    """
     @property
     def uploader_name(self):
         """
         Provides a user-friendly name for this uploader.
         """
-        return "S3Uploader"
+        return "SCPUploader"
+
+    def make_connection(self):
+        """
+        Establishes an SSH connection to the remote server using either a private key or a password.
+        """
+        hostname = self.target_location.get('hostname')
+        username = self.target_location.get('username')
+        # Look for a password in the [parser.init.target] section of the config.
+        password = self.target_location.get('password', None)
+        # Look for a key_filepath in the [parser.settings] section of the config.
+        key_filepath = getattr(self, 'key_filepath', None)
+
+        if not hostname or not username:
+            raise ValueError("Hostname and username are required for SCP uploader.")
+
+        self.info(f"Connecting to {username}@{hostname} via SSH...")
+        self.ssh = paramiko.SSHClient()
+        self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        try:
+            # Paramiko will automatically try the key first, then fall back to the password if provided.
+            self.ssh.connect(
+                hostname=hostname,
+                username=username,
+                password=password,
+                key_filename=key_filepath
+            )
+            self.sftp = self.ssh.open_sftp()
+            self.info("SSH connection established.")
+        except Exception as e:
+            self.error(f"Failed to establish SSH connection: {e}")
+            raise e
+
+    def close_connection(self):
+        """
+        Closes the SFTP and SSH connections.
+        """
+        if self.sftp:
+            self.sftp.close()
+        if self.ssh:
+            self.ssh.close()
+        self.info("SSH connection closed.")
+
+    def check_exists(self, target_file):
+        """
+        Checks if a file already exists on the remote server.
+        """
+        try:
+            # The target_file from the base class is a Path object, convert to string for SFTP.
+            self.sftp.stat(str(target_file))
+            return True
+        except FileNotFoundError:
+            return False
+
+    def make_folders(self, target_directory):
+        """
+        Recursively creates a directory structure on the remote server.
+        """
+        # The target_directory from the base class is a Path object, convert to string.
+        target_dir_str = str(target_directory).replace('\\', '/')
+        if target_dir_str == '/':
+            # The root directory always exists.
+            return
+        try:
+            self.sftp.stat(target_dir_str)
+        except FileNotFoundError:
+            # The directory doesn't exist, so we create its parent first, then this one.
+            self.make_folders(os.path.dirname(target_dir_str))
+            self.info(f"Creating remote directory: {target_dir_str}")
+            self.sftp.mkdir(target_dir_str)
+
+    def do_move(self, filename, destination):
+        """
+        Performs the actual file transfer using SCP (via SFTP put).
+        """
+        # The destination from the base class is a Path object, convert to string.
+        destination_str = str(destination).replace('\\', '/')
+        self.sftp.put(filename, destination_str)
 
     def upload(self, ready: dict) -> dict:
         """
-        The core method of the uploader. Receives a dictionary of tasks,
-        uploads each file to the target S3 bucket, and returns a dictionary
-        detailing the results.
+        Wrapper around the parent upload method to fix a JSON serialization issue.
         """
-        self.info("S3Uploader 'upload' method started.")
-        # The framework passes a dictionary; we get the list of files from the 'to upload' key.
-        files_to_process = ready.get('to upload', [])
+        # Call the parent's upload method which handles the connection and the main upload loop.
+        results = super().upload(ready)
 
-        s3_client = boto3.client('s3')
-        # Retrieve the destination S3 bucket and prefix from the configuration.
-        target_bucket = self.target_location.get('bucket')
-        target_prefix = self.target_location.get('prefix', '')
+        # The parent class's upload method returns Path objects in the success list,
+        # which are not JSON serializable. We must convert them to strings here.
+        for success_record in results.get('success', []):
+            if 'destination' in success_record and isinstance(success_record['destination'], Path):
+                # Convert the Path object to a POSIX-style string (using forward slashes).
+                success_record['destination'] = success_record['destination'].as_posix()
 
-        if not target_bucket:
-            self.error("Target S3 bucket not specified in config. Aborting upload.")
-            # Return a valid dictionary even on configuration error.
-            return {'success': [], 'failure': [{"error": "Target bucket not configured"}]}
-
-        # Prepare lists to report the results, conforming to the base class standard.
-        successes = []
-        failures = ready.get("failure", []) # Pass through any failures from previous steps
-
-        for local_file_path in files_to_process:
-            try:
-                # Get just the filename from the full temporary path.
-                file_name = os.path.basename(local_file_path)
-                
-                # Construct the full S3 object key for the destination. This logic
-                # correctly handles cases where the prefix is empty or already has a slash.
-                if target_prefix:
-                    s3_key = f"{target_prefix.rstrip('/')}/{file_name}"
-                else:
-                    s3_key = file_name
-
-                self.info(f"Uploading {local_file_path} to s3://{target_bucket}/{s3_key}")
-                # Perform the actual upload. Boto3 handles large files automatically.
-                s3_client.upload_file(local_file_path, target_bucket, s3_key)
-                
-                # Create a success record in the format expected by the framework's save() method.
-                success_record = {
-                    "type": "upload success",
-                    "filename": local_file_path,
-                    "destination": f"s3://{target_bucket}/{s3_key}",
-                    "timestamp": datetime.utcnow().timestamp()
-                }
-                successes.append(success_record)
-
-            except Exception as e:
-                # If any error occurs, log it and create a detailed failure record.
-                self.error(f"Failed to upload {local_file_path} to S3: {e}")
-                failure_record = {
-                    "type": "upload failure",
-                    "filename": local_file_path,
-                    "error": str(e),
-                    "timestamp": datetime.utcnow().timestamp()
-                }
-                failures.append(failure_record)
-
-        self.info(f"S3Uploader 'upload' method finished. Success: {len(successes)}, Failure: {len(failures)}")
-        # Always return a dictionary in the format expected by the framework's `process()` method.
-        return {'success': successes, 'failure': failures}
-
-    def clean(self):
-        
-        pass
+        return results
