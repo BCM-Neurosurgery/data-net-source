@@ -13,9 +13,15 @@ state_path = "/path/to/store/state/info"
 
     # The source section will contain the parameters the checker expects about where and how to find the data
     [parser.init.source]
-    # Local directory where the checker should store downloaded data
-    path = "/Users/tpk/Documents/Research/data/qualtrics"
-    # What else needs to go here?
+    path = "/remote/root/data/directory"
+    source_data_path = "[root_directory]/oura_data"
+    webhook_post_path = "[root_directory]/oura_data/webhook_posts"
+    data_net_path = "/Users/sophiapouya/workspace/bcm/data-net-source/oura_data"
+
+        [parser.init.source.ssh_config]
+        hostname = "url.of.ec2server"
+        username = "ec2-user"
+        key_filename = "/path/to/identity/file"
 
     # The target section contains information for the Uploader, about where to place the data
     [parser.init.target]
