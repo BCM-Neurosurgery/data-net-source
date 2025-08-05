@@ -2,7 +2,7 @@
 
 [parser.class]
 type = "dynamic"
-name = "OuraWebhookChecker"
+name = "OuraWebhookParser"
 parts = [
   ["checkers.api.oura", "OuraWebhookChecker"],
   ["uploaders.json", "JSONDocInjectorUploader"]
