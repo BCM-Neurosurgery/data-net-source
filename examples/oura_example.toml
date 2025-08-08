@@ -11,11 +11,10 @@ parts = [
 [parser.init]
 state_path = "/path/to/store/state/info"
 
-    # The source section will contain the paramete
-    rs the checker expects about where and how to find the data
+    # The source section will contain the parameters the checker expects about where and how to find the data
     [parser.init.source]
-    path = "/remote/root/data/directory"
-    local_staging_path = "/Users/sophiapouya/workspace/bcm/data-net-source/oura_data"
+    path = "/path/to/stage/downloaded/data"
+    local_staging_path = "/remote/root/data/directory"
 
         [parser.init.source.ssh_config]
         hostname = "url.of.ec2server"

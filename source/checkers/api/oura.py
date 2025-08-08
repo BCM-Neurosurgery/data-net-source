@@ -1,10 +1,14 @@
 import os
 import json
+from asyncio.staggered import staggered_race
+
 import pandas as pd
 import requests
 
 from datetime import datetime
 from pathlib import Path
+
+import toml
 from paramiko import SSHClient 
 
 from abc import abstractmethod, ABC
@@ -228,152 +232,188 @@ class OuraAPIStreamChecker(OuraAPIBaseChecker):
     
 
 class OuraWebhookChecker(BaseChecker):
-    checker_name = "OuraChecker"
-    # delete_age_hours = 24
+    """
 
-    def make_connection(self): 
-        self.source = self.source_location
-        self.info("Connecting to remote SSH and setting up paths...")       
-        self.state_path = Path(self.state_path)
-        remote_root_path = Path(self.source["path"])
-        self.source_data_path = Path(self.source.get("source_data_path", remote_root_path / "oura_data"))
-        self.webhook_post_path = Path(self.source.get("webhook_posts", self.source_data_path / "webhook_posts"))
-        self.local_staging_path = Path(self.source["local_staging_path"])
-        self.ssh_config = self.source.get("ssh_config", None)
+    """
+
+    checker_name = "OuraChecker"
+
+    # Optional settings for where to find data on the remote listener server
+    #
+    webhook_post_folder_name = 'webhook_posts'
+    webhook_post_folder_path = None
+
+    participant_map_file_name = 'participant_map.json'
+    participant_map_file_path = None
+
+    auth_token_file_name = 'auth_token.json'
+    auth_token_file_path = None
+
+    oura_api_url = "https://api.ouraring.com/v2/usercollection"
+
+    stub_config = """
+    [parser.init.source]
+    # Path on the remote system hosting the listener server to look for new data
+    listener_data = ''
+    # Local path where data downloaded based on listener's events will be placed
+    path = ''
+      
+      # Information needed to open an ssh/sftp connection to the listener server
+      [parser.init.source.ssh_config]
+      hostname = 'path.to.remote'
+      username = 'your-username'
+      password = 'your-password'
+    """
+    source_location = toml.loads(stub_config)
+
+    @property
+    def source_data_path(self):
+        return Path(self.source_location['listener_data'])
+
+    def build_remote_path(self, fullpath, ending):
+        if fullpath:  # Prefer full explicit path if given
+            return fullpath
+        else:
+            return Path(self.source_data_path / ending)
+
+    @property
+    def webhook_post_path(self):
+        return self.build_remote_path(self.webhook_post_folder_path, self.webhook_post_folder_name)
+
+    @property
+    def participant_map_path(self):
+        return self.build_remote_path(self.participant_map_file_path, self.participant_map_file_name)
+
+    @property
+    def auth_token_path(self):
+        return self.build_remote_path(self.auth_token_file_path, self.auth_token_file_name)
+
+    @property
+    def local_staging_path(self):
+        return Path(self.source_location["path"])
+
+    def make_connection(self):
+        self.info("Connecting to remote SSH...")
+        ssh_config = self.source_location.get("ssh_config")
         self.sftp = None
 
-        
         # Set up the ssh client
-        if self.ssh_config is not None: 
+        if ssh_config is not None:
             self.ssh = SSHClient()
             self.ssh.load_system_host_keys()
-            self.ssh.connect(hostname=self.ssh_config["hostname"], 
-                             username=self.ssh_config["username"], 
-                             key_filename = self.ssh_config["key_filename"])
+            self.ssh.connect(hostname=ssh_config["hostname"],
+                             username=ssh_config["username"],
+                             key_filename=ssh_config["key_filename"])
             self.sftp = self.ssh.open_sftp()
-        
-    # reads json file remotely via SSH
+
+    def close_connection(self):
+        self.sftp.close()
+        self.ssh.close()
+
     def _read_json_file(self, path):
-        if self.ssh_config:
-            with self.sftp.open(path, "r") as f:
-                return json.load(f)
-        raise FileNotFoundError("json file not found")
-        
+        """Read in the contents of a json file remotely via SSH/SFTP"""
+        with self.sftp.open(path, "r") as f:
+            return json.load(f)
 
     def _map_user_to_participant(self, user_id):
-        map_path = self.source_data_path / "participant_map.json"
-        
         try:
-            with self.sftp.open(str(map_path), "r") as f:
-                user_map = json.load(f)
+            user_map = self._read_json_file(self.participant_map_path.as_posix())
         except IOError:
-            raise FileNotFoundError("Could not find participant_map.json")
-    
-        self.info(f"User ID: {user_id}, mapped participant: {user_map.get(user_id)}")
-        return user_map.get(user_id)
+            raise FileNotFoundError(f"Could not find participant_map ({self.participant_map_path.as_posix()})")
 
-    # find new webhook posts that haven't been processed and query the api for the data 
-    def check(self):
-        if not hasattr(self, "sftp"):
-            self.make_connection()
-
-        # get the upload state
-        if not self.state_path.exists():
-            self.info("Local upload_state.json not found, creating new one")
-            state = {"success": [], "failure": [], "skipped": []}
-            with open(self.state_path, "w") as f:
-                json.dump(state, f, indent=2)
+        try:
+            mapped_id = user_map[user_id]
+        except KeyError:
+            self.debug(f'User ID {user_id} not found in the participant map')
+            raise KeyError("Could not find user!")  # Make sure user IDs are not sent via error logging
         else:
-            with open(self.state_path, "r") as f:
-                state = json.load(f)
-        
-        self.upload_state = state
+            self.debug(f"User ID: {user_id}, mapped participant: {mapped_id}")
+        return mapped_id
 
+    def iter_webhooks(self):
+        user_dirs = self.sftp.listdir(str(self.webhook_post_path))
+        self.info(f"Users found in webhook dir:  {user_dirs}")
+        for user in user_dirs:
+            user_path = Path(self.webhook_post_path, user)
+            modality_dirs = self.sftp.listdir(user_path.as_posix())
+            for modality in modality_dirs:
+                modality_path = Path(user_path, modality)
+                webhooks_jsons = [f for f
+                                  in self.sftp.listdir(modality_path.as_posix())
+                                  if f.endswith(".json")]
+                for filename in webhooks_jsons:
+                    yield Path(modality_path, filename), filename
+
+    def process_webhooks(self):
         # pass the state variables from function to function -> potentially avoiding self.?
         to_process = []
         failures = []
 
-        # Load tokens
-        token_path = self.source_data_path / "oura_tokens.json"
+        # Load tokens for all patients from the webhook server
+        token_path = self.auth_token_path
         tokens = self._read_json_file(str(token_path))
 
-        if self.sftp:
-            user_dirs = self.sftp.listdir(str(self.webhook_post_path))
-            self.info(f"Users found in webhook dir:  {user_dirs}")
-            for user in user_dirs:
-                user_path = f"{self.webhook_post_path}/{user}"
-                modality_dirs = self.sftp.listdir(str(user_path))
-                for modality in modality_dirs:
-                    modality_path = f"{user_path}/{modality}"
-                    for filename in self.sftp.listdir(str(modality_path)):
-                        if not filename.endswith(".json"):
-                            continue
-                        file_path = f"{modality_path}/{filename}"
-                        try:
-                            payload = self._read_json_file(str(file_path))
-                            result = self._handle_payload(payload, tokens, filename)
-                            if isinstance(result, dict) and all(k in result for k in ("key", "uploaded", "timestamp")):
-                                to_process.append(result)
-                            else:
-                                if result is not None:
-                                    failures.append({
-                                        "file": file_path,
-                                        "error": f"Malformed result returned: {result}",
-                                        "timestamp": datetime.now().timestamp()
-                                    })
-                        except Exception as e:
-                            self.info(f"[ERROR] Failed on {file_path}: {str(e)}")
-                            failures.append({
-                                "file": file_path,
-                                "error": str(e),
-                                "timestamp": datetime.now().timestamp()
-                            })
-        if to_process and failures:
-            self.info(f"To process: {to_process[0]}")
-            self.info(f"Failures: {failures[0]}")
-        return {"to do": to_process, "failure": failures}
+        for file_path, filename in self.iter_webhooks():
+            try:
+                payload = self._read_json_file(str(file_path))
+                result = self._handle_payload(payload, tokens, filename)
+            except Exception as e:
+                import sys, traceback
+                self.warning(f"[ERROR] Failed on {file_path}: {str(e)}")
+                failures.append({
+                    "file": file_path,
+                    "error": str(e),
+                    "traceback": traceback.format_exc(),
+                    "timestamp": datetime.now().timestamp()
+                })
+            else:
+                to_process.append(result)
+        return to_process, failures
 
     def _handle_payload(self, payload, tokens, timestamp_clean):
         data_type = payload["data_type"]
         user_id = payload["user_id"]
         object_id = payload["object_id"]
 
+        # TODO: need to correctly mark successful uploads only here
+
+        # Map between oura IDs and study-ids, also fetch relevant access tokens
+        # (Missing values will cause a key error which should crash back to calling function)
         participant_id = self._map_user_to_participant(user_id)
-        if not participant_id:
-            return
+        token = tokens[participant_id]["access_token"]
 
-        key = f"{participant_id}/{data_type}/{timestamp_clean}"
-
-        #need to correctly mark successful uploads only here
-
-        token = tokens.get(participant_id, {}).get("access_token")
-        if not token:
-            self.info(f"Skipping, no token for {participant_id}")
-            return
-
-        url = f"https://api.ouraring.com/v2/usercollection/{data_type}/{object_id}"
+        # Retrieve the data for this document from the Oura API
+        url = f"{self.oura_api_url}/{data_type}/{object_id}"
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(url, headers=headers)
-        self.info(f"Queried {url} for {participant_id}/{data_type}: {response.status_code}")
+        self.debug(f"Queried {url} for {participant_id}/{data_type}: {response.status_code}")
         response.raise_for_status()
         data = response.json()
 
-        dest_dir = self.local_staging_path / participant_id / data_type
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_file = dest_dir / timestamp_clean
-
-        with open(dest_file, "w") as f:
+        # Save the downloaded data in the local staging directory for further processing
+        stage_dir = self.local_staging_path / participant_id / data_type
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        staged_file = stage_dir / timestamp_clean
+        with open(staged_file, "w") as f:
             f.write(json.dumps(data, indent=2))
 
-            return {
-                "key": key,
-                "uploaded": str(dest_file),
-                "timestamp": datetime.now().timestamp()
-            }
+        return staged_file
+
+    # find new webhook posts that haven't been processed and query the api for the data 
+    def check(self):
+
+        try:
+            self.make_connection()
+            to_process, failures = self.process_webhooks()
+        except Exception as e:
+            raise e
+        finally:
+            self.close_connection()
+        self.info(f'Found data from {len(to_process)} new webhook events')
+        self.info(f'Experienced {len(failures)} failures during data retrieval')
+        return {"to do": to_process, "failure": failures}
 
     def save(self, completed):
-        if not hasattr(self, "sftp"):
-            self.make_connection()
         to_save = completed.get("success", [])
         if to_save:
             self.info(f"[Save] to_save contents: {to_save[0]}") 
