@@ -246,7 +246,7 @@ class OuraWebhookChecker(BaseChecker):
     participant_map_file_name = 'participant_map.json'
     participant_map_file_path = None
 
-    auth_token_file_name = 'auth_token.json'
+    auth_token_file_name = 'oura_tokens.json'
     auth_token_file_path = None
 
     oura_api_url = "https://api.ouraring.com/v2/usercollection"
@@ -331,7 +331,7 @@ class OuraWebhookChecker(BaseChecker):
         return mapped_id
 
     def iter_webhooks(self):
-        user_dirs = self.sftp.listdir(str(self.webhook_post_path))
+        user_dirs = self.sftp.listdir(self.webhook_post_path.as_posix())
         self.info(f"Users found in webhook dir:  {user_dirs}")
         for user in user_dirs:
             user_path = Path(self.webhook_post_path, user)
@@ -351,11 +351,11 @@ class OuraWebhookChecker(BaseChecker):
 
         # Load tokens for all patients from the webhook server
         token_path = self.auth_token_path
-        tokens = self._read_json_file(str(token_path))
+        tokens = self._read_json_file(token_path.as_posix())
 
         for file_path, filename in self.iter_webhooks():
             try:
-                payload = self._read_json_file(str(file_path))
+                payload = self._read_json_file(file_path.as_posix())
                 result = self._handle_payload(payload, tokens, filename)
             except Exception as e:
                 import sys, traceback
