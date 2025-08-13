@@ -1,119 +1,88 @@
-# source/uploaders/ssh.py
+# source/uploaders/local_to_s3.py
 
+import boto3
 import os
 from datetime import datetime
-from pathlib import Path # Import the Path object for type checking
-from .base import RemoteFilesystemUploader # Inherits from the remote uploader base
+from .base import BaseUploader
 import logging
-import paramiko # The library for SSH and SCP
 
-class SCPUploaderMixin(RemoteFilesystemUploader):
+class S3UploaderMixin(BaseUploader):
     """
-    An Uploader mixin that securely sends files to a remote server using SCP.
-    It preserves the relative directory structure from the temporary folder.
+    An Uploader mixin that uploads both files and directories to S3,
+    preserving the relative directory structure from the source folder.
     """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.sftp = None
-        self.ssh = None
-
     @property
     def uploader_name(self):
         """
         Provides a user-friendly name for this uploader.
         """
-        return "SCPUploader"
-
-    def make_connection(self):
-        """
-        Establishes an SSH connection to the remote server using either a private key or a password.
-        """
-        hostname = self.target_location.get('hostname')
-        username = self.target_location.get('username')
-        # Look for a password in the [parser.init.target] section of the config.
-        password = self.target_location.get('password', None)
-        # Look for a key_filepath in the [parser.settings] section of the config.
-        key_filepath = getattr(self, 'key_filepath', None)
-
-        if not hostname or not username:
-            raise ValueError("Hostname and username are required for SCP uploader.")
-
-        self.info(f"Connecting to {username}@{hostname} via SSH...")
-        self.ssh = paramiko.SSHClient()
-        self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        try:
-            # Paramiko will automatically try the key first, then fall back to the password if provided.
-            self.ssh.connect(
-                hostname=hostname,
-                username=username,
-                password=password,
-                key_filename=key_filepath
-            )
-            self.sftp = self.ssh.open_sftp()
-            self.info("SSH connection established.")
-        except Exception as e:
-            self.error(f"Failed to establish SSH connection: {e}")
-            raise e
-
-    def close_connection(self):
-        """
-        Closes the SFTP and SSH connections.
-        """
-        if self.sftp:
-            self.sftp.close()
-        if self.ssh:
-            self.ssh.close()
-        self.info("SSH connection closed.")
-
-    def check_exists(self, target_file):
-        """
-        Checks if a file already exists on the remote server.
-        """
-        try:
-            # The target_file from the base class is a Path object, convert to string for SFTP.
-            self.sftp.stat(str(target_file))
-            return True
-        except FileNotFoundError:
-            return False
-
-    def make_folders(self, target_directory):
-        """
-        Recursively creates a directory structure on the remote server.
-        """
-        # The target_directory from the base class is a Path object, convert to string.
-        target_dir_str = str(target_directory).replace('\\', '/')
-        if target_dir_str == '/':
-            # The root directory always exists.
-            return
-        try:
-            self.sftp.stat(target_dir_str)
-        except FileNotFoundError:
-            # The directory doesn't exist, so we create its parent first, then this one.
-            self.make_folders(os.path.dirname(target_dir_str))
-            self.info(f"Creating remote directory: {target_dir_str}")
-            self.sftp.mkdir(target_dir_str)
-
-    def do_move(self, filename, destination):
-        """
-        Performs the actual file transfer using SCP (via SFTP put).
-        """
-        # The destination from the base class is a Path object, convert to string.
-        destination_str = str(destination).replace('\\', '/')
-        self.sftp.put(filename, destination_str)
+        return "S3Uploader"
 
     def upload(self, ready: dict) -> dict:
         """
-        Wrapper around the parent upload method to fix a JSON serialization issue.
+        The core method of the uploader. It processes a list of local paths,
+        uploading files and creating empty directories in the target S3 bucket.
         """
-        # Call the parent's upload method which handles the connection and the main upload loop.
-        results = super().upload(ready)
+        self.info("S3Uploader 'upload' method started.")
+        items_to_process = ready.get('to upload', [])
 
-        # The parent class's upload method returns Path objects in the success list,
-        # which are not JSON serializable. We must convert them to strings here.
-        for success_record in results.get('success', []):
-            if 'destination' in success_record and isinstance(success_record['destination'], Path):
-                # Convert the Path object to a POSIX-style string (using forward slashes).
-                success_record['destination'] = success_record['destination'].as_posix()
+        s3_client = boto3.client('s3')
+        target_bucket = self.target_location.get('bucket')
+        target_prefix = self.target_location.get('prefix', '')
 
-        return results
+        if not target_bucket:
+            self.error("Target S3 bucket not specified in config. Aborting upload.")
+            return {'success': [], 'failure': [{"error": "Target bucket not configured"}]}
+
+        successes = []
+        failures = ready.get("failure", [])
+
+        for local_path in items_to_process:
+            try:
+                # Use the base class's helper to get the item's path relative to the source.
+                relative_path = self.raw_relative_filepath(local_path)
+                
+                # Construct the final S3 key.
+                if target_prefix:
+                    s3_key = os.path.join(target_prefix.rstrip('/'), relative_path).replace('\\', '/')
+                else:
+                    s3_key = relative_path.replace('\\', '/')
+
+                # Logic to differentiate between files and directories ---
+                if os.path.isfile(local_path):
+                    # This is a file, use the standard upload_file method.
+                    self.info(f"Uploading file {local_path} to s3://{target_bucket}/{s3_key}")
+                    s3_client.upload_file(local_path, target_bucket, s3_key)
+                elif os.path.isdir(local_path):
+                    # This is a directory. To create it in S3, we upload an empty
+                    # object with a key that ends in a slash.
+                    s3_key_dir = f"{s3_key.rstrip('/')}/"
+                    self.info(f"Creating empty directory in S3: s3://{target_bucket}/{s3_key_dir}")
+                    s3_client.put_object(Bucket=target_bucket, Key=s3_key_dir, Body='')
+                else:
+                    # If the path is neither a file nor a directory (e.g., a broken link), skip it.
+                    self.warning(f"Skipping item that is not a file or directory: {local_path}")
+                    continue
+                
+                success_record = {
+                    "type": "upload success",
+                    "filename": local_path,
+                    "destination": f"s3://{target_bucket}/{s3_key}",
+                    "timestamp": datetime.utcnow().timestamp()
+                }
+                successes.append(success_record)
+
+            except Exception as e:
+                self.error(f"Failed to process {local_path}: {e}")
+                failure_record = {
+                    "type": "upload failure",
+                    "filename": local_path,
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().timestamp()
+                }
+                failures.append(failure_record)
+
+        self.info(f"S3Uploader 'upload' method finished. Success: {len(successes)}, Failure: {len(failures)}")
+        return {'success': successes, 'failure': failures}
+
+
