@@ -14,7 +14,7 @@ state_path = "/path/to/store/state/info"
     # The source section will contain the parameters the checker expects about where and how to find the data
     [parser.init.source]
     path = "/path/to/stage/downloaded/data"
-    local_staging_path = "/remote/root/data/directory"
+    listener_data = "/remote/root/data/directory"
 
         [parser.init.source.ssh_config]
         hostname = "url.of.ec2server"
