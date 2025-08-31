@@ -152,7 +152,5 @@ class S3UploaderMixin(RemoteFilesystemUploader):
                     failures.append(failure_record)
         finally:
             self.close_connection()
-
         self.info(f"S3Uploader 'upload' method finished. Success: {len(successes)}, Failure: {len(failures)}, Skipped: {len(skipped)}")
-
         return {'success': successes, 'failure': failures, 'skipped': skipped}
