@@ -111,7 +111,11 @@ class FileCheckerMixin(BaseChecker):
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
         successes = self.load_non_failure()
-        uploaded_files = [success['uploaded'] for success in successes]
+        # Create a dictionary mapping uploaded file paths to their logged modification times.
+        uploaded_files_state = {
+            success['uploaded']: success.get('mtime') 
+            for success in successes if 'uploaded' in success
+        }
 
         # Determine which of the files here need to be uploaded
         to_upload = []
@@ -119,14 +123,25 @@ class FileCheckerMixin(BaseChecker):
         for item_here in os.listdir(source_dir):
             full_path = os.path.join(source_dir, item_here)
 
-            # Skip any files and folders that have already been logged as complete
-            if full_path in uploaded_files:
-                continue
 
             # Explicitly check all the files against the optional regex and that they are not the state file
             if os.path.isfile(full_path):
+                # First, check if the file matches our include/exclude rules.
                 if self.check_regex_filter(full_path) and not self.check_regex_exclude(full_path):
-                    to_upload.append(full_path)
+                    if full_path not in uploaded_files_state:
+                        # Case 1: It's a NEW file.
+                        to_upload.append(full_path)
+                    else:
+                        # Case 2: It's a previously uploaded file, check if it was MODIFIED.
+                        logged_mtime = uploaded_files_state[full_path]
+                        if logged_mtime is None:
+                            # Re-upload if we don't have a historic mtime for it.
+                            to_upload.append(full_path)
+                        else:
+                            current_mtime = os.path.getmtime(full_path)
+                            if current_mtime > logged_mtime:
+                                self.info(f"File has been modified, queuing for upload: {full_path}")
+                                to_upload.append(full_path)
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
@@ -155,6 +170,14 @@ class FileCheckerMixin(BaseChecker):
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
+        # Adding the file's last modification time to the log entry.
+        try:
+            log_entry['mtime'] = os.path.getmtime(entry_data['filename'])
+        except FileNotFoundError:
+            # Handle edge case where file might be gone before logging.
+            log_entry['mtime'] = None
+            self.warn(f"Could not find {entry_data['filename']} to log its modification time.")
+        
         return log_entry
 
     def save_state(self, success=None, failure=None, skipped=None):

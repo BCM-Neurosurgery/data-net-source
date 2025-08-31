@@ -48,22 +48,6 @@ class SCPUploaderMixin(RemoteFilesystemUploader):
 
     def do_move(self, filename, destination):
         return self.time_upload(self.scp.put, filename, destination.as_posix())
-    
-    def upload(self, ready: dict) -> dict:
-        """
-        Wrapper around the parent upload method to fix a JSON serialization issue.
-        """
-        # Call the parent's upload method which handles the main upload loop.
-        results = super().upload(ready)
-
-        # The parent class's upload method returns Path objects in the success list,
-        # which are not JSON serializable. We must convert them to strings here.
-        for success_record in results.get('success', []):
-            if 'destination' in success_record and isinstance(success_record['destination'], Path):
-                # Convert the Path object to a POSIX-style string (using forward slashes).
-                success_record['destination'] = success_record['destination'].as_posix()
-
-        return results
 
 
 class SFTPUploader(RemoteFilesystemUploader):
