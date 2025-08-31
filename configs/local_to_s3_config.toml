@@ -10,26 +10,28 @@
 type = "dynamic"
 name = "LocalToS3Parser"
 parts = [
-  # This checker watches the local filesystem.
-  ["checkers.local_to_s3", "LocalToS3Checker"],
-  # This is the S3 uploader we built that preserves file structure.
-  ["uploaders.s3", "S3UploaderMixin"]
+  # using the existing checker from stream.py
+  ["checkers.local.__init__", "FileCheckerMixin"],
+  # This points to the S3UploaderMixin class in its own file.
+  ["uploaders.local_to_s3", "S3UploaderMixin"]
 ]
 
 [parser.init]
-# The state file for this specific parser.
+# The directory where the state file for this parser will be stored.
 state_path = "path/to/state/file"
 
-
 # [parser.init.source] -> Settings for the local file checker.
-# This path will also be used to determine the relative file path for uploads.
 [parser.init.source]
+# The local directory that the parser will monitor for new/modified files.
 path = "path/to/local/dir"
 
 # [parser.init.target] -> Settings for the S3 uploader.
 [parser.init.target]
 bucket = "bucket-name" # Your S3 bucket name
+# A prefix to organize the uploaded files within the S3 bucket.
 prefix = "raw_from_local/"
+#ermit overwriting modified files
+allow-overwrite = true
 
 [dependencies]
 pip = [
@@ -37,8 +39,7 @@ pip = [
 ]
 
 [logging.file]
-# This path should point to a real directory.
 filepath = "path/to/log/file.txt"
-level = 10                # Level 20 is INFO, which is good for general messages.
-max_size = 10485760       # Max size in bytes (10MB) before creating a new log file.
-max_files = 5             # Max number of old log files to keep.
+level = 10 # DEBUG level to see detailed output
+max_size = 10485760
+max_files = 5
