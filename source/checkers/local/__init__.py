@@ -170,14 +170,14 @@ class FileCheckerMixin(BaseChecker):
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
-        # Adding the file's last modification time to the log entry.
+        # Adding the file's last modification time to the log entry..
         try:
             log_entry['mtime'] = os.path.getmtime(entry_data['filename'])
         except FileNotFoundError:
             # Handle edge case where file might be gone before logging.
             log_entry['mtime'] = None
             self.warn(f"Could not find {entry_data['filename']} to log its modification time.")
-        
+
         return log_entry
 
     def save_state(self, success=None, failure=None, skipped=None):
