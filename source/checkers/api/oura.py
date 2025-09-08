@@ -250,7 +250,7 @@ class OuraWebhookChecker(BaseChecker):
     auth_token_file_path = None
 
     # Name of file in staging to keep track of the most recent event for each patient
-    event_tracker_file_name = 'last_event_time.json'
+    event_track_datatype = 'webhook_times'
 
     oura_api_url = "https://api.ouraring.com/v2/usercollection"
 
@@ -404,27 +404,21 @@ class OuraWebhookChecker(BaseChecker):
         staged_files = [staged_file]
 
         # Update the time of the most recent event for this patient in the event time tracker
-        patient_event_file = self.local_staging_path / participant_id / self.event_tracker_file_name
+        patient_event_file = self.local_staging_path / participant_id / self.event_track_datatype / timestamp_clean
         if os.path.exists(patient_event_file):
             with open(patient_event_file, "r") as f:
                 existing_event_times = json.load(f)
         else:
             existing_event_times = {}
 
-        do_write = False
         if data_type in existing_event_times:
-            logged_time = existing_event_times[data_type]
-            if pd.Timestamp(logged_time) < pd.Timestamp(event_time):
-                existing_event_times[data_type] = event_time
-                do_write = True
+            existing_event_times[data_type] = existing_event_times[data_type] + event_time
         else:
             existing_event_times[data_type] = event_time
-            do_write = True
 
-        if do_write:
-            # If an event time was updated make sure the event tracker file is appended to the list
-            with open(patient_event_file, "w") as f:
-                json.dump(existing_event_times, f, indent=2)
+        # If an event time was updated make sure the event tracker file is appended to the list
+        with open(patient_event_file, "w") as f:
+            json.dump(existing_event_times, f, indent=2)
             staged_files.append(patient_event_file)
 
         return staged_files
