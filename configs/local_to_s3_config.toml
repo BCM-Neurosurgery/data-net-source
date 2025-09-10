@@ -24,6 +24,8 @@ state_path = "path/to/state/file"
 [parser.init.source]
 # The local directory that the parser will monitor for new/modified files.
 path = "path/to/local/dir"
+# Set to 'true' to upload files that have been modified.
+check_for_modifications = false
 
 # [parser.init.target] -> Settings for the S3 uploader.
 [parser.init.target]
