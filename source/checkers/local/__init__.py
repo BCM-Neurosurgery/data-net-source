@@ -98,6 +98,8 @@ class FileCheckerMixin(BaseChecker):
         determines which files need to be uploaded. The method considers previously logged
         successes, applies inclusion and exclusion filters, and processes nested directories if needed.
 
+        Added functionality to check for file modifications based on the 'check_for_modifications' setting.
+
         :param source_dir: The directory from which to start the search. Must be provided via the config file
         :type source_dir: str
         :param level: The depth level of recursion. Defaults to 0, only used to track depth for verbose output.
@@ -110,12 +112,24 @@ class FileCheckerMixin(BaseChecker):
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
+        # Defaults to False if not present, maintaining the original behavior.
+        check_modified = self.source_location.get('check_for_modifications', False)
+
         successes = self.load_non_failure()
-        # Create a dictionary mapping uploaded file paths to their logged modification times.
-        uploaded_files_state = {
-            success['uploaded']: success.get('mtime') 
-            for success in successes if 'uploaded' in success
-        }
+        
+        # Load state differently based on the setting
+        if check_modified:
+            # Load state with mtime for modification checking
+            uploaded_files_state = {
+                success['uploaded']: success.get('mtime') 
+                for success in successes if 'uploaded' in success
+            }
+        else:
+            # Load state with just file paths for new-file-only checking
+            uploaded_files_state = {
+                success['uploaded']: True 
+                for success in successes if 'uploaded' in success
+            }
 
         # Determine which of the files here need to be uploaded
         to_upload = []
@@ -129,10 +143,12 @@ class FileCheckerMixin(BaseChecker):
                 # First, check if the file matches our include/exclude rules.
                 if self.check_regex_filter(full_path) and not self.check_regex_exclude(full_path):
                     if full_path not in uploaded_files_state:
-                        # Case 1: It's a NEW file.
+                        # This file is NEW, so we always add it.
                         to_upload.append(full_path)
-                    else:
-                        # Case 2: It's a previously uploaded file, check if it was MODIFIED.
+
+                    # This block will run if the setting is true to check for modifications
+                    elif check_modified:
+                        # The file exists in the log, so now we check if it was MODIFIED.
                         logged_mtime = uploaded_files_state[full_path]
                         if logged_mtime is None:
                             # Re-upload if we don't have a historic mtime for it.
