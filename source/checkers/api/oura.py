@@ -16,6 +16,35 @@ from abc import abstractmethod, ABC
 from source.checkers.api.base import BaseAPIChecker
 from source.checkers.base import BaseChecker
 
+
+class OuraOAuthBaseChecker(BaseChecker, ABC):
+
+    oura_api_url = "https://api.ouraring.com/v2/usercollection"
+
+    def make_connection(self):
+        self.info("Connecting to remote SSH...")
+        ssh_config = self.source_location.get("ssh_config")
+        self.sftp = None
+
+        # Set up the ssh client
+        if ssh_config is not None:
+            self.ssh = SSHClient()
+            self.ssh.load_system_host_keys()
+            self.ssh.connect(hostname=ssh_config["hostname"],
+                             username=ssh_config["username"],
+                             key_filename=ssh_config["key_filename"])
+            self.sftp = self.ssh.open_sftp()
+
+    def close_connection(self):
+        self.sftp.close()
+        self.ssh.close()
+
+    def _read_json_file(self, path):
+        """Read in the contents of a json file remotely via SSH/SFTP"""
+        with self.sftp.open(path, "r") as f:
+            return json.load(f)
+
+
 class OuraAPIBaseChecker(BaseAPIChecker, ABC):
 
     api_url = 'https://api.ouraring.com/v2/usercollection'
@@ -133,110 +162,13 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
         pass
 
 
-class OuraAPIDocumentChecker(OuraAPIBaseChecker):
+class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
     """
-    This class is only compatible with data stored by the API as 'documents'.
-
-    Datatypes that are not stored like this have to be handled by a different checker.
-
-    Source Format:
-    {
-        "collections": [],  # List of modality names, as defined by the OuraAPI to pull documents for
-        "patients": {       # Dictionary of patient IDs and the API keys needed to access that patient's data
-            "patient_id": "OuraAPI-patient-application-key"
-        }
-    }
-
-    Other Settings:
-      - look_back_duration: (optional) pandas frequency string, defines how far back from the current date to look for
-      new documents. By default, this is 14D, since the OuraRing can store up to two weeks of data locally.
-      - today: (optional) pandas date defining the current date, mainly used for testing purposes. Leave as None to use
-      the real current date.
-      - api_url: (optional) the full URL needed to access the OuraRing REST API.
-
+    Checker that connects to a remote server which is listening for webhooks from Oura,
+    and fetches the specified data from the OuraAPI, authenticating via OAuth2
     """
 
-    checker_name = "OuraAPIDocumentChecker"
-    _time_parameter_name = 'date'
-
-    def fetch_collection_data(self, collection, headers):
-        """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f'{self.api_url}/{collection}'
-
-        # Get all documents for this collection between now and the look back duration
-        start_date = self.today - pd.Timedelta(self.look_back_duration)
-        today = self.today.strftime('%Y-%m-%d')
-        params = {
-            f'start_{self._time_parameter_name}': start_date.strftime('%Y-%m-%d'),
-            f'end_{self._time_parameter_name}': today,
-        }
-        response = requests.request(
-            'GET', collection_url, headers=headers, params=params
-        )
-
-        if response.status_code != 200:
-            # Per Oura ring docs any response code besides 200 should be an error
-            self.error(f'Oura returned an error code ({response.status_code})')
-            return {}
-
-        return response.json()['data']
-
-
-class OuraAPIStreamChecker(OuraAPIBaseChecker):
-    """
-    Checker to pull down data from oura that is saved as individual datapoints instead of documents
-
-    Works by reformatting all the data found in the stream as day-shape documents
-    """
-    checker_name = "OuraAPIDocumentChecker"
-    _time_parameter_name = 'datetime'
-
-    def fetch_collection_data(self, collection, headers):
-        """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f'{self.api_url}/{collection}'
-        time_fmt = '%Y-%m-%dT00:00:00'
-
-        start_date = self.today - pd.Timedelta(self.look_back_duration)
-        days = pd.date_range(start=start_date, end=self.today, freq='D')
-
-        all_data = []
-
-        day_intervals = zip(days[:-1], days[1:])
-        # Get all documents for this collection between now and the look back duration
-        for day, next_day in day_intervals:
-            # TODO: how do we need to treat timezones???
-            params = {
-                f'start_{self._time_parameter_name}': day.strftime(time_fmt),
-                f'end_{self._time_parameter_name}': next_day.strftime(time_fmt),
-            }
-            response = requests.request(
-                'GET', collection_url, headers=headers, params=params
-            )
-
-            if response.status_code != 200:
-                # Per Oura ring docs any response code besides 200 should be an error
-                self.error(f'Oura returned an error {response.status_code} for {collection} when fetching {day}')
-            elif not response.json()['data']:
-                self.error(f'Oura returned an empty dataset')
-            else:
-                day_str = day.strftime('%Y-%m-%d')
-                stream_data = response.json()['data']
-                day_data = {
-                    'day': day_str,
-                    'id': f'{day_str}:n-points:{len(stream_data)}',
-                    'data': stream_data
-                }
-                all_data.append(day_data)
-
-        return all_data
-    
-
-class OuraWebhookChecker(BaseChecker):
-    """
-
-    """
-
-    checker_name = "OuraChecker"
+    checker_name = "OuraOAuthWebhookChecker"
 
     # Optional settings for where to find data on the remote listener server
     #
@@ -252,15 +184,13 @@ class OuraWebhookChecker(BaseChecker):
     # Name of file in staging to keep track of the most recent event for each patient
     event_track_datatype = 'webhook_times'
 
-    oura_api_url = "https://api.ouraring.com/v2/usercollection"
-
     stub_config = """
     [parser.init.source]
     # Path on the remote system hosting the listener server to look for new data
     listener_data = ''
     # Local path where data downloaded based on listener's events will be placed
     path = ''
-      
+
       # Information needed to open an ssh/sftp connection to the listener server
       [parser.init.source.ssh_config]
       hostname = 'path.to.remote'
@@ -294,29 +224,6 @@ class OuraWebhookChecker(BaseChecker):
     @property
     def local_staging_path(self):
         return Path(self.source_location["path"])
-
-    def make_connection(self):
-        self.info("Connecting to remote SSH...")
-        ssh_config = self.source_location.get("ssh_config")
-        self.sftp = None
-
-        # Set up the ssh client
-        if ssh_config is not None:
-            self.ssh = SSHClient()
-            self.ssh.load_system_host_keys()
-            self.ssh.connect(hostname=ssh_config["hostname"],
-                             username=ssh_config["username"],
-                             key_filename=ssh_config["key_filename"])
-            self.sftp = self.ssh.open_sftp()
-
-    def close_connection(self):
-        self.sftp.close()
-        self.ssh.close()
-
-    def _read_json_file(self, path):
-        """Read in the contents of a json file remotely via SSH/SFTP"""
-        with self.sftp.open(path, "r") as f:
-            return json.load(f)
 
     def _map_user_to_participant(self, user_id):
         try:
@@ -423,7 +330,7 @@ class OuraWebhookChecker(BaseChecker):
 
         return staged_files
 
-    # find new webhook posts that haven't been processed and query the api for the data 
+    # find new webhook posts that haven't been processed and query the api for the data
     def check(self):
 
         try:
@@ -444,7 +351,7 @@ class OuraWebhookChecker(BaseChecker):
     def save(self, completed):
         to_save = completed.get("success", [])
         if to_save:
-            self.info(f"[Save] to_save contents: {to_save[0]}") 
+            self.info(f"[Save] to_save contents: {to_save[0]}")
 
         self.info(f"[Save] Marking {len(to_save)} files as uploaded")
 
@@ -464,7 +371,7 @@ class OuraWebhookChecker(BaseChecker):
             self.make_connection()
         with open(self.state_path, "r") as f:
             self.upload_state = json.load(f)
-        
+
         # clean outdated log entries
         cleaned_log = super().clean_outdated(self.upload_state)
 
@@ -475,3 +382,135 @@ class OuraWebhookChecker(BaseChecker):
         with open(self.state_path, "w") as f:
             json.dump(final_log, f, indent=2)
 
+
+class OuraAPIDocumentChecker(OuraAPIBaseChecker):
+    """
+    This class is only compatible with data stored by the API as 'documents'.
+
+    Only compatible with legacy (pre-OAuth2) versions od the Oura API
+    Datatypes that are not stored like this have to be handled by a different checker.
+
+    Source Format:
+    {
+        "collections": [],  # List of modality names, as defined by the OuraAPI to pull documents for
+        "patients": {       # Dictionary of patient IDs and the API keys needed to access that patient's data
+            "patient_id": "OuraAPI-patient-application-key"
+        }
+    }
+
+    Other Settings:
+      - look_back_duration: (optional) pandas frequency string, defines how far back from the current date to look for
+      new documents. By default, this is 14D, since the OuraRing can store up to two weeks of data locally.
+      - today: (optional) pandas date defining the current date, mainly used for testing purposes. Leave as None to use
+      the real current date.
+      - api_url: (optional) the full URL needed to access the OuraRing REST API.
+
+    """
+
+    checker_name = "OuraAPIDocumentChecker"
+    _time_parameter_name = 'date'
+
+    def fetch_collection_data(self, collection, headers):
+        """Find and download all the JSON data for a single collection of a single patient"""
+        collection_url = f'{self.api_url}/{collection}'
+
+        # Get all documents for this collection between now and the look back duration
+        start_date = self.today - pd.Timedelta(self.look_back_duration)
+        today = self.today.strftime('%Y-%m-%d')
+        params = {
+            f'start_{self._time_parameter_name}': start_date.strftime('%Y-%m-%d'),
+            f'end_{self._time_parameter_name}': today,
+        }
+        response = requests.request(
+            'GET', collection_url, headers=headers, params=params
+        )
+
+        if response.status_code != 200:
+            # Per Oura ring docs any response code besides 200 should be an error
+            self.error(f'Oura returned an error code ({response.status_code})')
+            return {}
+
+        return response.json()['data']
+
+
+class OuraAPIStreamChecker(OuraAPIBaseChecker):
+    """
+    Checker to pull down data from oura that is saved as individual datapoints instead of documents
+
+    Works by reformatting all the data found in the stream as day-shape documents
+    Only compatible with legacy (pre-OAuth2) versions od the Oura API
+    """
+    checker_name = "OuraAPIDocumentChecker"
+    _time_parameter_name = 'datetime'
+
+    def fetch_collection_data(self, collection, headers):
+        """Find and download all the JSON data for a single collection of a single patient"""
+        collection_url = f'{self.api_url}/{collection}'
+        time_fmt = '%Y-%m-%dT00:00:00'
+
+        start_date = self.today - pd.Timedelta(self.look_back_duration)
+        days = pd.date_range(start=start_date, end=self.today, freq='D')
+
+        all_data = []
+
+        day_intervals = zip(days[:-1], days[1:])
+        # Get all documents for this collection between now and the look back duration
+        for day, next_day in day_intervals:
+            # TODO: how do we need to treat timezones???
+            params = {
+                f'start_{self._time_parameter_name}': day.strftime(time_fmt),
+                f'end_{self._time_parameter_name}': next_day.strftime(time_fmt),
+            }
+            response = requests.request(
+                'GET', collection_url, headers=headers, params=params
+            )
+
+            if response.status_code != 200:
+                # Per Oura ring docs any response code besides 200 should be an error
+                self.error(f'Oura returned an error {response.status_code} for {collection} when fetching {day}')
+            elif not response.json()['data']:
+                self.error(f'Oura returned an empty dataset')
+            else:
+                day_str = day.strftime('%Y-%m-%d')
+                stream_data = response.json()['data']
+                day_data = {
+                    'day': day_str,
+                    'id': f'{day_str}:n-points:{len(stream_data)}',
+                    'data': stream_data
+                }
+                all_data.append(day_data)
+
+        return all_data
+    
+class OuraOAuthPeriodicDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
+    """
+    Checker designed to periodically fetch data from Oura API, using OAuth tokens which are continuously refreshed
+    on a separate server
+    """
+    checker_name = 'OuraOAuthPeriodicCDocumentChecker'
+
+    auth_token_file_path = None
+
+    stub_config = """
+    [parser.init.source]
+    # Path to JSON on the remote system hosting the OAuth refresh service where auth tokens are stored
+    auth_token_file_path = ''
+    # Local path where data downloaded will be cached for further processing
+    path = ''
+    # List of modalities to fetch from the Oura API
+    collections = []
+
+      # Information needed to open an ssh/sftp connection to the listener server
+      [parser.init.source.ssh_config]
+      hostname = 'path.to.remote'
+      username = 'your-username'
+      password = 'your-password'
+    """
+    source_location = toml.loads(stub_config)
+
+    @property
+    def patients(self):
+        """Fetch active patient list and most current tokens from the OAuth service"""
+        self.make_connection()
+        patient_tokens = self._read_json_file(self.auth_token_file_path)
+        return patient_tokens
