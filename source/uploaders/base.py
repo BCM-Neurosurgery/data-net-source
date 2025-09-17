@@ -188,6 +188,7 @@ class FileSystemUploader(BaseUploader, ABC):
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
+                self.info(f"Copying to {folder_path}")
                 self.make_folders(folder_path)
 
                 # Perform the file copy
