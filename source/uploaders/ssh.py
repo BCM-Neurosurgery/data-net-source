@@ -49,9 +49,9 @@ class SCPUploaderMixin(RemoteFilesystemUploader):
         # make sure directory is made on elias prior to continuing
         exit_status = stdout.channel.recv_exit_status()
         if exit_status == 0:
-            self.info('Files successfully created on server')
+            self.info('Folders successfully created on server')
         else:
-            self.info("Error", exit_status)
+            self.warning("Error: folders were not succesfully created on server", exit_status)
 
 
     def do_move(self, filename, destination):
