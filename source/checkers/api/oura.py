@@ -489,8 +489,6 @@ class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
     """
     checker_name = 'OuraOAuthDocumentChecker'
 
-    auth_token_file_path = None
-
     stub_config = """
     [parser.init.source]
     # Path to JSON on the remote system hosting the OAuth refresh service where auth tokens are stored
@@ -512,8 +510,10 @@ class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
     def patients(self):
         """Fetch active patient list and most current tokens from the OAuth service"""
         self.make_connection()
-        patient_tokens = self._read_json_file(self.auth_token_file_path)
-        return patient_tokens
+        patient_tokens = self._read_json_file(self.source_location['auth_token_file_path'])
+        self.close_connection()
+        simple_tokens = {patient: data['access_token'] for patient, data in patient_tokens.items()}
+        return simple_tokens
 
 
 class OuraOAuthStreamChecker(OuraOAuthBaseChecker, OuraAPIStreamChecker):
@@ -546,5 +546,7 @@ class OuraOAuthStreamChecker(OuraOAuthBaseChecker, OuraAPIStreamChecker):
     def patients(self):
         """Fetch active patient list and most current tokens from the OAuth service"""
         self.make_connection()
-        patient_tokens = self._read_json_file(self.auth_token_file_path)
-        return patient_tokens
+        patient_tokens = self._read_json_file(self.source_location['auth_token_file_path'])
+        self.close_connection()
+        simple_tokens = {patient: data['access_token'] for patient, data in patient_tokens.items()}
+        return simple_tokens
