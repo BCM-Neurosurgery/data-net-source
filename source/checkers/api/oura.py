@@ -482,12 +482,46 @@ class OuraAPIStreamChecker(OuraAPIBaseChecker):
 
         return all_data
     
-class OuraOAuthPeriodicDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
+class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
     """
     Checker designed to periodically fetch data from Oura API, using OAuth tokens which are continuously refreshed
     on a separate server
     """
-    checker_name = 'OuraOAuthPeriodicCDocumentChecker'
+    checker_name = 'OuraOAuthDocumentChecker'
+
+    auth_token_file_path = None
+
+    stub_config = """
+    [parser.init.source]
+    # Path to JSON on the remote system hosting the OAuth refresh service where auth tokens are stored
+    auth_token_file_path = ''
+    # Local path where data downloaded will be cached for further processing
+    path = ''
+    # List of modalities to fetch from the Oura API
+    collections = []
+
+      # Information needed to open an ssh/sftp connection to the listener server
+      [parser.init.source.ssh_config]
+      hostname = 'path.to.remote'
+      username = 'your-username'
+      password = 'your-password'
+    """
+    source_location = toml.loads(stub_config)
+
+    @property
+    def patients(self):
+        """Fetch active patient list and most current tokens from the OAuth service"""
+        self.make_connection()
+        patient_tokens = self._read_json_file(self.auth_token_file_path)
+        return patient_tokens
+
+
+class OuraOAuthStreamChecker(OuraOAuthBaseChecker, OuraAPIStreamChecker):
+    """
+    Checker designed to periodically fetch data from Oura API, using OAuth tokens which are continuously refreshed
+    on a separate server
+    """
+    checker_name = 'OuraOAuthStreamChecker'
 
     auth_token_file_path = None
 
