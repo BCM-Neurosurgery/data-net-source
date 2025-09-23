@@ -302,7 +302,7 @@ class FileSystemUploader(BaseUploader, ABC):
                 detail = f"File path did not match regex!"
                 self.error(detail)
                 raise ValueError(detail)
-            old_elements = old_match.capturesdict()
+            old_elements = old_match.groupdict()
         else:
             raise KeyError('Either source_regex or multi_regex must be defined!')
 
