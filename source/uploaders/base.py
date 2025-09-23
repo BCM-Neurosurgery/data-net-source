@@ -235,19 +235,34 @@ class FileSystemUploader(BaseUploader, ABC):
         """
         Restructure the path of a file before upload
 
-        For this to work the target location config must have an element named 'rebuild_filepath' of the form:
-        {
-            'source_regex': 'string',
-            'path_elements': ['string', ...]
-            'new_format': 'string'
-        }
+        For this to work the target location config must have an element named 'rebuild_filepath'.
+
+        The preferred form of this element is as follows:
+        ```
+        [parser.init.target.rebuild_filepath]
+        source_regex: 'string'
+        path_elements: ['string', ...]
+        new_format: 'string'
+        ```
         source_regex: This must be a regex pattern that matches the source filepath. It should contain capturing groups
             for all the path elements that should be included in the output filepath. The filepath here will always
             appear as the string representation of a UNIX-style path
         path_elements: list of strings, the names of the path element in each capturing group in the order that they
             appear in the regex/source filepath.
-        new_path: the new output path as a python f-string, where the variable names in `{}` correspond to the path
+        new_format: the new output path as a python f-string, where the variable names in `{}` correspond to the path
             element names listed in path_elements
+
+        An alternative method, which allows for greater flexibility in the regex, but with significantly reduced
+        readability requires a 'rebuild_filepath' element of the form:
+        ```
+        [parser.init.target.rebuild_filepath]
+        multi_regex: 'string'
+        new_format: 'string'
+        ```
+        multi_regex: regex pattern that matches the source filepath. It must use named capturing groups. Parsed using
+            the regex module (instead of the built-in re module) to support multiple groups with the same name.
+        new_format: the new output path as a python f-string, where the variable names in `{}` correspond to the names
+            of the capturing groups in the given regex pattern
 
         Example:
             old_path: '/source/patientDATAFILE/modality/date.json'
@@ -264,22 +279,35 @@ class FileSystemUploader(BaseUploader, ABC):
             return old_file_path
 
         rebuild_info = self.target_location['rebuild_filepath']
-
         old_path_unix = Path(old_file_path).as_posix()
-        old_re = rebuild_info['source_regex']
 
-        old_match = re.search(old_re, old_path_unix)
-        if old_match is None:
-            detail = (f"File path did not match regex!"
-                       f"Expected path with elements {rebuild_info['path_elements']} "
-                       f"and matching {old_re}")
+        # Preferred, easier to read, single source regex and ordered path elements format using builtin re library
+        if 'source_regex' in rebuild_info:
+            old_re = rebuild_info['source_regex']
+            old_match = re.search(old_re, old_path_unix)
+            if old_match is None:
+                detail = (f"File path did not match regex!"
+                           f"Expected path with elements {rebuild_info['path_elements']} "
+                           f"and matching {old_re}")
+                self.error(detail)
+                raise ValueError(detail)
+            old_elements = {name: old_match.group(i+1) for i, name in enumerate(rebuild_info['path_elements'])}
 
-            self.error(detail)
-            raise ValueError(detail)
+        # More flexible, but harder to read dictionary based format. Uses regex library for additional functionality
+        elif 'multi_regex' in rebuild_info:
+            import regex
+            pattern = rebuild_info['multi_regex']
+            old_match = regex.search(pattern, old_path_unix)
+            if old_match is None:
+                detail = f"File path did not match regex!"
+                self.error(detail)
+                raise ValueError(detail)
+            old_elements = old_match.capturesdict()
+        else:
+            raise KeyError('Either source_regex or multi_regex must be defined!')
 
-        old_elements = {name: old_match.group(i+1) for i, name in enumerate(rebuild_info['path_elements'])}
+
         new_path = rebuild_info['new_format'].format(**old_elements)
-
         return Path(new_path)
 
 
