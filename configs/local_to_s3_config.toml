@@ -32,9 +32,9 @@ check_for_modifications = false
 bucket = "bucket-name" # Your S3 bucket name
 # A prefix to organize the uploaded files within the S3 bucket.
 prefix = "raw_from_local/"
-#ermit overwriting modified files
+# Permit overwriting modified files
 allow-overwrite = true
-
+  
 [dependencies]
 pip = [
   "boto3"
