@@ -119,15 +119,15 @@ class FileCheckerMixin(BaseChecker):
         
         # Load state differently based on the setting
         if check_modified:
-            # Load state with mtime for modification checking
+            # Load state with last_modified_time for modification checking
             uploaded_files_state = {
-                success['uploaded']: success.get('mtime') 
+                success['uploaded']: success.get('last_modified_time', success.get('modified_time'))
                 for success in successes if 'uploaded' in success
             }
         else:
             # Load state with just file paths for new-file-only checking
             uploaded_files_state = {
-                success['uploaded']: True 
+                success['uploaded']: True
                 for success in successes if 'uploaded' in success
             }
 
@@ -149,13 +149,13 @@ class FileCheckerMixin(BaseChecker):
                     # This block will run if the setting is true to check for modifications
                     elif check_modified:
                         # The file exists in the log, so now we check if it was MODIFIED.
-                        logged_mtime = uploaded_files_state[full_path]
-                        if logged_mtime is None:
-                            # Re-upload if we don't have a historic mtime for it.
+                        logged_modified_time = uploaded_files_state[full_path]
+                        if logged_modified_time is None:
+                            # Re-upload if we don't have a historic modified_time for it.
                             to_upload.append(full_path)
                         else:
-                            current_mtime = os.path.getmtime(full_path)
-                            if current_mtime > logged_mtime:
+                            current_modified_time = os.path.getmtime(full_path)
+                            if current_modified_time > logged_modified_time:
                                 self.info(f"File has been modified, queuing for upload: {full_path}")
                                 to_upload.append(full_path)
 
@@ -188,10 +188,10 @@ class FileCheckerMixin(BaseChecker):
         }
         # Adding the file's last modification time to the log entry..
         try:
-            log_entry['mtime'] = os.path.getmtime(entry_data['filename'])
+            log_entry['last_modified_time'] = os.path.getmtime(entry_data['filename'])
         except FileNotFoundError:
             # Handle edge case where file might be gone before logging.
-            log_entry['mtime'] = None
+            log_entry['last_modified_time'] = None
             self.warn(f"Could not find {entry_data['filename']} to log its modification time.")
 
         return log_entry
