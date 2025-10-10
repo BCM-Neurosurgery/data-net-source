@@ -2,7 +2,6 @@ import os
 import time
 import threading
 from datetime import datetime
-from watchdog.observers import Observer
 from watchdog.events import (
     FileSystemEventHandler,
     FileClosedEvent,
@@ -53,12 +52,16 @@ class WatchdogListenerMixin(BaseListener):
 
     def listen(self):
         """Initializes batching and starts the watchdog observer with the regex handler."""
-        self._setup_batching()  
-        source_config = self.source_location
-        path = self.source_location.get('path')
-        if not path:
-            raise ValueError("[parser.init.source] must contain a 'path' key.")
+        self._setup_batching()
+        self._setup_observer()  
+        self._start_observer()  
+        self.start_notify()
+        self._run_observer_loop()  
 
+    def _create_event_handler(self):
+        """Create the RegexMatchingEventHandler for this listener."""
+        source_config = self.source_location
+        
         # Preparing arguments for the RegexMatchingEventHandler from the config file.
         handler_kwargs = {
             'regexes': source_config.get('include_patterns', ['.*']), # Default to match everything
@@ -66,24 +69,8 @@ class WatchdogListenerMixin(BaseListener):
             'ignore_directories': True, # Using the handler's built-in directory ignoring - helps empty directories
             'case_sensitive': False
         }
-
-        self.info(f"Starting file system listener on directory: {path}")
-        event_handler = PipelineEventHandler(parser_instance=self, **handler_kwargs)
-        observer = Observer()
-        observer.schedule(event_handler, path, recursive=True)
-        observer.start()
-        self.start_notify()
-
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.warning("Listener stopped by user. Processing any remaining files...")
-            self._process_batch()
-            self.end_notify(0)
-        finally:
-            observer.stop()
-            observer.join()
+        
+        return PipelineEventHandler(parser_instance=self, **handler_kwargs)
 
     def _parse_event(self, raw_event: FileSystemEventHandler) -> tuple[str | None, str | None]:
         """

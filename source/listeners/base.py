@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from abc import ABC, abstractmethod
 
+from watchdog.observers import Observer
 from source.common import EMPTY_LOG
 
 
@@ -67,6 +68,59 @@ class BaseListener(ABC):
     def clean(self):
         """Perform cleanup actions, like removing old files or consolidating state entries."""
         pass
+
+    @abstractmethod
+    def _create_event_handler(self):
+        """
+        Create the specific event handler for this listener type.
+        
+        :return: Event handler instance compatible with watchdog Observer
+        """
+        pass
+
+    # -------------------------------------------------------------------------
+    # --- Concrete methods providing Observer management ---
+    # -------------------------------------------------------------------------
+
+    def _setup_observer(self):
+        """Initialize the watchdog observer and common configuration."""
+        self.observer = Observer()
+        source_config = self.source_location
+        self.watch_path = source_config.get('path')
+        if not self.watch_path:
+            raise ValueError("[parser.init.source] must contain a 'path' key.")
+        
+        self.recursive = source_config.get('recursive', True)
+        self.info(f"Observer setup for path: {self.watch_path}, recursive: {self.recursive}")
+
+    def _start_observer(self):
+        """Start the watchdog observer with the event handler."""
+        if not hasattr(self, 'observer') or not self.observer:
+            self._setup_observer()
+        
+        event_handler = self._create_event_handler()
+        self.observer.schedule(event_handler, self.watch_path, recursive=self.recursive)
+        self.observer.start()
+        self.info(f"Started {self.listener_name} observer on {self.watch_path}")
+
+    def _stop_observer(self):
+        """Stop and join the watchdog observer."""
+        if hasattr(self, 'observer') and self.observer:
+            self.observer.stop()
+            self.observer.join()
+            self.info(f"Stopped {self.listener_name} observer")
+
+    def _run_observer_loop(self):
+        """Run the main observer loop with proper cleanup."""
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.warning("Listener stopped by user. Processing any remaining files...")
+            self._process_batch()
+            self.end_notify(0)
+        finally:
+            self._stop_observer()
 
     # -------------------------------------------------------------------------
     # --- Concrete methods providing the batching functionality ---
