@@ -50,14 +50,6 @@ class WatchdogListenerMixin(BaseListener):
     def listener_name(self) -> str:
         return "WatchdogBatchListener"
 
-    def listen(self):
-        """Initializes batching and starts the watchdog observer with the regex handler."""
-        self._setup_batching()
-        self._setup_observer()  
-        self._start_observer()  
-        self.start_notify()
-        self._run_observer_loop()  
-
     def _create_event_handler(self):
         """Create the RegexMatchingEventHandler for this listener."""
         source_config = self.source_location

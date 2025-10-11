@@ -64,6 +64,7 @@ class ParserCommon(ABC):
             self.target_location = target
 
     def process(self):
+
         self.start_notify()
         try:
             to_do = self.check()
@@ -87,6 +88,15 @@ class ParserCommon(ABC):
             self.end_notify(1) #TODO: upgrade to send more meaningful exit codes
         else:
             self.end_notify(0)
+
+    def listen(self):
+        """
+        Execute the parser in continuous mode - monitors for new data and processes it as it arrives.
+        This method should be implemented by listener mixins for event-driven behavior.
+        """
+        # This will be overridden by listener mixins
+        # If called directly, it will cause an AttributeError that run.py will catch
+        pass
 
     def check(self):
         """

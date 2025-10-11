@@ -1,5 +1,6 @@
 """
-Entry-point script to load and run a parser in continuous, real-time listener mode.
+Entry-point script to run a parser in continuous listener mode.
+This is equivalent to: python run.py config.toml --mode listen
 """
 
 import argparse
@@ -33,12 +34,16 @@ if __name__ == '__main__':
     # 5. Call the .listen() method to start the long-running, event-driven process.
     try:
         parser.listen()
-    except AttributeError:
-        # Provide a helpful error if the user tries to run a checker-based config
-        # with this script, as it will not have a .listen() method.
-        parser.error(
-            f"The configured parser '{parser.__class__.__name__}' does not have a .listen() method. "
-            f"Ensure your config file specifies a Listener mixin, not a Checker mixin."
-        )
+    except AttributeError as e:
+        if 'listen' in str(e):
+            # Provide a helpful error if the user tries to run a checker-based config
+            # with this script, as it will not have a .listen() method.
+            parser.error(
+                f"The configured parser '{parser.__class__.__name__}' does not have listener capabilities. "
+                f"This config appears to use checker mixins instead of listener mixins. "
+                f"Try using 'python run.py {args.config_file}' for checker mode."
+            )
+        else:
+            parser.error(f"Parser setup failed: {e}", exc_info=True)
     except Exception as e:
         parser.error(f"The listener exited with an unexpected error: {e}", exc_info=True)

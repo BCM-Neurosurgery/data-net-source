@@ -7,18 +7,18 @@ from datetime import datetime
 from abc import ABC, abstractmethod
 
 from watchdog.observers import Observer
-from source.common import EMPTY_LOG
+from source.common import EMPTY_LOG, ParserCommon
 
 
-class BaseListener(ABC):
+class BaseListener(ParserCommon):
     """
-    Abstract base class for all listener mixins.
+    Abstract base class for all listener mixins that extends ParserCommon.
 
-    This class defines the required interface for a listener component, thread-safe batching and provides
-    the common logic for processing events and managing state.
+    This class provides event-driven data processing capabilities with batching,
+    threading, and state management. It integrates seamlessly with the existing
+    checker/transformer/uploader pipeline by overriding the listen() method.
     """
     state_filename = 'upload_state.json'
-    state_path = "path/to/state/save/dir"
 
     # -------------------------------------------------------------------------
     # --- Abstract methods to be implemented by concrete listeners ---
@@ -30,28 +30,51 @@ class BaseListener(ABC):
         """A simple attribute naming the mixin class for later reference."""
         pass
 
-    @abstractmethod
     def listen(self):
         """
-        Start the listener.
-
-        This should be a blocking call that runs continuously to monitor an
-        event source (e.g., start a watchdog observer, connect to a message queue).
+        Override ParserCommon's listen() method to provide event-driven processing.
+        
+        This method sets up the observer, starts monitoring, and processes events
+        as they arrive through the batching system.
         """
-        pass
+        self.info(f"Starting {self.listener_name} in continuous mode...")
+        try:
+            self._setup_batching()
+            self._setup_observer()
+            self._start_observer()
+            self.start_notify()
+            self._run_observer_loop()
+        except KeyboardInterrupt:
+            self.warning("Listener stopped by user. Processing any remaining files...")
+            self._process_batch()
+            self.end_notify(0)
+        finally:
+            self._stop_observer()
+
+    def check(self):
+        """
+        Override ParserCommon's check() method to prevent using listener configs in checker mode.
+        
+        Listeners are designed for event-driven processing, not batch checking.
+        """
+        raise AttributeError(
+            f"Listener '{self.listener_name}' does not support checker mode. "
+            f"This config uses listener mixins. Use --mode listen instead."
+        )
 
     @abstractmethod
-    def _parse_event(self, raw_event: any) -> dict:
+    def _parse_event(self, raw_event: any) -> tuple[str | None, str | None]:
         """
-        Parse a raw event from the source into the standard task format.
+        Parse a raw event from the source to extract file paths.
 
-        This is the primary abstraction point. It translates a source-specific
-        event object into the dictionary format expected by the `transform` method.
+        This method translates a source-specific event object into file paths
+        that can be processed by the batch system.
 
         :param raw_event: The native event object from the source (e.g., a
                           watchdog event, a message from a queue).
-        :return: A dictionary in the format {'to do': [...], 'failure': [...]}.
-                 Return an empty or None dict to indicate the event should be skipped.
+        :return: A tuple of (final_path, old_path). For simple events, old_path 
+                 should be None. For move events, both paths should be provided.
+                 Return (None, None) to indicate the event should be skipped.
         """
         pass
 
