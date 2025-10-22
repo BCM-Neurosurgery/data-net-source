@@ -4,4 +4,4 @@
 __pycache__/
 requirements.txt
 env/
-configs/
+configs/watchdog_listener_config.py
