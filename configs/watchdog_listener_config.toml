@@ -15,11 +15,11 @@ parts = [
 
 [parser.init]
 # The directory where the state file ('upload_state.json') will be stored.
-state_path = "path/to/state/file"
+state_path = "C:/Users/Nihil/datanet_files/s3_upload_state.json"
 
 [parser.init.source]
 # The local directory that the listener will monitor for new files.
-path = "path/to/local/dir"
+path = "E:/local"
 #File name patterns to include/exclude.
 include_patterns = [".*\\.csv$", ".*\\.txt$"]
 exclude_patterns = [".*\\.tmp$", "^.*/\\~\\$.*"]
@@ -32,7 +32,7 @@ batch_max_latency_seconds = 60
 
 [parser.init.target]
 # Settings for the S3 uploader.
-bucket = "bucket-name" # Your S3 bucket name
+bucket = "data-net-source-debug" # Your S3 bucket name
 prefix = "raw_data/"
 # Set to 'true' to upload files that have been modified.
 allow-overwrite = true
@@ -41,7 +41,7 @@ allow-overwrite = true
 
 # Enable logging to a local file using the python's built-in logging.
 [logging.file]
-filepath = "path/to/log/file.txt"
+filepath = "C:/Users/Nihil/datanet_files/parser_log.txt"
 level = 0             # level of events to include in this logger
 max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
 max_files = 5         # Max number of files to keep before deleting the oldest

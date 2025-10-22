@@ -50,7 +50,7 @@ class WatchdogListenerMixin(BaseListener):
     def listener_name(self) -> str:
         return "WatchdogBatchListener"
 
-    def _create_event_handler(self):
+    def create_event_handler(self):
         """Create the RegexMatchingEventHandler for this listener."""
         source_config = self.source_location
         
@@ -64,7 +64,7 @@ class WatchdogListenerMixin(BaseListener):
         
         return PipelineEventHandler(parser_instance=self, **handler_kwargs)
 
-    def _parse_event(self, raw_event: FileSystemEventHandler) -> tuple[str | None, str | None]:
+    def parse_event(self, raw_event: FileSystemEventHandler) -> tuple[str | None, str | None]:
         """
         Parses a watchdog event to extract file paths and filter unwanted files,
         returning a (final_path, old_path) tuple. Path-based filtering is

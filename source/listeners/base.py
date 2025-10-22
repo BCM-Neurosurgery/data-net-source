@@ -7,16 +7,16 @@ from datetime import datetime
 from abc import ABC, abstractmethod
 
 from watchdog.observers import Observer
-from source.common import EMPTY_LOG, ParserCommon
+from source.common import EMPTY_LOG
 
 
-class BaseListener(ParserCommon):
+class BaseListener(ABC):
     """
-    Abstract base class for all listener mixins that extends ParserCommon.
+    Abstract base class for all listener mixins.
 
     This class provides event-driven data processing capabilities with batching,
-    threading, and state management. It integrates seamlessly with the existing
-    checker/transformer/uploader pipeline by overriding the listen() method.
+    threading, and state management. Listener mixins should be combined with
+    ParserCommon through dynamic class composition, similar to BaseChecker.
     """
     state_filename = 'upload_state.json'
 
@@ -30,40 +30,8 @@ class BaseListener(ParserCommon):
         """A simple attribute naming the mixin class for later reference."""
         pass
 
-    def listen(self):
-        """
-        Override ParserCommon's listen() method to provide event-driven processing.
-        
-        This method sets up the observer, starts monitoring, and processes events
-        as they arrive through the batching system.
-        """
-        self.info(f"Starting {self.listener_name} in continuous mode...")
-        try:
-            self._setup_batching()
-            self._setup_observer()
-            self._start_observer()
-            self.start_notify()
-            self._run_observer_loop()
-        except KeyboardInterrupt:
-            self.warning("Listener stopped by user. Processing any remaining files...")
-            self._process_batch()
-            self.end_notify(0)
-        finally:
-            self._stop_observer()
-
-    def check(self):
-        """
-        Override ParserCommon's check() method to prevent using listener configs in checker mode.
-        
-        Listeners are designed for event-driven processing, not batch checking.
-        """
-        raise AttributeError(
-            f"Listener '{self.listener_name}' does not support checker mode. "
-            f"This config uses listener mixins. Use --mode listen instead."
-        )
-
     @abstractmethod
-    def _parse_event(self, raw_event: any) -> tuple[str | None, str | None]:
+    def parse_event(self, raw_event: any) -> tuple[str | None, str | None]:
         """
         Parse a raw event from the source to extract file paths.
 
@@ -93,7 +61,7 @@ class BaseListener(ParserCommon):
         pass
 
     @abstractmethod
-    def _create_event_handler(self):
+    def create_event_handler(self):
         """
         Create the specific event handler for this listener type.
         
@@ -105,7 +73,7 @@ class BaseListener(ParserCommon):
     # --- Concrete methods providing Observer management ---
     # -------------------------------------------------------------------------
 
-    def _setup_observer(self):
+    def setup_observer(self):
         """Initialize the watchdog observer and common configuration."""
         self.observer = Observer()
         source_config = self.source_location
@@ -116,40 +84,33 @@ class BaseListener(ParserCommon):
         self.recursive = source_config.get('recursive', True)
         self.info(f"Observer setup for path: {self.watch_path}, recursive: {self.recursive}")
 
-    def _start_observer(self):
+    def start_observer(self):
         """Start the watchdog observer with the event handler."""
         if not hasattr(self, 'observer') or not self.observer:
-            self._setup_observer()
-        
-        event_handler = self._create_event_handler()
+            self.setup_observer()
+
+        event_handler = self.create_event_handler()
         self.observer.schedule(event_handler, self.watch_path, recursive=self.recursive)
         self.observer.start()
         self.info(f"Started {self.listener_name} observer on {self.watch_path}")
 
-    def _stop_observer(self):
+    def stop_observer(self):
         """Stop and join the watchdog observer."""
         if hasattr(self, 'observer') and self.observer:
             self.observer.stop()
             self.observer.join()
             self.info(f"Stopped {self.listener_name} observer")
 
-    def _run_observer_loop(self):
-        """Run the main observer loop with proper cleanup."""
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.warning("Listener stopped by user. Processing any remaining files...")
-            self._process_batch()
-            self.end_notify(0)
-        finally:
-            self._stop_observer()
+    def run_observer_loop(self):
+        """Run the main observer loop. Cleanup is handled by ParserCommon.listen()."""
+        while True:
+            time.sleep(1)
 
     # -------------------------------------------------------------------------
     # --- Concrete methods providing the batching functionality ---
     # -------------------------------------------------------------------------
 
-    def _setup_batching(self):
+    def setup_batching(self):
         """Initializes all common batching attributes from the configuration."""
         source_config = self.source_location
         self._batch_max_size = source_config.get('batch_max_size', 10)
@@ -165,7 +126,7 @@ class BaseListener(ParserCommon):
         Adds a file from an event to the batch buffer, handles renames,
         and checks batch triggers using a unified logic.
         """
-        final_path, old_path = self._parse_event(raw_event)
+        final_path, old_path = self.parse_event(raw_event)
         if not final_path:
             return  # The event was ignored by the parser.
 
@@ -191,7 +152,7 @@ class BaseListener(ParserCommon):
             # Start the timer only if this is the first item in a new batch.
             if len(self._file_buffer) == 1:
                 self._batch_timer = threading.Timer(
-                    self._batch_max_latency_seconds, self._process_batch
+                    self._batch_max_latency_seconds, self.process_batch
                 )
                 self._batch_timer.start()
 
@@ -200,9 +161,9 @@ class BaseListener(ParserCommon):
                 process_now = True
         
         if process_now:
-            self._process_batch()
+            self.process_batch()
 
-    def _process_batch(self):
+    def process_batch(self):
         """Processes all files currently in the buffer."""
         files_to_process = []
         with self._buffer_lock:

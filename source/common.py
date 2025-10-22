@@ -91,12 +91,38 @@ class ParserCommon(ABC):
 
     def listen(self):
         """
-        Execute the parser in continuous mode - monitors for new data and processes it as it arrives.
-        This method should be implemented by listener mixins for event-driven behavior.
+        Execute the parser in continuous listener mode.
+        This is for event-driven, continuous operation.
+        
+        This orchestrates the listener lifecycle.
         """
-        # This will be overridden by listener mixins
-        # If called directly, it will cause an AttributeError that run.py will catch
-        pass
+        self.start_notify()
+        try:
+            # Setup phase - prepare batching and observer
+            self.setup_batching()
+            self.setup_observer()
+            self.start_observer()
+            
+            # Main listening loop - runs continuously
+            self.info(f"Listener is now monitoring for events...")
+            self.run_observer_loop()
+            
+        except KeyboardInterrupt:
+            self.warning("Listener stopped by user. Processing any remaining files...")
+            # Process any remaining files in the batch
+            if hasattr(self, '_process_batch'):
+                self.process_batch()
+            self.end_notify(0)
+        except Exception as e:
+            import sys, traceback
+            self.error(e)
+            self.error(f'Encountered {str(e)}')
+            self.debug(traceback.format_exception(*sys.exc_info()))
+            self.end_notify(1)
+        finally:
+            # Cleanup phase - stop observer
+            if hasattr(self, 'stop_observer'):
+                self.stop_observer()
 
     def check(self):
         """
