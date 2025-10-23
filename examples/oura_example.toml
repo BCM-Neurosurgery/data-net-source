@@ -1,0 +1,43 @@
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "OuraWebhookParser"
+parts = [
+  ["checkers.api.oura", "OuraWebhookChecker"],
+  ["uploaders.json", "JSONDocInjectorUploader"]
+]
+
+[parser.init]
+state_path = "/path/to/store/state/info"
+
+    # The source section will contain the parameters the checker expects about where and how to find the data
+    [parser.init.source]
+    path = "/path/to/stage/downloaded/data"
+    listener_data = "/remote/root/data/directory"
+
+        [parser.init.source.ssh_config]
+        hostname = "url.of.ec2server"
+        username = "ec2-user"
+        key_filename = "/path/to/identity/file"
+
+    # The target section contains information for the Uploader, about where to place the data
+    [parser.init.target]
+    path = '/base/path/for/all/jsons'
+    # Key in the payload that contains the unique identifier of this payload
+    doc_id_key = 'document_id'
+    # relative path/filename of the JSON to inject data into (need not exist) as a python format string
+    # Filled with context obtained from both the payload and the path metadata
+    new_format = '{patient_id}/oura/{date}/{doc_type}.json'
+
+
+[logging.file]
+level = 0
+max_size = 21048576
+max_files = 5
+
+[dependencies]
+pip = [
+  "pandas",
+  "requests"
+]
