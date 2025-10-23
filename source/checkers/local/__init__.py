@@ -98,6 +98,8 @@ class FileCheckerMixin(BaseChecker):
         determines which files need to be uploaded. The method considers previously logged
         successes, applies inclusion and exclusion filters, and processes nested directories if needed.
 
+        Added functionality to check for file modifications based on the 'check_for_modifications' setting.
+
         :param source_dir: The directory from which to start the search. Must be provided via the config file
         :type source_dir: str
         :param level: The depth level of recursion. Defaults to 0, only used to track depth for verbose output.
@@ -110,8 +112,26 @@ class FileCheckerMixin(BaseChecker):
         # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
+        # check_for_modifications is required in the config file
+        if 'check_for_modifications' not in self.source_location:
+            raise ValueError("'check_for_modifications' must be specified in the config")
+        check_modified = self.source_location['check_for_modifications']
+
         successes = self.load_non_failure()
-        uploaded_files = [success['uploaded'] for success in successes]
+        
+        # Load state differently based on the setting
+        if check_modified:
+            # Load state with last_modified_time for modification checking
+            uploaded_files_state = {
+                success['uploaded']: success.get('last_modified_time', success.get('modified_time'))
+                for success in successes if 'uploaded' in success
+            }
+        else:
+            # Load state with just file paths for new-file-only checking
+            uploaded_files_state = {
+                success['uploaded']: True
+                for success in successes if 'uploaded' in success
+            }
 
         # Determine which of the files here need to be uploaded
         to_upload = []
@@ -119,14 +139,27 @@ class FileCheckerMixin(BaseChecker):
         for item_here in os.listdir(source_dir):
             full_path = os.path.join(source_dir, item_here)
 
-            # Skip any files and folders that have already been logged as complete
-            if full_path in uploaded_files:
-                continue
 
             # Explicitly check all the files against the optional regex and that they are not the state file
             if os.path.isfile(full_path):
+                # First, check if the file matches our include/exclude rules.
                 if self.check_regex_filter(full_path) and not self.check_regex_exclude(full_path):
-                    to_upload.append(full_path)
+                    if full_path not in uploaded_files_state:
+                        # This file is NEW, so we always add it.
+                        to_upload.append(full_path)
+
+                    # This block will run if the setting is true to check for modifications
+                    elif check_modified:
+                        # The file exists in the log, so now we check if it was MODIFIED.
+                        logged_modified_time = uploaded_files_state[full_path]
+                        if logged_modified_time is None:
+                            # Re-upload if we don't have a historic modified_time for it.
+                            to_upload.append(full_path)
+                        else:
+                            current_modified_time = os.path.getmtime(full_path)
+                            if current_modified_time > logged_modified_time:
+                                self.info(f"File has been modified, queuing for upload: {full_path}")
+                                to_upload.append(full_path)
 
             # For any directories that have not been marked as completed, process recursively
             elif os.path.isdir(full_path):
@@ -155,6 +188,14 @@ class FileCheckerMixin(BaseChecker):
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
+        # Adding the file's last modification time to the log entry..
+        try:
+            log_entry['last_modified_time'] = os.path.getmtime(entry_data['filename'])
+        except FileNotFoundError:
+            # Handle edge case where file might be gone before logging.
+            log_entry['last_modified_time'] = None
+            self.warn(f"Could not find {entry_data['filename']} to log its modification time.")
+
         return log_entry
 
     def save_state(self, success=None, failure=None, skipped=None):

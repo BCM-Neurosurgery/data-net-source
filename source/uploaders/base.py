@@ -179,7 +179,7 @@ class FileSystemUploader(BaseUploader, ABC):
                         skip_dict = {
                             "type": "RemoteFileExists",
                             "filename": filename,
-                            "destination": destination,
+                            "destination": destination.as_posix(), # Convert the Path object to a string.
                             "timestamp": datetime.now().timestamp()
                         }
                         self.debug(f'Skipping, already exists ({destination}) ')
@@ -219,7 +219,7 @@ class FileSystemUploader(BaseUploader, ABC):
                     {
                         "type": "upload success",
                         "filename": filename,
-                        "destination": destination,
+                        "destination": destination.as_posix(), # Convert the Path object to a string.
                         "timestamp": datetime.now().timestamp()
                     }
                 )

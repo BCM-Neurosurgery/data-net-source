@@ -27,8 +27,7 @@ any format of data collection, with a particular emphasis on the research enviro
       - [Initialization](#initiation)
       - [Optional Settings](#settings)
     - [Logging](#logging)
-    - [Dependencies](#dependencies-)
-
+    - [Dependencies](#dependencies)
 
 # Quick Start
 

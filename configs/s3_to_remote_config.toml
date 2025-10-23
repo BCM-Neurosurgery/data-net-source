@@ -1,0 +1,60 @@
+# =======================================================
+# PARSER B: AWS S3 to Remote Filesystem (via SCP)
+# =======================================================
+# This parser watches an S3 bucket for new files, downloads them
+# to a local temporary directory, and then uploads them to a remote
+# server using SCP, preserving the subdirectory structure.
+
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "S3ToRemoteParser"
+parts = [
+  # This is the S3 checker we built that preserves file structure.
+  ["checkers.s3", "S3ObjectCheckerMixin"],
+  # This is an existing uploader from your framework in ssh.py for sending files via SSH.
+  ["uploaders.ssh", "SCPUploaderMixin"]
+]
+
+[parser.init]
+# A separate state file for this parser is crucial to track S3 objects.
+state_path = "path/to/state/file"
+
+# [parser.init.source] -> Settings for the S3 checker.
+[parser.init.source]
+bucket = "bucket-name" # The S3 bucket to watch
+# It will watch for the files uploaded by Parser A.
+prefix = "raw_from_local/"
+# The temporary local directory where the checker will download files from S3.
+path = "path/to/temp/dir"
+
+# [parser.init.target] -> Settings for the SCP/SSH uploader.
+[parser.init.target]
+# The absolute path on the remote server where files will be uploaded.
+path = "/path/to/uploads"
+
+[parser.init.target.ssh-config]
+# Change these to your remote server's details.
+hostname = "hostname"
+username = "username"
+password = "password"
+# Optional: If you are using an SSH key for authentication (recommended).
+# The parameter name must be 'key_filename' for paramiko.
+key_filename = "/path/to/your/private/key"
+
+
+
+
+[dependencies]
+pip = [
+  "boto3",
+  "paramiko", # The library needed for SSH/SCP functionality
+  "scp"       # The existing uploader also requires the 'scp' package
+]
+
+[logging.file]
+filepath = "path/to/log/file.txt"
+level = 10
+max_size = 10485760
+max_files = 5
