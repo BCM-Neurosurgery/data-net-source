@@ -113,9 +113,11 @@ class FileCheckerMixin(BaseChecker):
         source_dir = self.source_location['path'] if source_dir is None else source_dir
 
         # check_for_modifications is required in the config file
-        if 'check_for_modifications' not in self.source_location:
-            raise ValueError("'check_for_modifications' must be specified in the config")
-        check_modified = self.source_location['check_for_modifications']
+        if 'check_for_modifications' in self.source_location:
+            check_modified = self.source_location['check_for_modifications']
+        else:
+            check_modified = False
+
 
         successes = self.load_non_failure()
         
