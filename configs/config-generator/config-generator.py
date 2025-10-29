@@ -35,12 +35,14 @@ def fetch_listener_metadata(module_path: str, class_name: str) -> dict:
         mixin_class = getattr(module, class_name)
         
         # Access property getters directly (they don't use self)
+        name = mixin_class.listener_name.fget(None)
         dependencies = mixin_class.required_dependencies.fget(None)
         config = mixin_class.config_template.fget(None)
         
         return {
             'dependencies': dependencies or [],
-            'source_config': config or {}
+            'source_config': config or {},
+            'name': name 
         }
     except Exception as e:
         print(f"Warning: Could not fetch metadata for {class_name}: {e}")
@@ -485,7 +487,7 @@ def main():
     """Main interactive configuration generator."""
     print_header("Data Net Source - Config Generator")
     print("\nThis tool will help you create a configuration file for your parser.")
-    
+    print(watchdog_meta)
     # Step 1: Choose mode
     print_header("Step 1: Choose Parser Mode")
     print("\nSelect the execution mode for your parser:")
