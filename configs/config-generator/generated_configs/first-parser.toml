@@ -1,0 +1,57 @@
+# ============================================================
+# Auto-generated config for first-parser
+# Mode: checker
+# ============================================================
+
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "first-parser"
+parts = [
+  ["checkers.local.__init__", "FileCheckerMixin"],
+  ["transformers.openpose", "OpenPoseTransformer"],
+  ["uploaders.local_to_s3", "S3UploaderMixin"],
+]
+
+[parser.init]
+state_path = "path/to/state/directory"
+
+[parser.init.source]
+path = "path/to/local/directory"
+check_for_modifications = false
+
+[parser.init.middle]
+path = "path/to/intermediate/storage"
+
+[parser.init.target]
+bucket = "target-bucket-name"
+prefix = "raw_data/"
+allow-overwrite = true
+
+# Logging configuration
+[logging.file]
+filepath = "path/to/log/file.log"
+level = 0
+max_size = 21048576
+max_files = 5
+
+[logging.sentry]
+dsn = "https://your-sentry-dsn"
+level = 10
+event_level = 30
+
+[logging.healthchecks]
+url = "https://hc-ping.com"
+ping_key = "your-ping-key"
+slug = "parser-slug"
+level = 20
+create = true
+verify_cert = true
+
+[dependencies]
+pip = [
+  "boto3",
+  "requests",
+  "sentry-sdk",
+]

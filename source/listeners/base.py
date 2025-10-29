@@ -5,6 +5,7 @@ import os
 import json
 from datetime import datetime
 from abc import ABC, abstractmethod
+from typing import List, Dict
 
 from watchdog.observers import Observer
 from source.common import EMPTY_LOG
@@ -17,8 +18,36 @@ class BaseListener(ABC):
     This class provides event-driven data processing capabilities with batching,
     threading, and state management. Listener mixins should be combined with
     ParserCommon through dynamic class composition, similar to BaseChecker.
+    
+    All concrete listener mixins MUST implement:
+        - required_dependencies: List[str] - Python packages needed
+        - config_template: Dict - Example configuration structure
     """
     state_filename = 'upload_state.json'
+
+    # -------------------------------------------------------------------------
+    # --- Abstract properties for metadata (required for config generator) ---
+    # -------------------------------------------------------------------------
+
+    @property
+    @abstractmethod
+    def required_dependencies(self) -> List[str]:
+        """
+        List of Python packages required by this listener.
+        
+        :return: List of package names (e.g., ['watchdog', 'requests'])
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def config_template(self) -> Dict:
+        """
+        Template configuration dictionary for this listener.
+        
+        :return: Dictionary with example configuration keys and values
+        """
+        pass
 
     # -------------------------------------------------------------------------
     # --- Abstract methods to be implemented by concrete listeners ---

@@ -8,7 +8,43 @@ checkers, listeners, transformers, and uploaders.
 
 import os
 import sys
+import importlib
 from pathlib import Path
+
+
+def fetch_listener_metadata(module_path: str, class_name: str) -> dict:
+    """
+    Dynamically fetch metadata from a listener mixin class.
+    
+    Since metadata properties don't depend on instance state, we access them
+    directly from the property's fget function.
+    
+    :param module_path: Module path (e.g., "listeners.watchdog_listener")
+    :param class_name: Class name (e.g., "WatchdogListenerMixin")
+    :return: Dictionary with dependencies and config_template
+    """
+    try:
+        # Add parent directory to path if not already there
+        current_dir = Path(__file__).parent if '__file__' in globals() else Path.cwd()
+        parent_dir = current_dir.parent.parent if '__file__' in globals() else Path.cwd().parent
+        
+        if str(parent_dir) not in sys.path:
+            sys.path.insert(0, str(parent_dir))
+        
+        module = importlib.import_module(f"source.{module_path}")
+        mixin_class = getattr(module, class_name)
+        
+        # Access property getters directly (they don't use self)
+        dependencies = mixin_class.required_dependencies.fget(None)
+        config = mixin_class.config_template.fget(None)
+        
+        return {
+            'dependencies': dependencies or [],
+            'source_config': config or {}
+        }
+    except Exception as e:
+        print(f"Warning: Could not fetch metadata for {class_name}: {e}")
+        return {'dependencies': [], 'source_config': {}}
 
 
 # Available components registry
@@ -88,19 +124,16 @@ CHECKERS = {
     },
 }
 
+# Dynamically fetch listener metadata
+watchdog_meta = fetch_listener_metadata("listeners.watchdog_listener", "WatchdogListenerMixin")
+
 LISTENERS = {
     "1": {
         "name": "WatchdogListenerMixin",
         "module": "listeners.watchdog_listener",
         "description": "Monitor filesystem for new files in real-time",
-        "source_config": {
-            "path": "path/to/monitor",
-            "include_patterns": [".*\\.csv$", ".*\\.txt$"],
-            "exclude_patterns": [".*\\.tmp$"],
-            "batch_max_size": 10,
-            "batch_max_latency_seconds": 60,
-        },
-        "dependencies": ["watchdog"]
+        "source_config": watchdog_meta['source_config'],
+        "dependencies": watchdog_meta['dependencies']
     },
 }
 
@@ -181,6 +214,67 @@ UPLOADERS = {
     },
 }
 
+LOGGING = {
+    "0": {
+        "name": "None",
+        "description": "No logging configuration",
+        "config": None,
+        "dependencies": []
+    },
+    "1": {
+        "name": "File Logging",
+        "description": "Log to rotating file on disk",
+        "config": {
+            "filepath": "path/to/log/file.log",
+            "level": 0,  # 0=DEBUG, 10=INFO, 20=WARNING, 30=ERROR
+            "max_size": 21048576,  # 20MB
+            "max_files": 5,
+        },
+        "dependencies": []
+    },
+    "2": {
+        "name": "Sentry",
+        "description": "Send errors and logs to Sentry for monitoring",
+        "config": {
+            "dsn": "https://your-sentry-dsn",
+            "level": 10,  # Breadcrumb level
+            "event_level": 30,  # Event level (errors and above)
+        },
+        "dependencies": ["sentry-sdk"]
+    },
+    "3": {
+        "name": "Healthchecks.io",
+        "description": "Monitor job runs with healthchecks.io",
+        "config": {
+            "url": "https://hc-ping.com",
+            "ping_key": "your-ping-key",
+            "slug": "parser-slug",
+            "level": 20,  # WARNING and above
+            "create": True,
+            "verify_cert": True,
+        },
+        "dependencies": ["requests"]
+    },
+    "4": {
+        "name": "File + Sentry",
+        "description": "Log to file and send errors to Sentry",
+        "config": "combined",
+        "dependencies": ["sentry-sdk"]
+    },
+    "5": {
+        "name": "File + Healthchecks",
+        "description": "Log to file and monitor with healthchecks.io",
+        "config": "combined",
+        "dependencies": ["requests"]
+    },
+    "6": {
+        "name": "All Logging",
+        "description": "File, Sentry, and Healthchecks combined",
+        "config": "combined",
+        "dependencies": ["sentry-sdk", "requests"]
+    },
+}
+
 
 def print_header(text):
     """Print a formatted header."""
@@ -207,7 +301,7 @@ def get_user_choice(prompt, valid_choices):
         print(f"Invalid choice. Please select from: {', '.join(valid_choices)}")
 
 
-def generate_toml_config(parser_name, mode, checker_or_listener, transformer, uploader, state_path, log_path):
+def generate_toml_config(parser_name, mode, checker_or_listener, transformer, uploader, logging_choice, state_path, log_path):
     """Generate TOML configuration content."""
     
     # Determine which component to use
@@ -218,6 +312,7 @@ def generate_toml_config(parser_name, mode, checker_or_listener, transformer, up
     
     transformer_component = TRANSFORMERS[transformer]
     uploader_component = UPLOADERS[uploader]
+    logging_component = LOGGING[logging_choice]
     
     # Build parts list
     parts = []
@@ -233,6 +328,7 @@ def generate_toml_config(parser_name, mode, checker_or_listener, transformer, up
     dependencies.update(primary_component["dependencies"])
     dependencies.update(transformer_component["dependencies"])
     dependencies.update(uploader_component["dependencies"])
+    dependencies.update(logging_component["dependencies"])
     
     # Start building TOML content
     config_lines = []
@@ -289,13 +385,90 @@ def generate_toml_config(parser_name, mode, checker_or_listener, transformer, up
     config_lines.append("")
     
     # Logging configuration
-    config_lines.append("# Logging configuration")
-    config_lines.append("[logging.file]")
-    config_lines.append(f'filepath = "{log_path}"')
-    config_lines.append("level = 0  # 0=DEBUG, 10=INFO, 20=WARNING, 30=ERROR")
-    config_lines.append("max_size = 21048576  # 20MB")
-    config_lines.append("max_files = 5")
-    config_lines.append("")
+    if logging_component["config"] is not None:
+        config_lines.append("# Logging configuration")
+        
+        if logging_component["config"] == "combined":
+            # Handle combined logging options
+            if logging_choice == "4":  # File + Sentry
+                config_lines.append("[logging.file]")
+                for key, value in LOGGING["1"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+                config_lines.append("[logging.sentry]")
+                for key, value in LOGGING["2"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+            
+            elif logging_choice == "5":  # File + Healthchecks
+                config_lines.append("[logging.file]")
+                for key, value in LOGGING["1"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+                config_lines.append("[logging.healthchecks]")
+                for key, value in LOGGING["3"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    elif isinstance(value, bool):
+                        config_lines.append(f'{key} = {str(value).lower()}')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+            
+            elif logging_choice == "6":  # All
+                config_lines.append("[logging.file]")
+                for key, value in LOGGING["1"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+                config_lines.append("[logging.sentry]")
+                for key, value in LOGGING["2"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+                config_lines.append("[logging.healthchecks]")
+                for key, value in LOGGING["3"]["config"].items():
+                    if isinstance(value, str):
+                        config_lines.append(f'{key} = "{value}"')
+                    elif isinstance(value, bool):
+                        config_lines.append(f'{key} = {str(value).lower()}')
+                    else:
+                        config_lines.append(f'{key} = {value}')
+                config_lines.append("")
+        else:
+            # Single logging type
+            log_type = logging_component["name"].lower().replace(" ", "")
+            if "file" in log_type:
+                section = "logging.file"
+            elif "sentry" in log_type:
+                section = "logging.sentry"
+            elif "healthchecks" in log_type:
+                section = "logging.healthchecks"
+            else:
+                section = "logging.file"
+            
+            config_lines.append(f"[{section}]")
+            for key, value in logging_component["config"].items():
+                if isinstance(value, str):
+                    config_lines.append(f'{key} = "{value}"')
+                elif isinstance(value, bool):
+                    config_lines.append(f'{key} = {str(value).lower()}')
+                else:
+                    config_lines.append(f'{key} = {value}')
+            config_lines.append("")
     
     # Dependencies
     if dependencies:
@@ -356,8 +529,16 @@ def main():
         list(UPLOADERS.keys())
     )
     
-    # Step 5: Basic configuration
-    print_header("Step 5: Basic Configuration")
+    # Step 5: Choose logging
+    print_header("Step 5: Choose Logging (Optional)")
+    print_options(LOGGING, "Available Logging Options")
+    logging_choice = get_user_choice(
+        f"Select logging [0-{len(LOGGING)-1}]",
+        list(LOGGING.keys())
+    )
+    
+    # Step 6: Basic configuration
+    print_header("Step 6: Basic Configuration")
     parser_name = input("\nEnter parser name (e.g., MyDataParser): ").strip()
     if not parser_name:
         parser_name = "CustomParser"
@@ -366,15 +547,18 @@ def main():
     if not state_path:
         state_path = "path/to/state/directory"
     
-    log_path = input("Enter log file path: ").strip()
-    if not log_path:
-        log_path = "path/to/log/file.log"
+    # Only ask for log path if file logging is selected
+    log_path = None
+    if logging_choice in ["1", "4", "5", "6"]:
+        log_path = input("Enter log file path: ").strip()
+        if not log_path:
+            log_path = "path/to/log/file.log"
     
     # Generate config
     print_header("Generating Configuration")
     config_content = generate_toml_config(
         parser_name, mode, primary_choice, transformer_choice, 
-        uploader_choice, state_path, log_path
+        uploader_choice, logging_choice, state_path, log_path
     )
     
     # Save config

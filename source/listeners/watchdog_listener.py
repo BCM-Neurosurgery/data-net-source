@@ -46,6 +46,24 @@ class WatchdogListenerMixin(BaseListener):
     A concrete listener that uses 'watchdog' to monitor a directory and processes
     new files.
     """
+    
+    @property
+    def required_dependencies(self):
+        """Required Python packages for this listener."""
+        return ['watchdog']
+    
+    @property
+    def config_template(self):
+        """Example configuration template for this listener."""
+        return {
+            'path': 'path/to/monitor',
+            'include_patterns': ['.*\\.csv$', '.*\\.txt$'],
+            'exclude_patterns': ['.*\\.tmp$'],
+            'batch_max_size': 10,
+            'batch_max_latency_seconds': 60,
+            'recursive': True
+        }
+    
     @property
     def listener_name(self) -> str:
         return "WatchdogBatchListener"
