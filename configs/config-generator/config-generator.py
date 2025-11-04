@@ -14,14 +14,14 @@ from pathlib import Path
 
 def fetch_listener_metadata(module_path: str, class_name: str) -> dict:
     """
-    Dynamically fetch metadata from a listener mixin class.
+    Dynamically fetch ALL metadata from a listener mixin class.
     
-    Since metadata properties don't depend on instance state, we access them
-    directly from the property's fget function.
+    Fetches: class name, module path, description, dependencies, config template,
+    and config comments all directly from the listener class properties.
     
     :param module_path: Module path (e.g., "listeners.watchdog_listener")
     :param class_name: Class name (e.g., "WatchdogListenerMixin")
-    :return: Dictionary with dependencies and config_template
+    :return: Dictionary with all metadata needed for config generator
     """
     try:
         # Add parent directory to path if not already there
@@ -34,19 +34,32 @@ def fetch_listener_metadata(module_path: str, class_name: str) -> dict:
         module = importlib.import_module(f"source.{module_path}")
         mixin_class = getattr(module, class_name)
         
-        # Access property getters directly (they don't use self)
-        name = mixin_class.listener_name.fget(None)
-        dependencies = mixin_class.required_dependencies.fget(None)
-        config = mixin_class.config_template.fget(None)
+        # Access all property getters directly (they don't use self)
+        config_data = mixin_class.config_with_comments.fget(None) or {}
+        
+        # Extract values and comments from tuples
+        source_config = {k: v[0] for k, v in config_data.items()}
+        config_comments = {k: v[1] for k, v in config_data.items()}
         
         return {
-            'dependencies': dependencies or [],
-            'source_config': config or {},
-            'name': name 
+            'name': mixin_class.listener_name.fget(None),
+            'module': mixin_class.mixin_module_path.fget(None),
+            'description': mixin_class.mixin_description.fget(None),
+            'dependencies': mixin_class.required_dependencies.fget(None) or [],
+            'source_config': source_config,
+            'config_comments': config_comments
         }
     except Exception as e:
         print(f"Warning: Could not fetch metadata for {class_name}: {e}")
-        return {'dependencies': [], 'source_config': {}}
+        import traceback
+        traceback.print_exc()
+        return {
+            'name': class_name,
+            'module': module_path,
+            'description': 'Error loading description',
+            'dependencies': [],
+            'source_config': {}
+        }
 
 
 # Available components registry
@@ -126,17 +139,11 @@ CHECKERS = {
     },
 }
 
-# Dynamically fetch listener metadata
-watchdog_meta = fetch_listener_metadata("listeners.watchdog_listener", "WatchdogListenerMixin")
+# Dynamically fetch ALL listener metadata from the actual mixin class
+_watchdog_meta = fetch_listener_metadata("listeners.watchdog_listener", "WatchdogListenerMixin")
 
 LISTENERS = {
-    "1": {
-        "name": "WatchdogListenerMixin",
-        "module": "listeners.watchdog_listener",
-        "description": "Monitor filesystem for new files in real-time",
-        "source_config": watchdog_meta['source_config'],
-        "dependencies": watchdog_meta['dependencies']
-    },
+    "1": _watchdog_meta,
 }
 
 TRANSFORMERS = {
@@ -355,17 +362,22 @@ def generate_toml_config(parser_name, mode, checker_or_listener, transformer, up
     config_lines.append(f'state_path = "{state_path}"')
     config_lines.append("")
     
-    # Source configuration
+    # Source configuration with comments
     config_lines.append("[parser.init.source]")
+    config_comments = primary_component.get("config_comments", {})
     for key, value in primary_component["source_config"].items():
+        # Get comment for this field if available
+        comment = config_comments.get(key, "")
+        comment_suffix = f"  # {comment}" if comment else ""
+        
         if isinstance(value, str):
-            config_lines.append(f'{key} = "{value}"')
+            config_lines.append(f'{key} = "{value}"{comment_suffix}')
         elif isinstance(value, bool):
-            config_lines.append(f'{key} = {str(value).lower()}')
+            config_lines.append(f'{key} = {str(value).lower()}{comment_suffix}')
         elif isinstance(value, list):
-            config_lines.append(f'{key} = {value}')
+            config_lines.append(f'{key} = {value}{comment_suffix}')
         else:
-            config_lines.append(f'{key} = {value}')
+            config_lines.append(f'{key} = {value}{comment_suffix}')
     config_lines.append("")
     
     # Middle configuration (if transformer is used)
@@ -487,7 +499,7 @@ def main():
     """Main interactive configuration generator."""
     print_header("Data Net Source - Config Generator")
     print("\nThis tool will help you create a configuration file for your parser.")
-    print(watchdog_meta)
+    
     # Step 1: Choose mode
     print_header("Step 1: Choose Parser Mode")
     print("\nSelect the execution mode for your parser:")

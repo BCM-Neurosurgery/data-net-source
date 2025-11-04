@@ -48,25 +48,35 @@ class WatchdogListenerMixin(BaseListener):
     """
     
     @property
+    def listener_name(self) -> str:
+        """The name of this listener mixin (used by config generator)."""
+        return "WatchdogListenerMixin"
+    
+    @property
+    def mixin_module_path(self):
+        """Module path for this mixin."""
+        return "listeners.watchdog_listener"
+    
+    @property
+    def mixin_description(self):
+        """Human-readable description."""
+        return "Monitor filesystem for new files in real-time"
+    
+    @property
     def required_dependencies(self):
         """Required Python packages for this listener."""
         return ['watchdog']
     
     @property
-    def config_template(self):
-        """Example configuration template for this listener."""
+    def config_with_comments(self):
+        """Configuration template with inline comments - (value, comment) tuples."""
         return {
-            'path': 'path/to/monitor',
-            'include_patterns': ['.*\\.csv$', '.*\\.txt$'],
-            'exclude_patterns': ['.*\\.tmp$'],
-            'batch_max_size': 10,
-            'batch_max_latency_seconds': 60,
-            'recursive': True
+            'path': ('path/to/monitor', 'Directory path to monitor for file changes'),
+            'include_patterns': (['.*\\.csv$', '.*\\.txt$'], 'List of regex patterns for files to include (e.g., [\'.*\\\\.csv$\', \'.*\\\\.txt$\'])'),
+            'exclude_patterns': (['.*\\.tmp$'], 'List of regex patterns for files to exclude (e.g., [\'.*\\\\.tmp$\'])'),
+            'batch_max_size': (10, 'Maximum number of files to accumulate before processing'),
+            'batch_max_latency_seconds': (60, 'Maximum seconds to wait before processing batch (even if not full)'),
         }
-    
-    @property
-    def listener_name(self) -> str:
-        return "WatchdogBatchListener"
 
     def create_event_handler(self):
         """Create the RegexMatchingEventHandler for this listener."""
