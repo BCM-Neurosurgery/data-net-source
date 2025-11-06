@@ -62,18 +62,64 @@ def fetch_listener_metadata(module_path: str, class_name: str) -> dict:
         }
 
 
+def fetch_checker_metadata(module_path: str, class_name: str) -> dict:
+    """
+    Dynamically fetch ALL metadata from a checker mixin class.
+    
+    Fetches: class name, module path, description, dependencies, config template,
+    and config comments all directly from the checker class properties.
+    
+    :param module_path: Module path (e.g., "checkers.local.__init__")
+    :param class_name: Class name (e.g., "FileCheckerMixin")
+    :return: Dictionary with all metadata needed for config generator
+    """
+    try:
+        # Add parent directory to path if not already there
+        current_dir = Path(__file__).parent if '__file__' in globals() else Path.cwd()
+        parent_dir = current_dir.parent.parent if '__file__' in globals() else Path.cwd().parent
+        
+        if str(parent_dir) not in sys.path:
+            sys.path.insert(0, str(parent_dir))
+        
+        module = importlib.import_module(f"source.{module_path}")
+        mixin_class = getattr(module, class_name)
+        
+        # Access all property getters directly (they don't use self)
+        config_data = mixin_class.config_with_comments.fget(None) or {}
+        
+        # Extract values and comments from tuples
+        source_config = {k: v[0] for k, v in config_data.items()}
+        config_comments = {k: v[1] for k, v in config_data.items()}
+        
+        return {
+            'name': mixin_class.checker_name.fget(None),
+            'module': mixin_class.mixin_module_path.fget(None),
+            'description': mixin_class.mixin_description.fget(None),
+            'dependencies': mixin_class.required_dependencies.fget(None) or [],
+            'source_config': source_config,
+            'config_comments': config_comments
+        }
+    except Exception as e:
+        print(f"Warning: Could not fetch metadata for {class_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'name': class_name,
+            'module': module_path,
+            'description': 'Error loading description',
+            'dependencies': [],
+            'source_config': {},
+            'config_comments': {}
+        }
+
+
 # Available components registry
+
+# Dynamically fetch checker metadata
+_file_checker_meta = fetch_checker_metadata("checkers.local.__init__", "FileCheckerMixin")
+
 CHECKERS = {
-    "1": {
-        "name": "FileCheckerMixin",
-        "module": "checkers.local.__init__",
-        "description": "Check local directory for new files",
-        "source_config": {
-            "path": "path/to/local/directory",
-            "check_for_modifications": False,
-        },
-        "dependencies": []
-    },
+    "1": _file_checker_meta,
     "2": {
         "name": "StreamedFileCheckerMixin",
         "module": "checkers.local.stream",
@@ -366,18 +412,19 @@ def generate_toml_config(parser_name, mode, checker_or_listener, transformer, up
     config_lines.append("[parser.init.source]")
     config_comments = primary_component.get("config_comments", {})
     for key, value in primary_component["source_config"].items():
-        # Get comment for this field if available
+        # Add comment above the line if available
         comment = config_comments.get(key, "")
-        comment_suffix = f"  # {comment}" if comment else ""
+        if comment:
+            config_lines.append(f'# {comment}')
         
         if isinstance(value, str):
-            config_lines.append(f'{key} = "{value}"{comment_suffix}')
+            config_lines.append(f'{key} = "{value}"')
         elif isinstance(value, bool):
-            config_lines.append(f'{key} = {str(value).lower()}{comment_suffix}')
+            config_lines.append(f'{key} = {str(value).lower()}')
         elif isinstance(value, list):
-            config_lines.append(f'{key} = {value}{comment_suffix}')
+            config_lines.append(f'{key} = {value}')
         else:
-            config_lines.append(f'{key} = {value}{comment_suffix}')
+            config_lines.append(f'{key} = {value}')
     config_lines.append("")
     
     # Middle configuration (if transformer is used)
