@@ -1,15 +1,22 @@
-import os
-from datetime import datetime
 import requests
 import pandas as pd
 from source.checkers.local import FileCheckerMixin
 
-class DBFileCheckerMixin(FileCheckerMixin):
+class MySQLContainerCheckerMixin(FileCheckerMixin):
+    """Checker to load files pulled from a MySQL container"""
+    # the full URL to connect to the database
     db_url = ''
+
+    # the route needed to dump from the database and retrieve filepaths
     dump_route = ''
-    # look back duration as pandas timedelta str
+
+    # how far back from midnight we should retrieve data from (as pandas timedelta string)
     look_back_duration = '1D'
+
+    # the path that data is dumped to in the container
     container_path = ''
+
+    # the path that data is dumped to on disk (i.e. where is the dump mounted)
     actual_path = ''
 
     # by default gets data from midnight to 'look_back_duration' prior
@@ -32,9 +39,11 @@ class DBFileCheckerMixin(FileCheckerMixin):
     def check(self):
         res = self.dump_data()
         data = res.json()
-        if 'filepaths' in data:
+        if res.ok and 'filepaths' in data:
             # first replace db path with actual path
             filepaths = [filepath.replace(self.container_path, self.actual_path) for filepath in data['filepaths']]
             return {'to do': filepaths, 'failure': []}
+        elif not res.ok:
+            return {'to do': [], 'failure': [data]},
         else:
-            return {'to do': [], 'failure': []}
+            return {'to do': [], 'failure': [{'detail': 'unknown error occured'}]}
