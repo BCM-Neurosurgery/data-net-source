@@ -15,7 +15,7 @@ class DBFileCheckerMixin(FileCheckerMixin):
     def get_payload(self):
         midnight_local = pd.Timestamp("today").normalize()
         # now get look_back_duration prior
-        time_prior = midnight - pd.Timedelta(look_back_duration)
+        time_prior = midnight_local - pd.Timedelta(self.look_back_duration)
         payload = {
             "query_start": time_prior.isoformat(),
             "query_end": midnight_local.isoformat()
@@ -24,7 +24,7 @@ class DBFileCheckerMixin(FileCheckerMixin):
 
     def dump_data(self):
         payload = self.get_payload()
-        return res = requests.post(f'{db_url}/{dump_route}', data=payload)
+        return requests.post(f'{self.db_url}/{self.dump_route}', json=payload)
 
     # by default get filepaths to upload from route response
     def check(self):
