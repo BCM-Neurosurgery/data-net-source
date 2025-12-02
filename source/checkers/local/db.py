@@ -9,6 +9,8 @@ class DBFileCheckerMixin(FileCheckerMixin):
     dump_route = ''
     # look back duration as pandas timedelta str
     look_back_duration = '1D'
+    container_path = ''
+    actual_path = ''
 
     # by default gets data from midnight to 'look_back_duration' prior
     # method can be overwritten for custom payload behavior
@@ -31,6 +33,8 @@ class DBFileCheckerMixin(FileCheckerMixin):
         res = self.dump_data()
         data = res.json()
         if 'filepaths' in data:
-            return {'to do': data['filepaths'], 'failure': []}
+            # first replace db path with actual path
+            filepaths = [filepath.replace(self.container_path, self.actual_path) for filepath in data['filepaths']]
+            return {'to do': filepaths, 'failure': []}
         else:
             return {'to do': [], 'failure': []}
