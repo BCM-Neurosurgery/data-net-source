@@ -19,6 +19,8 @@ class MySQLContainerCheckerMixin(FileCheckerMixin):
     # the path that data is dumped to on disk (i.e. where is the dump mounted)
     actual_path = ''
 
+    dump_key = ''
+
     # by default gets data from midnight to 'look_back_duration' prior
     # method can be overwritten for custom payload behavior
     def get_payload(self):
@@ -33,7 +35,10 @@ class MySQLContainerCheckerMixin(FileCheckerMixin):
 
     def dump_data(self):
         payload = self.get_payload()
-        return requests.post(f'{self.db_url}/{self.dump_route}', json=payload)
+        headers = {
+            "X-Dump-Key": self.dump_key
+        }
+        return requests.post(f'{self.db_url}/{self.dump_route}', json=payload, headers=headers)
 
     # by default get filepaths to upload from route response
     def check(self):
