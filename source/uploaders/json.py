@@ -2,6 +2,7 @@ import copy
 import os
 import re
 import json
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -66,7 +67,7 @@ class JSONDocInjectorUploader(BaseUploader):
         context = copy.deepcopy(payload)
         context.update(kwargs)
 
-        path = self.new_format.format(**context)
+        path = self.target_location['new_format'].format(**context)
         return Path(path)
 
     def inject_payload(self, target_file, payload):
@@ -82,12 +83,12 @@ class JSONDocInjectorUploader(BaseUploader):
         else:
             contents = []
 
-        payload_id = payload[self.doc_id_key]
+        payload_id = payload[self.target_location['doc_id_key']]
 
         # Determine if this payload needs to be appended or replace an existing payload
         placement_loc = None
         for idx, doc in enumerate(contents):
-            this_id = doc[self.doc_id_key]
+            this_id = doc[self.target_location['doc_id_key']]
             if payload_id == this_id:
                 placement_loc = idx
                 break
@@ -99,10 +100,19 @@ class JSONDocInjectorUploader(BaseUploader):
             contents[placement_loc] = payload
 
         # Write the updated file contents to the file
-        with open(target_file, 'w') as json_file:
-            json_file.write(contents)
+        with open(target_file, "w") as json_file:
+            json.dump(contents, json_file, indent=2)
 
     def upload(self, ready):
+
+        if isinstance(ready, dict):
+            ready = (
+                ready.get("to upload")
+                or ready.get("to do")
+                or ready.get("todo")
+                or ready.get("to_do")
+                or []
+            )
 
         successes = []
         errors = []
@@ -126,7 +136,7 @@ class JSONDocInjectorUploader(BaseUploader):
                 error_dict = {
                     "type": "upload failure",
                     "filename": filename,
-                    "destination": destination,
+                    "destination": str(destination),
                     "error": str(e),
                     "trace": traceback.format_exception(*sys.exc_info()),
                     "timestamp": datetime.now().timestamp()
@@ -139,6 +149,8 @@ class JSONDocInjectorUploader(BaseUploader):
                 successes.append({
                     "type": "upload success",
                     "filename": filename,
-                    "destination": destination,
+                    "destination": str(destination),
                     "timestamp": datetime.now().timestamp()
                 })
+
+        return {"success": successes, "failure": errors, "skipped": []}

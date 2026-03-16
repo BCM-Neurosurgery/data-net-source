@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from asyncio.staggered import staggered_race
 
 import pandas as pd
@@ -171,18 +172,17 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
     checker_name = "OuraOAuthWebhookChecker"
 
     # Optional settings for where to find data on the remote listener server
-    #
-    webhook_post_folder_name = 'webhook_posts'
+    webhook_post_folder_name = "webhook_posts"
     webhook_post_folder_path = None
 
-    participant_map_file_name = 'participant_map.json'
+    participant_map_file_name = "participant_map.json"
     participant_map_file_path = None
 
-    auth_token_file_name = 'oura_tokens.json'
+    auth_token_file_name = "oura_tokens.json"
     auth_token_file_path = None
 
     # Name of file in staging to keep track of the most recent event for each patient
-    event_track_datatype = 'webhook_times'
+    event_track_datatype = "webhook_times"
 
     stub_config = """
     [parser.init.source]
@@ -199,9 +199,47 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
     """
     source_location = toml.loads(stub_config)
 
+    def _json_safe(self, obj):
+        """Recursively convert Path-like objects into JSON-serializable types."""
+        if isinstance(obj, Path):
+            return str(obj)
+        if isinstance(obj, dict):
+            return {k: self._json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [self._json_safe(v) for v in obj]
+        return obj
+        
+    def _state_file_path(self) -> str:
+        """
+        Our framework sometimes treats state_path as a file path, sometimes as a directory.
+        If it's a directory, store upload state as <state_path>/upload_state.json
+        """
+        # If state_path ends with .json, assume it's a file path
+        if isinstance(self.state_path, str) and self.state_path.endswith(".json"):
+            return self.state_path
+        return os.path.join(self.state_path, "upload_state.json")
+
+    def _load_upload_state(self) -> None:
+        """
+        Ensure self.upload_state exists and self._upload_state_path points to the on-disk JSON.
+        """
+        p = self._state_file_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+
+        if os.path.exists(p):
+            try:
+                with open(p, "r") as f:
+                    self.upload_state = json.load(f)
+            except json.JSONDecodeError:
+                self.upload_state = {"success": [], "failure": [], "skipped": []}
+        else:
+            self.upload_state = {"success": [], "failure": [], "skipped": []}
+
+        self._upload_state_path = p
+
     @property
     def source_data_path(self):
-        return Path(self.source_location['listener_data'])
+        return Path(self.source_location["listener_data"])
 
     def build_remote_path(self, fullpath, ending):
         if fullpath:  # Prefer full explicit path if given
@@ -234,24 +272,46 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         try:
             mapped_id = user_map[user_id]
         except KeyError:
-            self.debug(f'User ID {user_id} not found in the participant map')
+            self.debug(f"User ID {user_id} not found in the participant map")
             raise KeyError("Could not find user!")  # Make sure user IDs are not sent via error logging
         else:
             self.debug(f"User ID: {user_id}, mapped participant: {mapped_id}")
         return mapped_id
 
     def iter_webhooks(self):
+        """
+        Generator yielding (remote_file_path, filename).
+
+        NOTE: Kept original structure, but now includes a fast look_back_duration cutoff
+        using lexicographic comparison of the filename timestamp.
+        """
+        # Fast cutoff string for filenames: "YYYY-MM-DDTHH-MM-SS"
+        start_cutoff = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(self.look_back_duration)).strftime(
+            "%Y-%m-%dT%H-%M-%S"
+        )
+
         user_dirs = self.sftp.listdir(self.webhook_post_path.as_posix())
         self.info(f"Users found in webhook dir:  {user_dirs}")
+
         for user in user_dirs:
             user_path = Path(self.webhook_post_path, user)
             modality_dirs = self.sftp.listdir(user_path.as_posix())
+
             for modality in modality_dirs:
                 modality_path = Path(user_path, modality)
-                webhooks_jsons = [f for f
-                                  in self.sftp.listdir(modality_path.as_posix())
-                                  if f.endswith(".json")]
+
+                webhooks_jsons = [f for f in self.sftp.listdir(modality_path.as_posix()) if f.endswith(".json")]
+
+                # NEW: sort newest-first so we can break early when we hit older-than-cutoff
+                webhooks_jsons = sorted(webhooks_jsons, reverse=True)
+
                 for filename in webhooks_jsons:
+                    # filename looks like: "2026-03-11T10-29-08.json"
+                    base = filename[:-5]  # strip ".json"
+                    if base < start_cutoff:
+                        # since sorted desc, everything else will be older too
+                        break
+
                     yield Path(modality_path, filename), filename
 
     def process_webhooks(self):
@@ -268,16 +328,20 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
                 payload = self._read_json_file(file_path.as_posix())
                 results = self._handle_payload(payload, tokens, filename)
             except Exception as e:
-                import sys, traceback
+                import traceback
+
                 self.warning(f"[ERROR] Failed on {file_path}: {str(e)}")
-                failures.append({
-                    "file": file_path,
-                    "error": str(e),
-                    "traceback": traceback.format_exc(),
-                    "timestamp": datetime.now().timestamp()
-                })
+                failures.append(
+                    {
+                        "file": file_path,
+                        "error": str(e),
+                        "traceback": traceback.format_exc(),
+                        "timestamp": datetime.now().timestamp(),
+                    }
+                )
             else:
                 to_process.extend(results)
+
         return to_process, failures
 
     def _handle_payload(self, payload, tokens, timestamp_clean):
@@ -301,37 +365,56 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         response.raise_for_status()
         data = response.json()
 
+        # --- required by JSONDocInjectorUploader ---
+        payload_out = data if isinstance(data, dict) else {"data": data}
+
+        payload_out["patient_id"] = participant_id
+        payload_out["doc_type"] = data_type
+        payload_out["document_id"] = object_id  # stable unique identifier
+        payload_out["event_time"] = event_time  # optional but useful
+
+        # choose a date for grouping (best effort)
+        payload_out["date"] = (
+            payload_out.get("day")
+            or payload_out.get("summary_date")
+            or (event_time[:10] if isinstance(event_time, str) and len(event_time) >= 10 else None)
+            or timestamp_clean[:10]  # from filename like YYYY-MM-DD...
+        )
+
         # Save the downloaded data in the local staging directory for further processing
         stage_dir = self.local_staging_path / participant_id / data_type
         stage_dir.mkdir(parents=True, exist_ok=True)
         staged_file = stage_dir / timestamp_clean
         with open(staged_file, "w") as f:
-            f.write(json.dumps(data, indent=2))
+            f.write(json.dumps(payload_out, indent=2))
 
         staged_files = [staged_file]
 
-        # Update the time of the most recent event for this patient in the event time tracker
-        patient_event_file = self.local_staging_path / participant_id / self.event_track_datatype / timestamp_clean
-        if os.path.exists(patient_event_file):
-            with open(patient_event_file, "r") as f:
-                existing_event_times = json.load(f)
-        else:
-            existing_event_times = {}
+        event_payload = {
+            "patient_id": participant_id,
+            "doc_type": self.event_track_datatype,   # "webhook_times"
+            "date": payload_out["date"],             # same day grouping
+            "document_id": timestamp_clean,          # unique per webhook file (good enough)
+            "data_type": data_type,
+            "object_id": object_id,
+            "event_time": event_time,
+            "event_type": payload.get("event_type"),
+            "user_id": user_id,
+        }
 
-        if data_type in existing_event_times:
-            existing_event_times[data_type] = existing_event_times[data_type] + event_time
-        else:
-            existing_event_times[data_type] = event_time
+        event_dir = self.local_staging_path / participant_id / self.event_track_datatype
+        event_dir.mkdir(parents=True, exist_ok=True)
+        event_file = event_dir / f"{timestamp_clean}.json"
+        with open(event_file, "w") as f:
+            json.dump(event_payload, f, indent=2)
 
-        # If an event time was updated make sure the event tracker file is appended to the list
-        with open(patient_event_file, "w") as f:
-            json.dump(existing_event_times, f, indent=2)
-            staged_files.append(patient_event_file)
-
+        staged_files = [staged_file.as_posix(), event_file.as_posix()]
         return staged_files
 
     # find new webhook posts that haven't been processed and query the api for the data
     def check(self):
+        # NEW: make sure upload_state exists for save()/clean()
+        self._load_upload_state()
 
         try:
             self.make_connection()
@@ -343,34 +426,48 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
 
         # Make sure to upload files are unique (since there could be multiple even tracker updates)
         to_process = list(set(to_process))
+        to_process = [str(p) for p in to_process]
 
-        self.info(f'Found data from new webhook events!')
-        self.info(f'Experienced {len(failures)} failures during data retrieval')
+        self.info("Found data from new webhook events!")
+        self.info(f"Experienced {len(failures)} failures during data retrieval")
         return {"to do": to_process, "failure": failures}
 
     def save(self, completed):
-        to_save = completed.get("success", [])
+        # Ensure upload_state exists even if save() is called without check()
+        if not hasattr(self, "upload_state"):
+            self._load_upload_state()
+
+        to_save = completed.get("success", []) or []
         if to_save:
-            self.info(f"[Save] to_save contents: {to_save[0]}")
+            self.info(f"[Save] to_save sample keys: {list(to_save[0].keys())}")
 
         self.info(f"[Save] Marking {len(to_save)} files as uploaded")
 
         for item in to_save:
-            self.upload_state["success"].append({
-                "key": item["key"],
-                "uploaded": item["uploaded"],
-                "timestamp": item["timestamp"]
-            })
+            # Robustly infer a "key" for bookkeeping if the pipeline didn't supply one
+            key = item.get("key") or item.get("destination") or item.get("filename")
 
-        # write once after all are added
-        with open(self.state_path, "w") as f:
-            json.dump(self.upload_state, f, indent=2)
+            uploaded = item.get("uploaded", True)
+            ts = item.get("timestamp", time.time())
+
+            # Store the raw item too (helps debugging / future schema changes)
+            record = {
+                "key": key,
+                "uploaded": uploaded,
+                "timestamp": ts,
+                "raw": item,
+            }
+            self.upload_state.setdefault("success", []).append(record)
+
+        with open(self._upload_state_path, "w") as f:
+            json.dump(self._json_safe(self.upload_state), f, indent=2)
 
     def clean(self):
         if not hasattr(self, "sftp"):
             self.make_connection()
-        with open(self.state_path, "r") as f:
-            self.upload_state = json.load(f)
+
+        # NEW: load upload_state from disk
+        self._load_upload_state()
 
         # clean outdated log entries
         cleaned_log = super().clean_outdated(self.upload_state)
@@ -379,7 +476,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         final_log = super().clean_old_success(cleaned_log)
 
         # save cleaned upload log
-        with open(self.state_path, "w") as f:
+        with open(self._upload_state_path, "w") as f:
             json.dump(final_log, f, indent=2)
 
 
@@ -514,7 +611,6 @@ class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
         self.close_connection()
         simple_tokens = {patient: data['access_token'] for patient, data in patient_tokens.items()}
         return simple_tokens
-
 
 class OuraOAuthStreamChecker(OuraOAuthBaseChecker, OuraAPIStreamChecker):
     """
