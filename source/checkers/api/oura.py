@@ -18,34 +18,6 @@ from source.checkers.api.base import BaseAPIChecker
 from source.checkers.base import BaseChecker
 
 
-class OuraOAuthBaseChecker(BaseChecker, ABC):
-
-    oura_api_url = "https://api.ouraring.com/v2/usercollection"
-
-    def make_connection(self):
-        self.info("Connecting to remote SSH...")
-        ssh_config = self.source_location.get("ssh_config")
-        self.sftp = None
-
-        # Set up the ssh client
-        if ssh_config is not None:
-            self.ssh = SSHClient()
-            self.ssh.load_system_host_keys()
-            self.ssh.connect(hostname=ssh_config["hostname"],
-                             username=ssh_config["username"],
-                             key_filename=ssh_config["key_filename"])
-            self.sftp = self.ssh.open_sftp()
-
-    def close_connection(self):
-        self.sftp.close()
-        self.ssh.close()
-
-    def _read_json_file(self, path):
-        """Read in the contents of a json file remotely via SSH/SFTP"""
-        with self.sftp.open(path, "r") as f:
-            return json.load(f)
-
-
 class OuraAPIBaseChecker(BaseAPIChecker, ABC):
 
     api_url = 'https://api.ouraring.com/v2/usercollection'
@@ -65,11 +37,15 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
     _time_parameter_name = None
 
     def format_today(self):
-        """Ensure that the variable for today is saved as a pd.Timestamp, setting to current system date otherwise"""
         if self.today is None:
-            self.today = pd.Timestamp.today()
+            self.today = pd.Timestamp.now(tz="UTC").normalize()
         else:
             self.today = pd.Timestamp(self.today)
+            if self.today.tzinfo is None:
+                self.today = self.today.tz_localize("UTC")
+            else:
+                self.today = self.today.tz_convert("UTC")
+            self.today = self.today.normalize()
 
     @abstractmethod
     def fetch_collection_data(self, collection, headers):
@@ -161,6 +137,34 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
 
     def clean(self):
         pass
+
+
+class OuraOAuthBaseChecker(BaseChecker, ABC):
+
+    oura_api_url = "https://api.ouraring.com/v2/usercollection"
+
+    def make_connection(self):
+        self.info("Connecting to remote SSH...")
+        ssh_config = self.source_location.get("ssh_config")
+        self.sftp = None
+
+        # Set up the ssh client
+        if ssh_config is not None:
+            self.ssh = SSHClient()
+            self.ssh.load_system_host_keys()
+            self.ssh.connect(hostname=ssh_config["hostname"],
+                             username=ssh_config["username"],
+                             key_filename=ssh_config["key_filename"])
+            self.sftp = self.ssh.open_sftp()
+
+    def close_connection(self):
+        self.sftp.close()
+        self.ssh.close()
+
+    def _read_json_file(self, path):
+        """Read in the contents of a json file remotely via SSH/SFTP"""
+        with self.sftp.open(path, "r") as f:
+            return json.load(f)
 
 
 class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
@@ -524,7 +528,7 @@ class OuraAPIDocumentChecker(OuraAPIBaseChecker):
 
         if response.status_code != 200:
             # Per Oura ring docs any response code besides 200 should be an error
-            self.error(f'Oura returned an error code ({response.status_code})')
+            self.error(f'Oura returned an error code ({response.status_code}): {response.text}')
             return {}
 
         return response.json()['data']
@@ -538,47 +542,90 @@ class OuraAPIStreamChecker(OuraAPIBaseChecker):
     Only compatible with legacy (pre-OAuth2) versions od the Oura API
     """
     checker_name = "OuraAPIDocumentChecker"
-    _time_parameter_name = 'datetime'
+    _time_parameter_name = "datetime"
 
     def fetch_collection_data(self, collection, headers):
         """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f'{self.api_url}/{collection}'
-        time_fmt = '%Y-%m-%dT00:00:00'
+        collection_url = f"{self.api_url}/{collection}"
+        time_fmt = "%Y-%m-%dT%H:%M:%SZ"
 
         start_date = self.today - pd.Timedelta(self.look_back_duration)
-        days = pd.date_range(start=start_date, end=self.today, freq='D')
+        end_date = self.today + pd.Timedelta(days=1)  # include all of today
 
-        all_data = []
+        chunk_days = 28
 
-        day_intervals = zip(days[:-1], days[1:])
-        # Get all documents for this collection between now and the look back duration
-        for day, next_day in day_intervals:
-            # TODO: how do we need to treat timezones???
+        all_points = []
+
+        # iterate in 28-day chunks instead of by day: [chunk_start, chunk_end)
+        chunk_start = start_date
+        while chunk_start < end_date:
+            chunk_end = min(chunk_start + pd.Timedelta(days=chunk_days), end_date)
+            chunk_start.tz_convert("UTC")
+            chunk_end.tz_convert("UTC")
+
             params = {
-                f'start_{self._time_parameter_name}': day.strftime(time_fmt),
-                f'end_{self._time_parameter_name}': next_day.strftime(time_fmt),
+                f"start_{self._time_parameter_name}": chunk_start.strftime(time_fmt),
+                f"end_{self._time_parameter_name}": chunk_end.strftime(time_fmt),
             }
-            response = requests.request(
-                'GET', collection_url, headers=headers, params=params
-            )
+
+            response = requests.request("GET", collection_url, headers=headers, params=params)
 
             if response.status_code != 200:
-                # Per Oura ring docs any response code besides 200 should be an error
-                self.error(f'Oura returned an error {response.status_code} for {collection} when fetching {day}')
-            elif not response.json()['data']:
-                self.error(f'Oura returned an empty dataset')
-            else:
-                day_str = day.strftime('%Y-%m-%d')
-                stream_data = response.json()['data']
-                day_data = {
-                    'day': day_str,
-                    'id': f'{day_str}:n-points:{len(stream_data)}',
-                    'data': stream_data
-                }
-                all_data.append(day_data)
+                self.error(
+                    f"Oura returned an error {response.status_code} for {collection} "
+                    f"for interval {chunk_start.date()} -> {chunk_end.date()}: {response.text}"
+                )
+                # choose behavior: either continue to next chunk or bail out
+                # continuing is usually safer so you still get partial data
+                chunk_start = chunk_end
+                continue
 
+            payload = response.json()
+            points = payload.get("data", [])
+            # self.debug(f"{collection} {chunk_start} -> {chunk_end}: {len(points)} points, payload keys={list(payload.keys())}")
+            if not points:
+                # not necessarily an error; often just no data in that interval
+                chunk_start = chunk_end
+                continue
+
+            all_points.extend(points)
+            chunk_start = chunk_end
+
+        if not all_points:
+            self.error("Oura returned an empty dataset across all chunks")
+            return []
+
+        # Group by date extracted from each datapoint timestamp
+        ts_key = "timestamp"
+        by_day = {}
+
+        for pt in all_points:
+            ts_val = pt.get(ts_key)
+            if not ts_val:
+                continue
+
+            ts = pd.to_datetime(ts_val, utc=True, errors="coerce")
+            if pd.isna(ts):
+                continue
+
+            day_str = ts.strftime("%Y-%m-%d")
+            by_day.setdefault(day_str, []).append(pt)
+
+        # Build day-shaped docs
+        all_data = []
+        for day_str in sorted(by_day.keys()):
+            pts = by_day[day_str]
+            all_data.append(
+                {
+                    "day": day_str,
+                    "id": f"{day_str}:n-points:{len(pts)}",
+                    "data": pts,
+                }
+            )
+        self.log(f"all data len {len(all_data)}")
         return all_data
-    
+
+
 class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
     """
     Checker designed to periodically fetch data from Oura API, using OAuth tokens which are continuously refreshed
@@ -611,6 +658,7 @@ class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
         self.close_connection()
         simple_tokens = {patient: data['access_token'] for patient, data in patient_tokens.items()}
         return simple_tokens
+
 
 class OuraOAuthStreamChecker(OuraOAuthBaseChecker, OuraAPIStreamChecker):
     """
@@ -646,3 +694,72 @@ class OuraOAuthStreamChecker(OuraOAuthBaseChecker, OuraAPIStreamChecker):
         self.close_connection()
         simple_tokens = {patient: data['access_token'] for patient, data in patient_tokens.items()}
         return simple_tokens
+
+
+
+class OuraOAuthAllChecker(OuraOAuthBaseChecker, OuraAPIBaseChecker):
+    """
+    Unified OAuth checker:
+      - uses OAuth tokens (like OuraOAuthDocumentChecker / OuraOAuthStreamChecker)
+      - uses stream logic for heartrate
+      - uses document logic for everything else
+    """
+    checker_name = "OuraOAuthAllChecker"
+
+    # Which collections should use stream logic
+    stream_collections = {"heartrate"}
+
+    # Reuse the existing implementations without modifying them
+    _doc_impl = OuraAPIDocumentChecker()
+    _stream_impl = OuraAPIStreamChecker()
+
+    stub_config = """
+    [parser.init.source]
+    auth_token_file_path = ''
+    path = ''
+    collections = []
+
+      [parser.init.source.ssh_config]
+      hostname = 'path.to.remote'
+      username = 'your-username'
+      key_filename = '/path/to/key'
+    """
+    source_location = toml.loads(stub_config)["parser"]["init"]["source"]
+
+    @property
+    def patients(self):
+        """Fetch active patient list and most current tokens from the OAuth service"""
+        self.make_connection()
+        patient_tokens = self._read_json_file(self.source_location["auth_token_file_path"])
+        self.close_connection()
+        return {patient: data["access_token"] for patient, data in patient_tokens.items()}
+
+    def fetch_collection_data(self, collection, headers):
+        """
+        Dispatch to existing fetch logic depending on collection.
+        """
+        # Make sure the reused impl objects see the same runtime state/settings
+        self._sync_impl(self._doc_impl)
+        self._sync_impl(self._stream_impl)
+
+        if collection in self.stream_collections:
+            return self._stream_impl.fetch_collection_data(collection, headers)
+        else:
+            return self._doc_impl.fetch_collection_data(collection, headers)
+
+    def _sync_impl(self, impl):
+        """
+        Copy the minimum state that the legacy fetchers expect.
+        This avoids editing the original classes.
+        """
+        impl.api_url = self.api_url
+        impl.today = self.today
+        impl.look_back_duration = self.look_back_duration
+        impl.state_path = self.state_path
+        impl.source_location = self.source_location
+        # If your framework logger methods are instance methods on BaseChecker:
+        impl.debug = self.debug
+        impl.info = self.info
+        impl.error = self.error
+        # impl.notify = self.notify
+        impl.log = getattr(self, "log", self.info)
