@@ -597,31 +597,36 @@ class OuraAPIStreamChecker(OuraAPIBaseChecker):
 
         # Group by date extracted from each datapoint timestamp
         ts_key = "timestamp"
+
+        # 1) Pull timestamps once (same filtering behavior: missing -> skip)
+        pts = [pt for pt in all_points if pt.get(ts_key)]
+        ts_vals = [pt[ts_key] for pt in pts]
+
+        # 2) Vectorized parse (WAY faster than per-row)
+        ts = pd.to_datetime(ts_vals, utc=True, errors="coerce")
+
+        # 3) Drop NaT (same behavior as your pd.isna(ts) continue)
+        mask = ts.notna()
+        pts = [p for p, ok in zip(pts, mask) if ok]
+        ts = ts[mask]
+
+        # 4) Day strings in one shot (also faster than per-row strftime)
+        day_strs = ts.strftime("%Y-%m-%d")
+
         by_day = {}
-
-        for pt in all_points:
-            ts_val = pt.get(ts_key)
-            if not ts_val:
-                continue
-
-            ts = pd.to_datetime(ts_val, utc=True, errors="coerce")
-            if pd.isna(ts):
-                continue
-
-            day_str = ts.strftime("%Y-%m-%d")
+        for pt, day_str in zip(pts, day_strs):
             by_day.setdefault(day_str, []).append(pt)
 
         # Build day-shaped docs
         all_data = []
         for day_str in sorted(by_day.keys()):
-            pts = by_day[day_str]
-            all_data.append(
-                {
-                    "day": day_str,
-                    "id": f"{day_str}:n-points:{len(pts)}",
-                    "data": pts,
-                }
-            )
+            pts_for_day = by_day[day_str]
+            all_data.append({
+                "day": day_str,
+                "id": f"{day_str}:n-points:{len(pts_for_day)}",
+                "data": pts_for_day,
+            })
+
         self.log(f"all data len {len(all_data)}")
         return all_data
 
