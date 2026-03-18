@@ -49,6 +49,12 @@ class MySQLContainerCheckerMixin(FileCheckerMixin):
             filepaths = [filepath.replace(self.container_path, self.actual_path) for filepath in data['filepaths']]
             return {'to do': filepaths, 'failure': []}
         elif not res.ok:
-            return {'to do': [], 'failure': [data]},
+            return {'to do': [], 'failure': [{
+                'filename': "UNKNOWN", 
+                'type': data['detail'], 
+                }]}
         else:
-            return {'to do': [], 'failure': [{'detail': 'unknown error occured'}]}
+            return {'to do': [], 'failure': [{
+                'filename': "UNKNOWN",
+                'type': 'unknown server error'
+                }]}
