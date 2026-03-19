@@ -51,11 +51,11 @@ def load_parser(parser_config: dict) -> ParserCommon:
 
 
 if __name__ == '__main__':
-    arg_parser = argparse.ArgumentParser()
+    arg_parser = argparse.ArgumentParser(
+        description="Run a data-net-source parser in batch checker mode."
+    )
     arg_parser.add_argument('config_file', type=str,
-                            help='Path to the config file that specifies the parser to run')
-    arg_parser.add_argument('--mode', choices=['checker', 'listen'], required=True,
-                            help='Execution mode: checker (batch processing) or listen (continuous monitoring)')
+                            help='Path to the .toml config file that specifies the parser to run')
     args = arg_parser.parse_args()
 
     config = load_config(args.config_file)
@@ -63,26 +63,14 @@ if __name__ == '__main__':
     if 'logging' in config:
         parser.make_loggers(config['logging'])
 
-    # Execute in the specified mode
-    if args.mode == 'listen':
-        try:
-            parser.listen()
-        except AttributeError:
-            parser.error(
-                f"Parser '{parser.__class__.__name__}' does not support listen mode. "
-                f"Ensure your config uses listener mixins, not checker mixins."
-            )
-        except Exception as e:
-            parser.error(f"Listen mode failed: {e}", exc_info=True)
-    else:
-        # Checker mode
-        try:
-            parser.process()
-        except AttributeError as e:
-            parser.error(
-                f"Parser '{parser.__class__.__name__}' does not support checker mode. "
-                f"This config appears to use listener mixins instead of checker mixins. "
-                f"Try using --mode listen instead."
-            )
-        except Exception as e:
-            parser.error(f"Checker mode failed: {e}", exc_info=True)
+    # Checker mode (batch processing)
+    try:
+        parser.process()
+    except AttributeError as e:
+        parser.error(
+            f"Parser '{parser.__class__.__name__}' does not support checker mode. "
+            f"This config appears to use listener mixins instead of checker mixins. "
+            f"Try using 'python listen.py {args.config_file}' for continuous listener mode."
+        )
+    except Exception as e:
+        parser.error(f"Checker mode failed: {e}", exc_info=True)
