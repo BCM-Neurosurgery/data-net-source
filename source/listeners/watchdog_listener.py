@@ -91,9 +91,9 @@ class WatchdogListenerMixin(BaseListener):
                 event['timestamp'] = now
 
         current_state = self.load_state()
-        for key in ['success', 'failure', 'skipped']:
-            if key in completed and completed[key]:
-                current_state[key].extend(completed[key])
+        for key, events in completed.items():
+            if events:
+                current_state[key].extend(events)
         self.write_state(current_state)
 
     def clean(self):
