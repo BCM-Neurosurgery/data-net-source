@@ -212,34 +212,6 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         if isinstance(obj, (list, tuple)):
             return [self._json_safe(v) for v in obj]
         return obj
-        
-    def _state_file_path(self) -> str:
-        """
-        Our framework sometimes treats state_path as a file path, sometimes as a directory.
-        If it's a directory, store upload state as <state_path>/upload_state.json
-        """
-        # If state_path ends with .json, assume it's a file path
-        if isinstance(self.state_path, str) and self.state_path.endswith(".json"):
-            return self.state_path
-        return os.path.join(self.state_path, "upload_state.json")
-
-    def _load_upload_state(self) -> None:
-        """
-        Ensure self.upload_state exists and self._upload_state_path points to the on-disk JSON.
-        """
-        p = self._state_file_path()
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-
-        if os.path.exists(p):
-            try:
-                with open(p, "r") as f:
-                    self.upload_state = json.load(f)
-            except json.JSONDecodeError:
-                self.upload_state = {"success": [], "failure": [], "skipped": []}
-        else:
-            self.upload_state = {"success": [], "failure": [], "skipped": []}
-
-        self._upload_state_path = p
 
     @property
     def source_data_path(self):
@@ -392,8 +364,6 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         with open(staged_file, "w") as f:
             f.write(json.dumps(payload_out, indent=2))
 
-        staged_files = [staged_file]
-
         event_payload = {
             "patient_id": participant_id,
             "doc_type": self.event_track_datatype,   # "webhook_times"
@@ -418,7 +388,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
     # find new webhook posts that haven't been processed and query the api for the data
     def check(self):
         # NEW: make sure upload_state exists for save()/clean()
-        self._load_upload_state()
+        self.upload_state = self.load_state()
 
         try:
             self.make_connection()
@@ -437,41 +407,35 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         return {"to do": to_process, "failure": failures}
 
     def save(self, completed):
-        # Ensure upload_state exists even if save() is called without check()
         if not hasattr(self, "upload_state"):
-            self._load_upload_state()
+            self.upload_state = self.load_state()
 
-        to_save = completed.get("success", []) or []
-        if to_save:
-            self.info(f"[Save] to_save sample keys: {list(to_save[0].keys())}")
+        successes = completed.get("success", []) or []
+        failures = completed.get("failure", []) or []
 
-        self.info(f"[Save] Marking {len(to_save)} files as uploaded")
+        self.info(f"[Save] Marking {len(successes)} files as uploaded")
+        self.info(f"[Save] Recording {len(failures)} failures")
+        for item in successes:
 
-        for item in to_save:
-            # Robustly infer a "key" for bookkeeping if the pipeline didn't supply one
-            key = item.get("key") or item.get("destination") or item.get("filename")
-
-            uploaded = item.get("uploaded", True)
+            uploaded = item["filename"]
             ts = item.get("timestamp", time.time())
 
-            # Store the raw item too (helps debugging / future schema changes)
             record = {
-                "key": key,
                 "uploaded": uploaded,
                 "timestamp": ts,
-                "raw": item,
             }
             self.upload_state.setdefault("success", []).append(record)
 
-        with open(self._upload_state_path, "w") as f:
-            json.dump(self._json_safe(self.upload_state), f, indent=2)
+        self.upload_state.setdefault("failure", []).extend(failures)
+
+        self.write_state(self.upload_state)
 
     def clean(self):
         if not hasattr(self, "sftp"):
             self.make_connection()
 
         # NEW: load upload_state from disk
-        self._load_upload_state()
+        self.upload_state = self.load_state()
 
         # clean outdated log entries
         cleaned_log = super().clean_outdated(self.upload_state)
@@ -480,8 +444,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         final_log = super().clean_old_success(cleaned_log)
 
         # save cleaned upload log
-        with open(self._upload_state_path, "w") as f:
-            json.dump(final_log, f, indent=2)
+        self.write_state(final_log)
 
 
 class OuraAPIDocumentChecker(OuraAPIBaseChecker):
@@ -715,8 +678,8 @@ class OuraOAuthAllChecker(OuraOAuthBaseChecker, OuraAPIBaseChecker):
     stream_collections = {"heartrate"}
 
     # Reuse the existing implementations without modifying them
-    _doc_impl = OuraAPIDocumentChecker()
-    _stream_impl = OuraAPIStreamChecker()
+    _doc_impl = OuraOAuthDocumentChecker()
+    _stream_impl = OuraOAuthStreamChecker()
 
     stub_config = """
     [parser.init.source]
