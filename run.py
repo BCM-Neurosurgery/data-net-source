@@ -12,6 +12,7 @@ from os import PathLike
 
 
 def load_config(config_fp: Union[str, PathLike]) -> dict:
+
     with open(config_fp, 'r') as f:
         toml_config = toml.load(f)
     return toml_config
@@ -106,7 +107,9 @@ def apply_overrides(config: dict, overrides: List[str], allow_overwrite: bool = 
 
 
 if __name__ == '__main__':
-    arg_parser = argparse.ArgumentParser()
+    arg_parser = argparse.ArgumentParser(
+        description="Run a data-net-source parser in batch checker mode."
+    )
     arg_parser.add_argument('config_file', type=str,
                             help='Path to the config file that specifies the parser to run')
     arg_parser.add_argument(
@@ -138,4 +141,14 @@ if __name__ == '__main__':
     if 'logging' in config:
         parser.make_loggers(config['logging'])
 
-    parser.process()
+    # Checker mode (batch processing)
+    try:
+        parser.process()
+    except AttributeError as e:
+        parser.error(
+            f"Parser '{parser.__class__.__name__}' does not support checker mode. "
+            f"This config appears to use listener mixins instead of checker mixins. "
+            f"Try using 'python listen.py {args.config_file}' for continuous listener mode."
+        )
+    except Exception as e:
+        parser.error(f"Checker mode failed: {e}", exc_info=True)

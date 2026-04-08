@@ -1,4 +1,4 @@
-# source/uploaders/s3.py
+# source/uploaders/local_to_s3.py
 
 import boto3
 import os

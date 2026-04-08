@@ -1,0 +1,62 @@
+# =======================================================
+# Config for the Watchdog Listener
+# =======================================================
+
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "LocalToS3BatchListener"
+parts = [
+  ["listeners.watchdog_listener", "WatchdogListenerMixin"],
+  ["uploaders.local_to_s3", "S3UploaderMixin"]
+]
+
+
+[parser.init]
+# The directory where the state file ('upload_state.json') will be stored.
+state_path = "path/to/state/file"
+
+[parser.init.source]
+# The local directory that the listener will monitor for new files.
+path = "path/to/local/dir"
+#File name patterns to include/exclude.
+include_patterns = [".*\\.csv$", ".*\\.txt$"]
+exclude_patterns = [".*\\.tmp$", "^.*/\\~\\$.*"]
+#Batch configuration
+# Trigger the pipeline after 5 files have accumulated...
+batch_max_size = 5
+# ...or after 60 seconds have passed since the first file arrived,
+# whichever comes first.
+batch_max_latency_seconds = 60
+
+[parser.init.target]
+# Settings for the S3 uploader.
+bucket = "bucket-name" # Your S3 bucket name
+prefix = "raw_data/"
+# Set to 'true' to upload files that have been modified.
+allow-overwrite = true
+
+
+
+# Enable logging to a local file using the python's built-in logging.
+[logging.file]
+filepath = "path/to/log/file.txt"
+level = 0             # level of events to include in this logger
+max_size = 21048576   # Max size, in bytes, of a log file before it is rotated out
+max_files = 5         # Max number of files to keep before deleting the oldest
+
+# Enable logging to Sentry using the Sentry SDK API
+# [logging.sentry]
+# dsn = "placeholder"
+# level = 10
+# event_level = 30
+
+[dependencies]
+# Required dependencies for this specific parser configuration.
+# The `prepare.py` script will install these.
+pip = [
+  "boto3",
+  "watchdog"
+]
+
