@@ -53,7 +53,7 @@ def match_event(event, after=0, before=float('inf'), upload_match=None):
     """Check if an event matches all the given conditions"""
     in_time = after < event['timestamp'] < before
     if upload_match:
-        upload = bool(re.match(upload_match, event['uploaded']))
+        upload = bool(re.search(upload_match, event['uploaded']))
     else:
         upload = True
 

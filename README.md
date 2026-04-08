@@ -28,7 +28,6 @@ any format of data collection, with a particular emphasis on the research enviro
       - [Optional Settings](#settings)
     - [Logging](#logging)
     - [Dependencies](#dependencies)
-  - [AWS Credentials Setup](#aws-credentials-setup)
 
 # Quick Start
 
@@ -118,7 +117,7 @@ parser must also inherit from the respective mixin, as detailed below.
 Implementation details are available on the base class for each mixin family.
 
 ## Checkers
-A CheckerMixin, is responsible for providing the check() and save() methods.
+A CheckerMixin, is responsible for providing the check(), save(), and clen() methods.
 This method is responsible for interrogating the data source to find new data, by comparing
 against the upload_state. These are then returned to the SourceParser as a list
 of file paths, each of which indicates a data file to be processed and uploaded.
@@ -128,8 +127,29 @@ save() method the list of all files that were successfully uploaded, as well as 
 which processing failed at some point in the pipeline, along with the appropriate metadate. 
 These should then be saved in the state file.
 
-When writing a custom Checker, you must inherit from `source.checkers.base.BaseChecker`.
-You can then implement a customized check() method and optionally a save() method.
+### Checker subclasses
+There are several base classes for checkers which should be used to help enforce predictable behavior
+- `FileCheckerMixin`: (in `source.checkers.local`) checker for working with a generic filesystem, which provides some neat
+    filtering behavior using regex 
+- `StreamedFileChecker`: (in ) subtype of file checker that provides filtering by file last modified
+- `IndicatorFileChecker`: (in ) subtype of file checker that provides dynamic filtering by sub-directories
+- `BaseAPIChecker`: (in ) base class for 
+
+### The State File
+The state file should be used by the checker to keep track of which data has already 
+been processed, where errors occurred, and what data should be processed again. It is a json file with 
+a collection of entries organized by state.
+
+There are three kinds of states that should be supported:
+  - `success`: Entries that were downloaded, processed, and uploaded correctly
+  - `failure`: Entries that encountered an error somewhere in the processing or upload
+  - `skipped`: Entries that were processed nominally, but were not uploaded as the file already existed in the remote endpoint
+Of there three states, failure entries will be re-tried at every run.
+
+Each entry can have nearly any form, as is required by the checker to identify the data it relates two, however, all 
+entries have a few required elements:
+    - `timestamp`: The Unix UTC timestamp at which this event occurred
+Moreover, error type events, should include the error trace to aid in debugging
 
 ## Transformers
 TransformerMixins are responsible for providing the transform() method. 
@@ -303,100 +323,3 @@ For example:
 }
 ```
 This will install the newest version of numpy, version 1.0.3 of scipy, and the brpylib package directly from github
-
-# AWS Credentials Setup
-`[aws-credentials-setup]`
-
-To allow this application to interact with your AWS S3 buckets, you must configure your local machine with AWS credentials. This is a one-time setup required on each computer that will run the parser.
-
-The parser uses the standard AWS SDK, which automatically searches for credentials. The two most common methods for providing them are detailed below.
-
-### Method 1:  AWS Credentials File
-
-This method uses dedicated files in your home directory to store credentials securely, separate from your project code.
-
-#### 1. Create the .aws Directory
-   
-First, create a folder named .aws in your user's home directory.
-
-- `Windows:`
-  Open File Explorer and navigate to C:\Users\YourUserName\. Create a new folder named exactly .aws. The final path will be C:\Users\YourUserName\.aws\
-  
-- `Linux:`
-  Open a terminal and run the command: mkdir ~/.aws
-
-#### 2. Create the credentials and config Files
-
-Inside the .aws folder, create two new plain text files: credentials and config (with no file extensions).
-
-- In the credentials file, add your access keys:
-```bash
-[default]
-aws_access_key_id = YOUR_ACCESS_KEY_ID_HERE
-aws_secret_access_key = YOUR_SECRET_ACCESS_KEY_HERE
-```
-
-- In the config file, set your default AWS region:
-```bash
-[default]
-region = us-east-1
-```
-`Note:` Replace us-east-1 with the actual region of your S3 bucket (e.g., us-west-2, ap-south-1, etc.).
-
-### Method 2: Environment Variables
-
-For automated environments like servers or CI/CD pipelines, using environment variables is a common alternative. These variables will override the [default] profile in the credentials file.
-
-- Windows(in PowerShell):
-```bash
-$Env:AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_ID_HERE"
-$Env:AWS_SECRET_ACCESS_KEY="YOUR_SECRET_ACCESS_KEY_HERE"
-$Env:AWS_DEFAULT_REGION="us-east-1"
-```
-
-- Linux and macOS (in bash/zsh):
-```bash
-export AWS_ACCESS_KEY_ID="YOUR_ACCESS_KEY_ID_HERE"
-export AWS_SECRET_ACCESS_KEY="YOUR_SECRET_ACCESS_KEY_HERE"
-export AWS_DEFAULT_REGION="us-east-1"
-```
-
-#### Working with Multiple AWS Accounts (Named Profiles)
-
-For users who need to interact with multiple AWS accounts, you can configure "named profiles" in your credentials and config files.
-
-For example, to add a profile named development:
-- In your credentials file:
-  ```bash
-  [default]
-  aws_access_key_id = ...
-  aws_secret_access_key = ...
-
-  [development]
-  aws_access_key_id = YOUR_DEV_ACCOUNT_KEY_ID
-  aws_secret_access_key = YOUR_DEV_ACCOUNT_SECRET_KEY
-  ```
-
-- In your config file:
-```bash
-[default]
-region = us-east-1
-
-[profile development]
-region = us-west-2
-```
-(Notice the profile prefix for named profiles in the config file.)
-
-To use a named profile, set the AWS_PROFILE envionment variable in your terminal:
-- Windows (in PowerShell):
-```bash
-$Env:AWS_PROFILE="development"
-```
-
-- Linux and macOS (in bash/zsh):
-```bash
-export AWS_PROFILE="development"
-```
-The application will now use the credentials associated with the development profile.
-
-Once your credentials have been configured using one of these methods, the application will be able to securely authenticate and connect to your S3 buckets using the appropriate account.

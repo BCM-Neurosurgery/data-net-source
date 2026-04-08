@@ -4,4 +4,5 @@
 __pycache__/
 requirements.txt
 env/
-configs/watchdog_listener_config.py
+.vscode/
+logs/
