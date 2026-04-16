@@ -550,7 +550,7 @@ if __name__ == '__main__':
     if args.levels:
         filter_kwargs['level_filter'] = args.levels
     
-    commands_with_pager = {'logs', 'search', 'run-details', 'file-history'}
+    commands_with_pager = {'logs', 'search', 'tail', 'run-details', 'file-history'}
     pager_mode = args.pager
     if args.command not in commands_with_pager or args.count:
         pager_mode = 'off'
