@@ -8,6 +8,7 @@ import requests
 
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import toml
 from paramiko import SSHClient 
@@ -324,7 +325,8 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         data_type = payload["data_type"]
         user_id = payload["user_id"]
         object_id = payload["object_id"]
-        event_time = payload["event_time"]
+        event_time_utc = pd.Timestamp(payload["event_time"], tz="UTC")
+        event_time_local = event_time_utc.tz_convert(ZoneInfo("America/Chicago")).isoformat()
         timestamp_base = Path(timestamp_clean).stem
 
         # TODO: need to correctly mark successful uploads only here
@@ -348,13 +350,13 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
         payload_out["patient_id"] = participant_id
         payload_out["doc_type"] = data_type
         payload_out["document_id"] = object_id  # stable unique identifier
-        payload_out["event_time"] = event_time  # optional but useful
+        payload_out["event_time"] = event_time_local  # optional but useful
 
         # choose a date for grouping (best effort)
         payload_out["date"] = (
             payload_out.get("day")
             or payload_out.get("summary_date")
-            or (event_time[:10] if isinstance(event_time, str) and len(event_time) >= 10 else None)
+            or (event_time_local[:10] if isinstance(event_time_local, str) and len(event_time_local) >= 10 else None)
             or timestamp_clean[:10]  # from filename like YYYY-MM-DD...
         )
 
@@ -372,7 +374,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
             "document_id": timestamp_base,          # unique per webhook file (good enough)
             "data_type": data_type,
             "object_id": object_id,
-            "event_time": event_time,
+            "event_time": event_time_local,
             "event_type": payload.get("event_type"),
             "user_id": user_id,
         }
