@@ -349,7 +349,6 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
 
         payload_out["patient_id"] = participant_id
         payload_out["doc_type"] = data_type
-        payload_out["document_id"] = object_id  # stable unique identifier
         payload_out["event_time"] = event_time_local  # optional but useful
 
         # choose a date for grouping (best effort)
@@ -371,7 +370,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
             "patient_id": participant_id,
             "doc_type": self.event_track_datatype,   # "webhook_times"
             "date": payload_out["date"],             # same day grouping
-            "document_id": timestamp_base,          # unique per webhook file (good enough)
+            "id": f"{object_id}_{event_time_local}",          # unique per webhook file (good enough)
             "data_type": data_type,
             "object_id": object_id,
             "event_time": event_time_local,
