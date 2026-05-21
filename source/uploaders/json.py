@@ -88,7 +88,7 @@ class JSONDocInjectorUploader(BaseUploader):
         # Determine if this payload needs to be appended or replace an existing payload
         placement_loc = None
         for idx, doc in enumerate(contents):
-            this_id = doc[self.target_location['doc_id_key']]
+            this_id = doc.get(self.target_location['doc_id_key'])
             if payload_id == this_id:
                 placement_loc = idx
                 break
