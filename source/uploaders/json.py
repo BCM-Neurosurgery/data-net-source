@@ -89,9 +89,6 @@ class JSONDocInjectorUploader(BaseUploader):
         placement_loc = None
         for idx, doc in enumerate(contents):
             this_id = doc.get(self.target_location['doc_id_key'])
-            if this_id is None:
-                self.warning(f"Skipping existing record without {self.target_location['doc_id_key']} in {target_file}")
-                continue
             if payload_id == this_id:
                 placement_loc = idx
                 break
