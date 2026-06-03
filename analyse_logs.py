@@ -12,6 +12,10 @@ Currently implemented sub-commands:
 import argparse
 import os.path
 import re
+import shutil
+import subprocess
+import sys
+from contextlib import contextmanager
 from datetime import datetime
 from collections import defaultdict, Counter
 from run import load_config
@@ -145,6 +149,52 @@ def iter_logs(config, log_files=None, after=None, before=None, level_filter=None
             yield entry
 
 
+def _resolve_pager_command(pager_mode):
+    """Resolve pager command based on mode and terminal context."""
+    if pager_mode == 'off':
+        return None
+
+    if shutil.which('less'):
+        return ['less', '-R']
+
+    return None
+
+
+@contextmanager
+def maybe_page_stdout(pager_mode='less'):
+    """Route stdout to a pager process when configured and available."""
+    pager_cmd = _resolve_pager_command(pager_mode)
+    if not pager_cmd:
+        if pager_mode == 'less':
+            print(f'Warning: Requested pager "{pager_mode}" is not available; writing directly to stdout.', file=sys.stderr)
+        yield
+        return
+
+    pager_process = subprocess.Popen(
+        pager_cmd,
+        stdin=subprocess.PIPE,
+        text=True,
+        encoding='utf-8',
+        errors='replace'
+    )
+    original_stdout = sys.stdout
+
+    try:
+        sys.stdout = pager_process.stdin
+        yield
+    except BrokenPipeError:
+        # User quit the pager early.
+        pass
+    finally:
+        sys.stdout = original_stdout
+        if pager_process.stdin and not pager_process.stdin.closed:
+            try:
+                pager_process.stdin.close()
+            except BrokenPipeError:
+                pass
+        pager_process.wait()
+
+
 def logs(config, brief=False, show_count=False, **kwargs):
     """Display log entries (filtered by --levels if specified)"""
     # Require at least one filter to prevent displaying massive logs (unless just counting)
@@ -175,22 +225,17 @@ def logs(config, brief=False, show_count=False, **kwargs):
                 print(f'  {level:10s}: {level_counts[level]:6d}')
         return
     
-    # Otherwise show full log entries
-    log_entries = list(iter_logs(config, **kwargs))
-    
-    if not log_entries:
-        print('No log entries found matching the given criteria.')
-        return
-    
-    # Show what we're displaying
+    # Stream full log entries to avoid loading huge logs into memory
     levels = kwargs.get('level_filter')
     if levels:
         level_str = ', '.join(levels)
-        print(f'Found {len(log_entries)} log entries with levels: {level_str}\n')
+        print(f'Streaming log entries with levels: {level_str}\n')
     else:
-        print(f'Found {len(log_entries)} log entries:\n')
-    
-    for i, entry in enumerate(log_entries, 1):
+        print('Streaming log entries:\n')
+
+    total = 0
+    for i, entry in enumerate(iter_logs(config, **kwargs), 1):
+        total = i
         print(f'--- Entry #{i} [{entry.timestamp} {entry.level}] ---')
         if brief:
             # Just show first line
@@ -200,25 +245,38 @@ def logs(config, brief=False, show_count=False, **kwargs):
             print(entry.message)
         print()
 
+    if total == 0:
+        print('No log entries found matching the given criteria.')
+    else:
+        print(f'Displayed {total} log entries.')
+
 
 def search(config, pattern, show_count=False, **kwargs):
     """Search for a pattern in the log files and display matching entries (case-insensitive)"""
-    matches = []
-    
-    for entry in iter_logs(config, **kwargs):
-        if entry.matches(pattern):
-            matches.append(entry)
-    
     if show_count:
-        print(f'Found {len(matches)} matching entries for pattern: "{pattern}"')
+        count = 0
+        for entry in iter_logs(config, **kwargs):
+            if entry.matches(pattern):
+                count += 1
+        print(f'Found {count} matching entries for pattern: "{pattern}"')
         return
-    
-    print(f'Found {len(matches)} matching entries for pattern: "{pattern}"\n')
-    
-    for i, entry in enumerate(matches, 1):
+
+    print(f'Searching for pattern: "{pattern}"\n')
+    match_count = 0
+    for entry in iter_logs(config, **kwargs):
+        if not entry.matches(pattern):
+            continue
+
+        match_count += 1
+        i = match_count
         print(f'--- Match #{i} [{entry.timestamp} {entry.level}] ---')
         print(entry.message)
         print()
+
+    if match_count == 0:
+        print(f'No matching entries found for pattern: "{pattern}"')
+    else:
+        print(f'Found {match_count} matching entries for pattern: "{pattern}"')
 
 
 def tail(config, n=50, **kwargs):
@@ -330,27 +388,31 @@ def file_history(config, filename, show_count=False, **kwargs):
         print('Error: --filename parameter is required for file-history command')
         return
     
-    matches = []
-    
-    for entry in iter_logs(config, **kwargs):
-        if filename.lower() in entry.message.lower():
-            matches.append(entry)
-    
-    if not matches:
-        print(f'No log entries found mentioning file: "{filename}"')
-        return
-    
     if show_count:
-        print(f'Found {len(matches)} log entries mentioning "{filename}"')
+        count = 0
+        for entry in iter_logs(config, **kwargs):
+            if filename.lower() in entry.message.lower():
+                count += 1
+        print(f'Found {count} log entries mentioning "{filename}"')
         return
-    
-    print(f'Found {len(matches)} log entries mentioning "{filename}":\n')
-    
-    for i, entry in enumerate(matches, 1):
+
+    print(f'Searching for entries mentioning "{filename}":\n')
+    match_count = 0
+    for entry in iter_logs(config, **kwargs):
+        if filename.lower() not in entry.message.lower():
+            continue
+
+        match_count += 1
+        i = match_count
         print(f'--- Entry #{i} [{entry.timestamp} {entry.level}] ---')
         # Highlight the filename in the message
         print(entry.message)
         print()
+
+    if match_count == 0:
+        print(f'No log entries found mentioning file: "{filename}"')
+    else:
+        print(f'Found {match_count} log entries mentioning "{filename}"')
 
 
 def parse_datetime(date_str):
@@ -464,6 +526,15 @@ if __name__ == '__main__':
         metavar='NAME',
         help='Filename to search for (used with file-history command)'
     )
+
+    arg_parser.add_argument(
+        '--pager',
+        action='store',
+        type=str,
+        choices=['less', 'off'],
+        default='less',
+        help='Pager mode for long output: less (default) or off'
+    )
     
     args = arg_parser.parse_args()
     
@@ -479,27 +550,33 @@ if __name__ == '__main__':
     if args.levels:
         filter_kwargs['level_filter'] = args.levels
     
+    commands_with_pager = {'logs', 'search', 'tail', 'run-details', 'file-history'}
+    pager_mode = args.pager
+    if args.command not in commands_with_pager or args.count:
+        pager_mode = 'off'
+
     # Execute the appropriate command
-    if args.command == 'logs':
-        logs(config, brief=args.brief, show_count=args.count, **filter_kwargs)
-    
-    elif args.command == 'search':
-        if not args.pattern:
-            print('Error: --pattern is required for search command')
-            exit(1)
-        search(config, args.pattern, show_count=args.count, **filter_kwargs)
-    
-    elif args.command == 'tail':
-        tail(config, n=args.lines, **filter_kwargs)
-    
-    elif args.command == 'run-details':
-        run_details(config, run_number=args.run, **filter_kwargs)
-    
-    elif args.command == 'file-history':
-        if not args.filename:
-            print('Error: --filename is required for file-history command')
-            exit(1)
-        file_history(config, filename=args.filename, show_count=args.count, **filter_kwargs)
-    
-    else:
-        raise KeyError(f'Unrecognized command: {args.command}')
+    with maybe_page_stdout(pager_mode):
+        if args.command == 'logs':
+            logs(config, brief=args.brief, show_count=args.count, **filter_kwargs)
+
+        elif args.command == 'search':
+            if not args.pattern:
+                print('Error: --pattern is required for search command')
+                exit(1)
+            search(config, args.pattern, show_count=args.count, **filter_kwargs)
+
+        elif args.command == 'tail':
+            tail(config, n=args.lines, **filter_kwargs)
+
+        elif args.command == 'run-details':
+            run_details(config, run_number=args.run, **filter_kwargs)
+
+        elif args.command == 'file-history':
+            if not args.filename:
+                print('Error: --filename is required for file-history command')
+                exit(1)
+            file_history(config, filename=args.filename, show_count=args.count, **filter_kwargs)
+
+        else:
+            raise KeyError(f'Unrecognized command: {args.command}')
