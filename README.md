@@ -6,11 +6,8 @@ facilitating data aggregation from distributed resources to some central locatio
 It is designed to provide the boilerplate code to use a common interface for 
 any format of data collection, with a particular emphasis on the research environment.
 
-#### Publication:
-
-#### License:
-
 #### Citing Data Net:
+In preparation, please contact tomek.fraczek@bcm.edu
 
 ## Table of Contents
   - [Quick Start](#quick-start)
