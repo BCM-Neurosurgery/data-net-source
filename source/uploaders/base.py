@@ -164,6 +164,7 @@ class FileSystemUploader(BaseUploader, ABC):
 
         errors = ready["failure"]
         successes = []
+        skipped = []
         all_rates = []
 
         for filename in ready["to upload"]:
@@ -175,10 +176,19 @@ class FileSystemUploader(BaseUploader, ABC):
                     self.debug('Overwrite allowed. Skipping existence check')
                 else:
                     if self.check_exists(destination):
-                        raise FileExistsError(f"{filename} already exists! Skipping upload.")
+                        skip_dict = {
+                            "type": "RemoteFileExists",
+                            "filename": filename,
+                            "destination": destination.as_posix(), # Convert the Path object to a string.
+                            "timestamp": datetime.now().timestamp()
+                        }
+                        self.debug(f'Skipping, already exists ({destination}) ')
+                        skipped.append(skip_dict)
+                        continue
 
                 # Make sure the destination folder exists
                 folder_path = self.destination_dirpath(filename)
+                self.info(f"Copying to {folder_path}")
                 self.make_folders(folder_path)
 
                 # Perform the file copy
@@ -198,6 +208,7 @@ class FileSystemUploader(BaseUploader, ABC):
                     "destination": destination,
                     "error": str(e),
                     "trace": traceback.format_exception(*sys.exc_info()),
+                    "timestamp": datetime.now().timestamp()
                 }
                 errors.append(error_dict)
                 self.warning(
@@ -208,7 +219,8 @@ class FileSystemUploader(BaseUploader, ABC):
                     {
                         "type": "upload success",
                         "filename": filename,
-                        "destination": destination,
+                        "destination": destination.as_posix(), # Convert the Path object to a string.
+                        "timestamp": datetime.now().timestamp()
                     }
                 )
 
@@ -216,7 +228,8 @@ class FileSystemUploader(BaseUploader, ABC):
             self.debug(f"Average transfer rate {round(np.nanmean(all_rates), 2)} MB/s")
         else:
             self.info(f"No files transferred.")
-        return {"success": successes, "failure": errors}
+
+        return {"success": successes, "failure": errors, "skipped": skipped}
 
     def rebuild_filepath(self, old_file_path):
         """
@@ -257,8 +270,12 @@ class FileSystemUploader(BaseUploader, ABC):
 
         old_match = re.search(old_re, old_path_unix)
         if old_match is None:
-            self.error('Given path regex did not match the source path!')
-            raise ValueError('Given path regex did not match the source')
+            detail = (f"File path did not match regex!"
+                       f"Expected path with elements {rebuild_info['path_elements']} "
+                       f"and matching {old_re}")
+
+            self.error(detail)
+            raise ValueError(detail)
 
         old_elements = {name: old_match.group(i+1) for i, name in enumerate(rebuild_info['path_elements'])}
         new_path = rebuild_info['new_format'].format(**old_elements)
@@ -287,6 +304,7 @@ class RemoteFilesystemUploader(FileSystemUploader, ABC):
         """Wrapper around the generic filesystem upload function that additionally makes and closes a connection"""
         self.make_connection()
         try:
-            super().upload(ready)
+            results = super().upload(ready)
         finally:
             self.close_connection()
+        return results

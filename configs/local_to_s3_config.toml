@@ -1,0 +1,47 @@
+# =======================================================
+# PARSER A: Local Filesystem to AWS S3
+# =======================================================
+# This parser watches a local directory for new files and uploads them
+# to an S3 bucket, preserving the subdirectory structure.
+
+[parser]
+
+[parser.class]
+type = "dynamic"
+name = "LocalToS3Parser"
+parts = [
+  # using the existing checker from stream.py
+  ["checkers.local.__init__", "FileCheckerMixin"],
+  # This points to the S3UploaderMixin class in its own file.
+  ["uploaders.local_to_s3", "S3UploaderMixin"]
+]
+
+[parser.init]
+# The directory where the state file for this parser will be stored.
+state_path = "path/to/state/file"
+
+# [parser.init.source] -> Settings for the local file checker.
+[parser.init.source]
+# The local directory that the parser will monitor for new/modified files.
+path = "path/to/local/dir"
+# Set to 'true' to upload files that have been modified.
+check_for_modifications = false
+
+# [parser.init.target] -> Settings for the S3 uploader.
+[parser.init.target]
+bucket = "bucket-name" # Your S3 bucket name
+# A prefix to organize the uploaded files within the S3 bucket.
+prefix = "raw_from_local/"
+# Permit overwriting modified files
+allow-overwrite = true
+  
+[dependencies]
+pip = [
+  "boto3"
+]
+
+[logging.file]
+filepath = "path/to/log/file.txt"
+level = 10 # DEBUG level to see detailed output
+max_size = 10485760
+max_files = 5

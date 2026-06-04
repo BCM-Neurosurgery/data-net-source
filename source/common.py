@@ -5,6 +5,13 @@ import string
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+EMPTY_LOG = {
+    "success": [],
+    "failure": [],
+    "skipped": []
+}
+
+
 
 class ParserCommon(ABC):
 
@@ -57,6 +64,7 @@ class ParserCommon(ABC):
             self.target_location = target
 
     def process(self):
+
         self.start_notify()
         try:
             to_do = self.check()
@@ -65,17 +73,55 @@ class ParserCommon(ABC):
                 ready = self.transform(to_do)
                 complete = self.upload(ready)
             else:
-                complete = None
-            self.info(f'Saving {len(complete["success"])} successes and {len(complete["failure"])} failures')
+                complete = EMPTY_LOG
+            cat_lengths = [f'{len(events)} {cat} events' for cat, events in complete.items()]
+            self.info("During this run we had: " + ", ".join(cat_lengths))
             self.save(complete)
             self.info('Performing cleanup')
             self.clean()
         # Always send an end notification
         except Exception as e:
+            import sys, traceback
+            self.error(f'Encountered {str(e)}')
+            self.debug(''.join(traceback.format_exception(*sys.exc_info())))
             self.end_notify(1) #TODO: upgrade to send more meaningful exit codes
-            raise e
         else:
             self.end_notify(0)
+
+    def listen(self):
+        """
+        Execute the parser in continuous listener mode.
+        This is for event-driven, continuous operation.
+        
+        This orchestrates the listener lifecycle.
+        """
+        self.start_notify()
+        try:
+            # Setup phase - prepare batching and observer
+            self.setup_batching()
+            self.setup_observer()
+            self.start_observer()
+            
+            # Main listening loop - runs continuously
+            self.info(f"Listener is now monitoring for events...")
+            self.run_observer_loop()
+            
+        except KeyboardInterrupt:
+            self.warning("Listener stopped by user. Processing any remaining files...")
+            # Process any remaining files in the batch
+            if hasattr(self, '_process_batch'):
+                self.process_batch()
+            self.end_notify(0)
+        except Exception as e:
+            import sys, traceback
+            self.error(e)
+            self.error(f'Encountered {str(e)}')
+            self.debug(traceback.format_exception(*sys.exc_info()))
+            self.end_notify(1)
+        finally:
+            # Cleanup phase - stop observer
+            if hasattr(self, 'stop_observer'):
+                self.stop_observer()
 
     def check(self):
         """

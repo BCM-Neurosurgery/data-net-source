@@ -1,10 +1,11 @@
-import abc
 import os
 import re
 import toml
+import copy
 from abc import ABC, abstractmethod
 
-from source.checkers.local.base import FileCheckerMixin
+from source.common import EMPTY_LOG
+from source.checkers.local import FileCheckerMixin
 
 
 class BaseIndicatorChecker(FileCheckerMixin, ABC):
@@ -33,14 +34,18 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
 
         return {'to do': to_do, 'failure': failure}
 
-    def clean_old_indicators(self, indicated, logged_events):
-        """"""
-        relevant_events = []
-        for event in logged_events:
-            for indication in indicated:
-                if indication in event['uploaded']:
-                    relevant_events.append(event)
-                    break  # We can skip to the next event since this one is already saved
+    def clean_old_indicators(self, saved_state):
+        """Remove events related to indicator files/entries that no longer exist"""
+        indicated = self.parse_indicators()
+
+        relevant_events = copy.deepcopy(EMPTY_LOG)
+        for category, logged_events in saved_state.items():
+            for event in logged_events:
+                for indication in indicated:
+                    if indication in event['uploaded']:
+                        relevant_events[category].append(event)
+                    else:
+                        self.debug(f'Dropping non-indicated event: {event["uploaded"]}')
         return relevant_events
 
     def clean(self):
@@ -48,16 +53,13 @@ class BaseIndicatorChecker(FileCheckerMixin, ABC):
         upload_log = self.load_state()
 
         # Standard steps for cleaning up the upload state
-        unfixed_failures = self.clean_fixed_failures(upload_log['success'], upload_log['failure'])
-        most_recent_fails = self.clean_duplicate_failures(unfixed_failures)
-        kept_success = self.clean_old_success(upload_log['success'])
+        most_recent = self.clean_outdated(upload_log)
+        trimmed = self.clean_old_success(most_recent)
 
         # Only save the events related to files that are still indicated
-        check_locations = self.parse_indicators()
-        relevant_success = self.clean_old_indicators(check_locations, kept_success)
-        relevant_failure = self.clean_old_indicators(check_locations, most_recent_fails)
+        still_relevant = self.clean_old_indicators(trimmed)
 
-        self.save_state(relevant_success, relevant_failure)
+        self.save_state(**still_relevant)
 
 class IndicatorTomlChecker(BaseIndicatorChecker):
     """"""

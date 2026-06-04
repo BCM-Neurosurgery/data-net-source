@@ -12,6 +12,7 @@ Currently implemented sub-commands:
 
 If the sub-command makes changes to the state file, this tool will ask for confirmation before over-writing
 """
+import copy
 import json
 import argparse
 import os.path
@@ -52,14 +53,14 @@ def match_event(event, after=0, before=float('inf'), upload_match=None):
     """Check if an event matches all the given conditions"""
     in_time = after < event['timestamp'] < before
     if upload_match:
-        upload = bool(re.match(upload_match, event['uploaded']))
+        upload = bool(re.search(upload_match, event['uploaded']))
     else:
         upload = True
 
     return in_time and upload
 
 
-def iter_saved(config, success=True, failure=True, **kwargs):
+def iter_saved(config, success=True, failure=True, skipped=True, **kwargs):
     """
     Generator that yields a tuple for each event matching all the given conditions
 
@@ -69,6 +70,7 @@ def iter_saved(config, success=True, failure=True, **kwargs):
     :param config: Config file for the parser we're working with. Must specify the state path to find the state file
     :param success: If true, the list of 'success' events will be included in the iteration
     :param failure: If true, the list of 'failure' events will be included in the iteration
+    :param skipped: If true, the list of 'skipped' events will be included in the iteration
     :param kwargs: Additional search condition key word arguments, passed to match_event()
     """
     all_events = []
@@ -80,6 +82,8 @@ def iter_saved(config, success=True, failure=True, **kwargs):
         all_events.extend(event_tuples('success', state_data))
     if failure:
         all_events.extend(event_tuples('failure', state_data))
+    if skipped:
+        all_events.extend(event_tuples('skipped', state_data))
 
     for category, event in all_events:
         if match_event(event, **kwargs):
@@ -105,16 +109,17 @@ def get_time_range(config, **kwargs):
         print(f'Found no events matching the given criteria!')
 
 
-def forget(config, success=False, failure=False, **kwargs):
+def forget(config, success=False, failure=False, skipped=False, **kwargs):
     """Remove all matching events from the saved state"""
 
     remembered = []
     forgetting = []
     for category, event in iter_saved(config):
 
-        is_category = (success and category == 'success') or (failure and category == 'failure')
+        is_category = ((success and category == 'success')
+                       or (failure and category == 'failure')
+                       or (skipped and category == 'skipped'))
         matches = is_category and match_event(event, **kwargs)
-        # print(category, match_event(event, **kwargs))
 
         # Only remember the events that do not match the forget selection
         if matches:
@@ -128,13 +133,71 @@ def forget(config, success=False, failure=False, **kwargs):
     decide_action(config, remembered)
 
 
+def move(config, success=False, failure=False, skipped=False, **kwargs):
+
+    # Build up a base dictionary of unaffected events, by collecting all events that are not in one of the categories
+    # that events to be moved will be sourced from
+    print('Loading unaffected events... ')
+    unaffected = iter_saved(config, success=(not success), failure=(not failure), skipped=(not skipped))
+    base = list(unaffected)
+
+    print('Searching for events to move... ')
+    potential = iter_saved(config, success=success, failure=failure, skipped=skipped)
+    to_move = []
+    for cat, event in potential:
+        if match_event(event, **kwargs):
+            to_move.append(event)
+        else:
+            base.append((cat, event))
+
+    print(f'Found {len(to_move)} matching events to move')
+    if len(to_move) == 0:
+        print('No events to move! Exiting...')
+        exit(0)
+    target = get_input(
+        {
+            'success': 'Show the new state without saving',
+            'skipped': 'Save these changes directly to the primary state file',
+            'failure': 'Save changes to primary file, but cache the old state file'
+        },
+        'Where would you like to move these ?\n'
+    )
+    print(f'Moving {len(to_move)} events to {target}...')
+    for event in to_move:
+        base.append((target, event))
+
+    decide_action(config, base)
+
+
+def clean(config, success=False, failure=False, skipped=False, **kwargs):
+    """Apply any of the library of cleaning functions defined for the parser"""
+    import inspect
+
+    # Load the source parser and find all available cleaning functions
+    source_parser = load_parser(config['parser'])
+    if 'logging' in config:
+        source_parser.make_loggers(config['logging'])
+    methods = inspect.getmembers(source_parser, predicate=inspect.ismethod)
+    cleaners = {name: func for name, func in methods if name.startswith('clean_')}
+
+    options = {name: func.__doc__ for name, func in cleaners.items()}
+    cleaner_name = get_input(options, 'Which cleaning function would you like to run?\n')
+
+    state = source_parser.load_state()
+    cleaned = cleaners[cleaner_name](state)
+
+    ready = []
+    for category in cleaned.keys():
+        ready.extend(event_tuples(category, cleaned))
+
+    decide_action(config, ready)
+
 def format_state_data(events):
     """Re-organize a list of event tuples back into the state dictionary format"""
-    state_data = {'success': [], 'failure': []}
+    state_data = {'success': [], 'failure': [], 'skipped': []}
     for category, event in events:
         state_data[category].append(event)
     return state_data
-
 
 def decide_action(config, new_events):
     """
@@ -144,8 +207,11 @@ def decide_action(config, new_events):
     :param new_events: List of tuples of all the new events that should be saved
     """
     state_data = format_state_data(new_events)
-    print(f'New state file will have {len(new_events)} events'
-          f' with {len(state_data["success"])} successes and {len(state_data["failure"])} failures')
+    print(f'New state file will have {len(new_events)} events with:\n'
+          f'  - {len(state_data["success"])} successes\n'
+          f'  - {len(state_data["failure"])} failures\n'
+          f'  - {len(state_data["skipped"])} skips')
+
     choice = get_input(
         {
             'show': 'Show the new state without saving',
@@ -162,7 +228,7 @@ def decide_action(config, new_events):
         print(f'The new state file contents will be:')
         print(json.dumps(state_data, indent=2))
         decide_action(config, state_data)
-    elif choice == 'yes':
+    elif choice == 'write':
         print('Saving to primary file...')
         state_filepath = os.path.join(state_path, 'upload_state.json')
         with open(state_filepath, 'w') as state_file:
@@ -211,7 +277,7 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         'command',
         type=str,
-        choices=['count', 'forget', 'time-range'],
+        choices=['count', 'forget', 'time-range', 'move', 'clean'],
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
@@ -237,6 +303,11 @@ if __name__ == '__main__':
         '--failure',
         action='store_true',
         help='Include failure events in the search'
+    )
+    arg_parser.add_argument(
+        '--skipped',
+        action='store_true',
+        help='Include skipped events in the search'
     )
     arg_parser.add_argument(
         '--all-events',
@@ -266,9 +337,11 @@ if __name__ == '__main__':
     # Only include successes/failures if all-events or the relevant flag is set to true
     filter_kwargs['success'] = args.success
     filter_kwargs['failure'] = args.failure
+    filter_kwargs['skipped'] = args.skipped
     if args.all_events:
         filter_kwargs['success'] = True
         filter_kwargs['failure'] = True
+        filter_kwargs['skipped'] = True
 
     # Send processing off to the appropriate function based on the command given
     if args.command == 'count':
@@ -277,3 +350,9 @@ if __name__ == '__main__':
         get_time_range(config_json, **filter_kwargs)
     elif args.command == 'forget':
         forget(config_json, **filter_kwargs)
+    elif args.command == 'move':
+        move(config_json, **filter_kwargs)
+    elif args.command == 'clean':
+        clean(config_json, **filter_kwargs)
+    else:
+        raise KeyError(f'Unrecognized command: {args.command}')

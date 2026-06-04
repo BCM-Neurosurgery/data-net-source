@@ -35,10 +35,24 @@ class SCPUploaderMixin(RemoteFilesystemUploader):
         self.ssh.close()
 
     def check_exists(self, target_file):
-        return self.ssh.exec_command(f'test -f {target_file}')
+        stdin_, stdout_, stderr_ = self.ssh.exec_command(
+            f'test -f "{target_file.as_posix()}" && echo "Exists" || echo "New"')
+        error = "\n".join([line for line in iter(stderr_.readline, '')])
+        if error:
+            raise ChildProcessError(f'Received and error from Paramiko: \n{error}')
+        output = "\n".join([line for line in iter(stdout_.readline, '')])
+        return output.strip() == 'Exists'
 
     def make_folders(self, target_directory):
-        self.ssh.exec_command(f'mkdir -p {target_directory.as_posix()}')
+        stdin, stdout, stderr = self.ssh.exec_command(f'mkdir -p "{target_directory.as_posix()}"')
+        
+        # make sure directory is made on elias prior to continuing
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status == 0:
+            self.info('Folders successfully created on server')
+        else:
+            self.warning("Error: folders were not succesfully created on server", exit_status)
+
 
     def do_move(self, filename, destination):
         return self.time_upload(self.scp.put, filename, destination.as_posix())
@@ -72,7 +86,7 @@ class SFTPUploader(RemoteFilesystemUploader):
         return self.ssh.exec_command(f'test -f {target_file}')
 
     def make_folders(self, target_directory):
-        self.sftp.makedirs(Path(target_directory).as_posix(), exist_ok=True)
+        self.sftp.makedirs(Path(target_directory).as_posix(), exist_ok=True)   
 
     def do_move(self, filename, destination):
         return self.time_upload(self.sftp.put, filename, destination.as_posix())
