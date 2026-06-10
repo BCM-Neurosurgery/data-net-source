@@ -5,6 +5,7 @@ import os
 import json
 from datetime import datetime
 from abc import ABC, abstractmethod
+from typing import List, Dict
 
 from watchdog.observers import Observer
 from source.common import EMPTY_LOG
@@ -17,8 +18,66 @@ class BaseListener(ABC):
     This class provides event-driven data processing capabilities with batching,
     threading, and state management. Listener mixins should be combined with
     ParserCommon through dynamic class composition, similar to BaseChecker.
+    
+    All concrete listener mixins MUST implement:
+        - required_dependencies: List[str] - Python packages needed
+        - config_template: Dict - Example configuration structure
     """
     state_filename = 'upload_state.json'
+
+    # -------------------------------------------------------------------------
+    # --- Abstract properties for metadata (required for config generator) ---
+    # -------------------------------------------------------------------------
+
+    @property
+    @abstractmethod
+    def mixin_module_path(self) -> str:
+        """
+        The module path where this mixin is defined.
+        
+        :return: Module path relative to 'source' (e.g., 'listeners.watchdog_listener')
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def mixin_description(self) -> str:
+        """
+        Human-readable description of what this listener does.
+        
+        :return: Description string for config generator
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def required_dependencies(self) -> List[str]:
+        """
+        List of Python packages required by this listener.
+        
+        :return: List of package names (e.g., ['watchdog', 'requests'])
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def config_with_comments(self) -> Dict[str, tuple]:
+        """
+        Configuration template with inline comments.
+        
+        Each key maps to a tuple of (value, comment) where:
+        - value: The default/example value for this config field
+        - comment: Description of what the field does
+        
+        Example:
+            {
+                'path': ('path/to/monitor', 'Directory to monitor'),
+                'batch_size': (10, 'Number of files per batch')
+            }
+        
+        :return: Dictionary mapping config keys to (value, comment) tuples
+        """
+        pass
 
     # -------------------------------------------------------------------------
     # --- Abstract methods to be implemented by concrete listeners ---
@@ -27,7 +86,10 @@ class BaseListener(ABC):
     @property
     @abstractmethod
     def listener_name(self) -> str:
-        """A simple attribute naming the mixin class for later reference."""
+        """
+        A simple attribute naming the mixin class for later reference.
+        Also used by config generator as the class name.
+        """
         pass
 
     @abstractmethod
