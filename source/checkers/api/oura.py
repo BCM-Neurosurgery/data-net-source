@@ -359,10 +359,12 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
             or timestamp_clean[:10]  # from filename like YYYY-MM-DD...
         )
 
+        event_id = f"{object_id}_{event_time_local}"
+
         # Save the downloaded data in the local staging directory for further processing
         stage_dir = self.local_staging_path / participant_id / data_type
         stage_dir.mkdir(parents=True, exist_ok=True)
-        staged_file = stage_dir / f"{timestamp_base}.json"
+        staged_file = stage_dir / f"{event_id}.json"
         with open(staged_file, "w") as f:
             f.write(json.dumps(payload_out, indent=2))
 
@@ -370,7 +372,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
             "patient_id": participant_id,
             "doc_type": self.event_track_datatype,   # "webhook_times"
             "date": payload_out["date"],             # same day grouping
-            "id": f"{object_id}_{event_time_local}",          # unique per webhook file (good enough)
+            "id": event_id,          # unique per webhook file (good enough)
             "data_type": data_type,
             "object_id": object_id,
             "event_time": event_time_local,
@@ -380,7 +382,7 @@ class OuraOAuthWebhookChecker(OuraOAuthBaseChecker):
 
         event_dir = self.local_staging_path / participant_id / self.event_track_datatype
         event_dir.mkdir(parents=True, exist_ok=True)
-        event_file = event_dir / f"{timestamp_base}.json"
+        event_file = event_dir / f"{event_id}.json"
         with open(event_file, "w") as f:
             json.dump(event_payload, f, indent=2)
 
