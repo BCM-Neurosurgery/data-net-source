@@ -335,17 +335,8 @@ class SensorKitAPIChecker(BaseAPIChecker):
                 raise RuntimeError("Dataset API returned a repeated pagination cursor")
             seen_cursors.add(cursor)
 
-    @staticmethod
-    def safe_path(root, *parts):
-        """Keep participant labels and API names inside staging."""
-        if any(not part or Path(part).name != part or part in (".", "..") for part in parts):
-            raise ValueError("Invalid SensorKit path component")
-        path = Path(root).joinpath(*parts)
-        path.resolve().relative_to(Path(root).resolve())
-        return path
-
     def daily_parts(self, content, first_day, last_day):
-        """Keep whole records in their recording day, within the requested dates.
+        """Keep whole records in their recording day, within the requested dates based on look_back_duration.
 
         Preserve Apple-epoch timestamps and original fields, including nested JSON.
         Intervals spanning midnight stay intact, assigned by their timestamp.
@@ -367,9 +358,11 @@ class SensorKitAPIChecker(BaseAPIChecker):
             rows = [row for row in reader if row]
             if any(len(row) != len(header) for row in rows):
                 raise ValueError("SensorKit CSV row does not match its header")
-            timestamps = [row[header.index("timestamp")] for row in rows]
+            timestamp_column = header.index("timestamp")
+            timestamps = [row[timestamp_column] for row in rows]
         if not rows:
             return []
+        # Apple SensorKit uses seconds since 2001-01-01. 
         dates = pd.to_datetime(pd.to_numeric(timestamps, errors="raise") + 978307200,
                                unit="s", utc=True, errors="raise")
         if dates.isna().any():
@@ -395,7 +388,7 @@ class SensorKitAPIChecker(BaseAPIChecker):
         days = pd.Timedelta(self.look_back_duration) / pd.Timedelta(days=1)
         if not 0 < days < float("inf") or not days.is_integer():
             raise ValueError("look_back_duration must be a positive whole number of days")
-        now = pd.to_datetime(time(), unit="s", utc=True).tz_convert(self.daily_timezone)
+        now = pd.Timestamp(time(), unit="s", tz=self.daily_timezone)
         start = now.normalize() - pd.DateOffset(days=int(days) - 1)
         first_day, last_day = start.strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")
         self.info(f"SensorKit recording days: {first_day} through {last_day} "
@@ -409,10 +402,11 @@ class SensorKitAPIChecker(BaseAPIChecker):
         successes = self.load_successes()
         known_files = {entry["filename"] for entry in successes}
         # Reuse completion records only for the same timezone and a covered window.
-        finished = {entry["sensorkit_source"] for entry in successes
-                    if entry.get("sensorkit_timezone") == self.daily_timezone
-                    and entry.get("sensorkit_first_day", "9999") <= first_day}
-        self._source_files, self._file_sources = {}, {}
+        completed_sources = {entry["sensorkit_source"] for entry in successes
+                             if entry.get("sensorkit_timezone") == self.daily_timezone
+                             and entry.get("sensorkit_first_day", "9999") <= first_day}
+        # Track all daily files from each raw stream so a partial copy remains retryable.
+        self._source_files = {}
         self._first_day = first_day
         tasks, failures, seen = [], [], set()
 
@@ -420,13 +414,13 @@ class SensorKitAPIChecker(BaseAPIChecker):
             total = selected = already_uploaded = 0
             patient_task_count = len(tasks)
             try:
-                self.safe_path(root, patient)
+                patient_folder = root / patient / "sensorkit"
                 for dataset in self.iter_patient_datasets(patient_id, graph_client):
                     total += 1
                     schema = dataset["schema_id"]
                     if "sensorkit" not in schema.lower():
                         continue
-                    # Old immutable uploads cannot contain newer recordings.
+                    # Creation time selects candidate uploads; record timestamps select days.
                     if not start.timestamp() <= dataset["created_at"] <= now.timestamp():
                         continue
                     selected += 1
@@ -435,29 +429,28 @@ class SensorKitAPIChecker(BaseAPIChecker):
                         if name.lower() == "metadata":
                             continue  # Do not download, stage, or upload metadata streams.
                         basename = f"{name}_{dataset['id']}"
-                        source_id = str(self.safe_path(root, patient, "sensorkit", schema, basename))
+                        source_id = str(patient_folder / schema / basename)
                         if source_id in seen:
                             continue
                         seen.add(source_id)
-                        if source_id in finished:
+                        if source_id in completed_sources:
                             already_uploaded += 1
                             continue
                         try:
-                            response = stream_client._get(
+                            with stream_client._get(
                                 f"{stream_client.config.stream_url}/v1/session",
                                 params={"session_id": dataset["id"], "stream_name": name},
-                            )
-                            response.raise_for_status()
-                            parts = self.daily_parts(response.content, first_day, last_day)
-                            outputs = [(self.safe_path(root, patient, "sensorkit", day,
-                                                       basename + "." + extension), payload)
+                            ) as response:
+                                parts = self.daily_parts(response.content, first_day, last_day)
+                            # All data types share the same daily folder.
+                            outputs = [(patient_folder / day / f"{basename}.{extension}", payload)
                                        for day, extension, payload in parts]
                             self._source_files[source_id] = {str(path) for path, _ in outputs}
                             for path, payload in outputs:
                                 filename = str(path)
-                                self._file_sources[filename] = source_id
                                 if filename in known_files:
                                     continue
+                                path.resolve().relative_to(root.resolve())
                                 path.parent.mkdir(parents=True, exist_ok=True)
                                 path.write_bytes(payload)
                                 tasks.append(filename)
@@ -478,19 +471,21 @@ class SensorKitAPIChecker(BaseAPIChecker):
     def save(self, completed):
         """Use standard file events; mark a stream complete only after every copy succeeds."""
         state = self.load_state()
-        # Previous versions added scan checkpoints; the fixed recording window ignores them.
         state["success"] = [entry for entry in state["success"]
                             if entry.get("type") != "scan checkpoint"]
         state["success"].extend(completed["success"])
-        uploaded = {entry["filename"] for entry in state["success"]}
-        for entry in state["success"]:
-            source_id = self._file_sources.get(entry["filename"])
-            if source_id and self._source_files[source_id] <= uploaded:
-                entry.update(sensorkit_source=source_id, sensorkit_first_day=self._first_day,
-                             sensorkit_timezone=self.daily_timezone)
         state["failure"] = completed["failure"]
         state["skipped"] = completed.get("skipped", [])
-        self.write_state(self.clean_outdated(state))
+        state = self.clean_outdated(state)
+
+        uploaded = {entry["filename"]: entry for entry in state["success"]}
+        for source_id, filenames in self._source_files.items():
+            if filenames <= uploaded.keys():
+                for filename in filenames:
+                    uploaded[filename].update(sensorkit_source=source_id,
+                                              sensorkit_first_day=self._first_day,
+                                              sensorkit_timezone=self.daily_timezone)
+        self.write_state(state)
 
     def clean(self):
         """Keep staged daily files; no extra cache files are created."""
