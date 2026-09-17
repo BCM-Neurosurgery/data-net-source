@@ -10,6 +10,11 @@ from runeq.resources.stream import get_stream_data
 from runeq.resources.stream_metadata import get_patient_stream_metadata, get_stream_metadata
 from runeq.resources.stream_metadata import StreamMetadataSet
 import shutil
+from pathlib import Path
+from time import time
+from runeq.resources.client import global_graph_client, global_stream_client
+import csv
+from io import StringIO
 
 
 class RuneAPICheckerMixin(BaseAPIChecker):
@@ -282,3 +287,206 @@ class RuneAPICheckerMixin(BaseAPIChecker):
 
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(state, log, indent=2, default=convert_datetime) 
+
+
+class SensorKitAPIChecker(BaseAPIChecker):
+    """
+    Checks for new Apple Sensorkit datasets by patient
+    Split csv/json data into daily files for dates within look_back_duration
+    """
+
+    checker_name = "SensorKitAPIChecker"
+    look_back_duration = "7D"
+    dataset_page_size = 5000
+    daily_timezone = "America/Chicago"
+
+    dataset_query = """
+        query getDataSessions($patient_id: ID!, $cursor: Cursor, $limit: Int!) {
+            patient(id: $patient_id) {
+                dataSessionList(cursor: $cursor, limit: $limit) {
+                    pageInfo { endCursor }
+                    dataSessions {
+                        id
+                        created_at: createdAt
+                        schema_id: schemaId
+                        streams { name: streamName }
+                    }
+                }
+            }
+        }
+    """
+
+    def iter_patient_datasets(self, patient_id, client):
+        """List metadata in memory; the raw listing has no server-side date filter."""
+        cursor, seen_cursors = None, set()
+        page_count = 0
+        while True:
+            result = client.execute(statement=self.dataset_query, patient_id=patient_id,
+                                    cursor=cursor, limit=self.dataset_page_size)
+            page = result["patient"]["dataSessionList"]
+            yield from page["dataSessions"]
+            page_count += 1
+            if page_count % 10 == 0:
+                self.info(f"SensorKit metadata lookup: {page_count} pages read")
+            cursor = page["pageInfo"]["endCursor"]
+            if not cursor:
+                return
+            if cursor in seen_cursors:
+                raise RuntimeError("Dataset API returned a repeated pagination cursor")
+            seen_cursors.add(cursor)
+
+    def daily_parts(self, content, first_day, last_day):
+        """Keep whole records in their recording day, within the requested dates based on look_back_duration.
+
+        Preserve Apple-epoch timestamps and original fields, including nested JSON.
+        Intervals spanning midnight stay intact, assigned by their timestamp.
+        """
+        text = content.decode("utf-8-sig")
+        if not text.strip():
+            return []
+        is_json = text.lstrip().startswith(("[", "{"))
+        if is_json:
+            rows = json.loads(text)
+            if not isinstance(rows, list):
+                raise ValueError("Expected a SensorKit JSON array of records")
+            timestamps = [row["timestamp"] for row in rows]
+        else:
+            reader = csv.reader(StringIO(text), strict=True)
+            header = next(reader)
+            if header.count("timestamp") != 1 or len(set(header)) != len(header):
+                raise ValueError("Expected CSV with one timestamp column and unique headers")
+            rows = [row for row in reader if row]
+            if any(len(row) != len(header) for row in rows):
+                raise ValueError("SensorKit CSV row does not match its header")
+            timestamp_column = header.index("timestamp")
+            timestamps = [row[timestamp_column] for row in rows]
+        if not rows:
+            return []
+        # Apple SensorKit uses seconds since 2001-01-01. 
+        dates = pd.to_datetime(pd.to_numeric(timestamps, errors="raise") + 978307200,
+                               unit="s", utc=True, errors="raise")
+        if dates.isna().any():
+            raise ValueError("Missing SensorKit timestamp; cannot assign a recording day")
+        groups = {}
+        for day, row in zip(dates.tz_convert(self.daily_timezone).strftime("%Y-%m-%d"), rows):
+            if first_day <= day <= last_day:
+                groups.setdefault(day, []).append(row)
+        parts = []
+        for day, records in sorted(groups.items()):
+            if is_json:
+                payload = json.dumps(records, ensure_ascii=False).encode()
+            else:
+                output = StringIO(newline="")
+                writer = csv.writer(output)
+                writer.writerow(header)
+                writer.writerows(records)
+                payload = output.getvalue().encode()
+            parts.append((day, "json" if is_json else "csv", payload))
+        return parts
+
+    def check(self):
+        days = pd.Timedelta(self.look_back_duration) / pd.Timedelta(days=1)
+        if not 0 < days < float("inf") or not days.is_integer():
+            raise ValueError("look_back_duration must be a positive whole number of days")
+        now = pd.Timestamp(time(), unit="s", tz=self.daily_timezone)
+        start = now.normalize() - pd.DateOffset(days=int(days) - 1)
+        first_day, last_day = start.strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")
+        self.info(f"SensorKit recording days: {first_day} through {last_day} "
+                  f"inclusive ({self.daily_timezone})")
+
+        initialize(self.source_location["rune_config"])
+        graph_client, stream_client = global_graph_client(), global_stream_client()
+        with open(self.source_location["rune_patients_config"]) as file:
+            patients = json.load(file)["patient_ids"]
+        root = Path(self.source_location["path"])
+        successes = self.load_successes()
+        known_files = {entry["filename"] for entry in successes}
+        # Reuse completion records only for the same timezone and a covered window.
+        completed_sources = {entry["sensorkit_source"] for entry in successes
+                             if entry.get("sensorkit_timezone") == self.daily_timezone
+                             and entry.get("sensorkit_first_day", "9999") <= first_day}
+        # Track all daily files from each raw stream so a partial copy remains retryable.
+        self._source_files = {}
+        self._first_day = first_day
+        tasks, failures, seen = [], [], set()
+
+        for patient, patient_id in patients.items():
+            total = selected = already_uploaded = 0
+            patient_task_count = len(tasks)
+            try:
+                patient_folder = root / patient / "sensorkit"
+                for dataset in self.iter_patient_datasets(patient_id, graph_client):
+                    total += 1
+                    schema = dataset["schema_id"]
+                    if "sensorkit" not in schema.lower():
+                        continue
+                    # Creation time selects candidate uploads; record timestamps select days.
+                    if not start.timestamp() <= dataset["created_at"] <= now.timestamp():
+                        continue
+                    selected += 1
+                    for stream in dataset["streams"]:
+                        name = stream["name"]
+                        if name.lower() == "metadata":
+                            continue  # Do not download, stage, or upload metadata streams.
+                        basename = f"{name}_{dataset['id']}"
+                        source_id = str(patient_folder / schema / basename)
+                        if source_id in seen:
+                            continue
+                        seen.add(source_id)
+                        if source_id in completed_sources:
+                            already_uploaded += 1
+                            continue
+                        try:
+                            with stream_client._get(
+                                f"{stream_client.config.stream_url}/v1/session",
+                                params={"session_id": dataset["id"], "stream_name": name},
+                            ) as response:
+                                parts = self.daily_parts(response.content, first_day, last_day)
+                            # All data types share the same daily folder.
+                            outputs = [(patient_folder / day / f"{basename}.{extension}", payload)
+                                       for day, extension, payload in parts]
+                            self._source_files[source_id] = {str(path) for path, _ in outputs}
+                            for path, payload in outputs:
+                                filename = str(path)
+                                if filename in known_files:
+                                    continue
+                                path.resolve().relative_to(root.resolve())
+                                path.parent.mkdir(parents=True, exist_ok=True)
+                                path.write_bytes(payload)
+                                tasks.append(filename)
+                                known_files.add(filename)
+                        except Exception as error:
+                            failures.append(self.download_failure(source_id, error))
+            except Exception as error:
+                failures.append(self.download_failure(str(root / patient), error))
+            self.info(f"{patient}: {total} metadata records scanned; {selected} recent SensorKit datasets; "
+                      f"{already_uploaded} streams already uploaded; {len(tasks) - patient_task_count} daily files staged")
+        return {"to do": tasks, "failure": failures}
+
+    def download_failure(self, filename, error):
+        self.warning(f"SensorKit check failed for {filename}: {error}")
+        return {"type": "checker failure", "filename": filename,
+                "error": str(error), "timestamp": time()}
+
+    def save(self, completed):
+        """Use standard file events; mark a stream complete only after every copy succeeds."""
+        state = self.load_state()
+        state["success"] = [entry for entry in state["success"]
+                            if entry.get("type") != "scan checkpoint"]
+        state["success"].extend(completed["success"])
+        state["failure"] = completed["failure"]
+        state["skipped"] = completed.get("skipped", [])
+        state = self.clean_outdated(state)
+
+        uploaded = {entry["filename"]: entry for entry in state["success"]}
+        for source_id, filenames in self._source_files.items():
+            if filenames <= uploaded.keys():
+                for filename in filenames:
+                    uploaded[filename].update(sensorkit_source=source_id,
+                                              sensorkit_first_day=self._first_day,
+                                              sensorkit_timezone=self.daily_timezone)
+        self.write_state(state)
+
+    def clean(self):
+        """Keep staged daily files; no extra cache files are created."""
+        pass

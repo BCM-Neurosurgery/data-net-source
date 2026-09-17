@@ -1,0 +1,32 @@
+[parser.class]
+type = "dynamic"
+name = "MyBrainHealthSensorKitParser"
+parts = [
+  ["checkers.api.rune", "SensorKitAPIChecker"],
+  ["uploaders.simple", "CopyUploaderMixin"]
+]
+
+[parser.init]
+state_path = "/path/to/state/sensorkit"
+
+[parser.init.source]
+path = "/path/to/staging/sensorkit"
+rune_config = "/path/to/rune/config"
+rune_patients_config = "/path/to/rune_ids_config.json"
+
+[parser.init.target]
+path = "/path/to/data/sensorkit"
+allow-overwrite = true
+
+[parser.settings]
+look_back_duration = "7D"
+daily_timezone = "America/Chicago"
+dataset_page_size = 5000
+
+[logging.file]
+level = 0
+max_size = 21048576
+max_files = 5
+
+[dependencies]
+pip = ["runeq==0.17.0", "pandas", "numpy"]
