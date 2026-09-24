@@ -19,6 +19,8 @@ import os.path
 import re
 import shutil
 
+import pandas as pd
+
 from run import load_config, load_parser
 
 
@@ -96,6 +98,14 @@ def count(config, **kwargs):
     for i in iter_saved(config, **kwargs):
         num += 1
     print(f'Found {num} saved events')
+
+
+def list_events(config, **kwargs):
+    print(f'       Status     Timestamp (UTC)        Source Path (uploaded)')
+    print('==============================================================================')
+    for i, (category, event) in enumerate(iter_saved(config, **kwargs)):
+        t = pd.Timestamp(event["timestamp"], unit='s').strftime("%Y-%m-%d %H:%M:%S")
+        print(f'{i:<5}  {category:<10} {t:<20}   {event["uploaded"]}')
 
 
 def get_time_range(config, **kwargs):
@@ -277,7 +287,7 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         'command',
         type=str,
-        choices=['count', 'forget', 'time-range', 'move', 'clean'],
+        choices=['count', 'forget', 'time-range', 'move', 'clean', 'list'],
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
@@ -354,5 +364,7 @@ if __name__ == '__main__':
         move(config_json, **filter_kwargs)
     elif args.command == 'clean':
         clean(config_json, **filter_kwargs)
+    elif args.command == 'list':
+        list_events(config_json, **filter_kwargs)
     else:
         raise KeyError(f'Unrecognized command: {args.command}')
