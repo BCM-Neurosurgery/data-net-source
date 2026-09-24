@@ -103,9 +103,14 @@ def count(config, **kwargs):
 def list_events(config, **kwargs):
     print(f'       Status     Timestamp (UTC)        Source Path (uploaded)')
     print('==============================================================================')
+    i = None
     for i, (category, event) in enumerate(iter_saved(config, **kwargs)):
         t = pd.Timestamp(event["timestamp"], unit='s').strftime("%Y-%m-%d %H:%M:%S")
         print(f'{i:<5}  {category:<10} {t:<20}   {event["uploaded"]}')
+    if i is None:
+        print('###                    No matching saved events found.                     ###')
+
+
 
 
 def get_time_range(config, **kwargs):
