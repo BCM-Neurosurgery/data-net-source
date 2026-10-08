@@ -2,6 +2,7 @@ from source.common import ParserCommon
 from source.checkers.local.stream import StreamedFileCheckerMixin
 from source.uploaders.simple import CopyUploaderMixin
 from source.uploaders.ssh import SCPUploaderMixin
+from source.uploaders.rsync import RsyncUploaderMixin
 
 
 class BlackrockChecker(StreamedFileCheckerMixin):
@@ -19,6 +20,5 @@ class BlackrockLocalParser(BlackrockChecker, CopyUploaderMixin, ParserCommon):
     """Parser for copying new blackrock data to the local backup"""
 
 
-
-
-
+class BlackrockRsyncParser(BlackrockChecker, RsyncUploaderMixin, ParserCommon):
+    """Upload queued recording files with rsync over SSH."""
