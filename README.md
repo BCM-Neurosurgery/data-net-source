@@ -162,29 +162,6 @@ whatever that may be. They must implement the upload method().
 When given a list of new files to process, this method must perform the entire
 upload process and return back the success or failure metadata for each file.
 
-### SCP upload completion
-
-`SCPUploaderMixin` (including `VideoSCPParser`) uploads to a unique `.upload-<id>.part`
-file in the destination directory. It verifies the uploaded byte size and checks that
-the source size and modification time stayed unchanged before atomically renaming
-the temporary file to the final path. The SSH server must provide SFTP for file
-metadata, cleanup, and rename; replacing a final file with `allow-overwrite`
-requires the OpenSSH POSIX rename extension.
-Failed transfers attempt to remove only their temporary file; if the connection
-is lost, a temporary file may remain but will never be treated as the final upload.
-
-With `allow-overwrite = false` (the default), an existing final file is skipped only
-when its size matches the source. A size mismatch is an upload failure and remains
-eligible for retry. Repair the destination explicitly or enable `allow-overwrite`
-to replace it with a validated upload. Concurrent uploads cannot overwrite an
-existing final file when overwrite is disabled. Size validation detects truncation;
-it does not verify checksums or detect corruption of equal-size files.
-
-This validation applies when a file is queued for upload. Files already recorded
-as successful or skipped in historical parser state are not automatically rechecked.
-To recover an old partial upload, repair its destination and requeue that source
-in the parser state. Other filesystem uploaders retain their existing behavior.
-
 # The Config File
 The config file is responsible for specifying everything about a parser, and 
 should be the only thing that needs to be customized for each deployment.
