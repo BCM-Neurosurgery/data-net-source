@@ -94,11 +94,12 @@ class FileCheckerMixin(BaseChecker):
 
     def search_file_tree(self, source_dir=None, level=0):
         """
-        Recursively searches through a file tree starting at the specified directory and
-        determines which files need to be uploaded. The method considers previously logged
-        successes, applies inclusion and exclusion filters, and processes nested directories if needed.
+        Find files needing upload using one upload-history snapshot for the entire scan.
 
-        Added functionality to check for file modifications based on the 'check_for_modifications' setting.
+        Successful and skipped files are excluded unless 'check_for_modifications' is
+        enabled and their modification time has increased (or was not recorded).
+        Directory entries supply file types and cache metadata where available.
+        Results are accumulated directly, avoiding repeated copying through parents.
 
         :param source_dir: The directory from which to start the search. Must be provided via the config file
         :type source_dir: str
@@ -109,73 +110,67 @@ class FileCheckerMixin(BaseChecker):
                  - 'failure': list of directories that could not be processed due to an error.
         :rtype: dict
         """
-        # Draw the source location from the class settings if not passed explicitly under recursion
         source_dir = self.source_location['path'] if source_dir is None else source_dir
-
-        # Defaults to False if not present, maintaining the original behavior.
         check_modified = self.source_location.get('check_for_modifications', False)
 
-        successes = self.load_non_failure()
-        
-        # Load state differently based on the setting
-        if check_modified:
-            # Load state with last_modified_time for modification checking
-            uploaded_files_state = {
-                success['uploaded']: success.get('last_modified_time', success.get('modified_time'))
-                for success in successes if 'uploaded' in success
-            }
-        else:
-            # Load state with just file paths for new-file-only checking
-            uploaded_files_state = {
-                success['uploaded']: True
-                for success in successes if 'uploaded' in success
-            }
-
-        # Determine which of the files here need to be uploaded
-        to_upload = []
+        # Read and index history once, rather than twice for every visited directory.
+        # Keep this snapshot local so the next scan sees newly saved upload results.
+        upload_state = self.load_state()
+        uploaded_modification_times = {
+            event['uploaded']: event.get('last_modified_time', event.get('modified_time'))
+            for category in ('success', 'skipped')
+            for event in upload_state[category]
+            if 'uploaded' in event
+        }
+        # Retain only paths and timestamps while walking, not full event metadata.
+        del upload_state
+        files_to_upload = []
         failures = []
-        for item_here in os.listdir(source_dir):
-            full_path = os.path.join(source_dir, item_here)
 
+        def scan_directory(directory, depth):
+            """Visit one directory, sharing the history lookup and result lists."""
+            with os.scandir(directory) as directory_entries:
+                for entry in directory_entries:
+                    full_path = entry.path
+                    try:
+                        is_file = entry.is_file()
+                        is_directory = not is_file and entry.is_dir()
+                    except OSError:
+                        # Match os.path.isfile/isdir: inaccessible targets are ignored.
+                        continue
 
-            # Explicitly check all the files against the optional regex and that they are not the state file
-            if os.path.isfile(full_path):
-                # First, check if the file matches our include/exclude rules.
-                if self.check_regex_filter(full_path) and not self.check_regex_exclude(full_path):
-                    if full_path not in uploaded_files_state:
-                        # This file is NEW, so we always add it.
-                        to_upload.append(full_path)
-
-                    # This block will run if the setting is true to check for modifications
-                    elif check_modified:
-                        # The file exists in the log, so now we check if it was MODIFIED.
-                        logged_modified_time = uploaded_files_state[full_path]
-                        if logged_modified_time is None:
-                            # Re-upload if we don't have a historic modified_time for it.
-                            to_upload.append(full_path)
-                        else:
-                            current_modified_time = os.path.getmtime(full_path)
-                            if current_modified_time > logged_modified_time:
+                    if is_file:
+                        if not self.check_regex_filter(full_path) or self.check_regex_exclude(full_path):
+                            continue
+                        if full_path not in uploaded_modification_times:
+                            files_to_upload.append(full_path)
+                        elif check_modified:
+                            logged_modified_time = uploaded_modification_times[full_path]
+                            if logged_modified_time is None:
+                                files_to_upload.append(full_path)
+                            elif entry.stat().st_mtime > logged_modified_time:
                                 self.info(f"File has been modified, queuing for upload: {full_path}")
-                                to_upload.append(full_path)
+                                files_to_upload.append(full_path)
+                    elif is_directory:
+                        try:
+                            scan_directory(full_path, depth + 1)
+                        except Exception as error:
+                            # Keep earlier discoveries and report errors at any depth.
+                            # Each failed subtree contributes its own failure event.
+                            failures.append({
+                                'type': 'file',
+                                'checked': full_path,
+                                'filename': full_path,  # save() also requires this for directory failures.
+                                'status': 'checker error',
+                                'error': str(error),
+                                'timestamp': datetime.now().timestamp()
+                            })
 
-            # For any directories that have not been marked as completed, process recursively
-            elif os.path.isdir(full_path):
-                try:
-                    check_inside = self.search_file_tree(full_path, level=level + 1)
-                except Exception as e:
-                    failures.append({
-                        'type': 'file',
-                        'checked': full_path,
-                        'status': 'checker error',
-                        'error': f'{e}',
-                        'timestamp': datetime.now().timestamp()
-                    })
-                to_upload.extend(check_inside['to do'])
+            if depth and depth < self.verbose_level:
+                self.info(f'Checked everything in {directory}')
 
-        if level and level < self.verbose_level:
-            self.info(f'Checked everything in {source_dir}')
-        return {'to do': to_upload, 'failure': failures}
+        scan_directory(source_dir, level)
+        return {'to do': files_to_upload, 'failure': failures}
 
     def build_log_entry(self, entry_data):
         log_entry = {
