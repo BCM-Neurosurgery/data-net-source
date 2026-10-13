@@ -173,14 +173,19 @@ class FileCheckerMixin(BaseChecker):
         return {'to do': files_to_upload, 'failure': failures}
 
     def build_log_entry(self, entry_data):
+        """Format a saved event while retaining its status and error details."""
         log_entry = {
             'type': 'file',
             'checked': self.source_location['path'],
             'uploaded': entry_data['filename'],
-            'status': entry_data['type'],
+            'status': entry_data.get('status', entry_data['type']),
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
+        # Scanner failures supply an explicit status; uploader events use their type.
+        # Keep diagnostics when present without adding error fields to normal events.
+        if 'error' in entry_data:
+            log_entry['error'] = entry_data['error']
         # Adding the file's last modification time to the log entry..
         try:
             log_entry['last_modified_time'] = os.path.getmtime(entry_data['filename'])
