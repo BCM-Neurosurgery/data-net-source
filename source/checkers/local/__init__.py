@@ -148,9 +148,15 @@ class FileCheckerMixin(BaseChecker):
                             logged_modified_time = uploaded_modification_times[full_path]
                             if logged_modified_time is None:
                                 files_to_upload.append(full_path)
-                            elif entry.stat().st_mtime > logged_modified_time:
-                                self.info(f"File has been modified, queuing for upload: {full_path}")
-                                files_to_upload.append(full_path)
+                            else:
+                                try:
+                                    current_modified_time = entry.stat().st_mtime
+                                except FileNotFoundError:
+                                    # Directory entries can outlive the files they describe.
+                                    continue
+                                if current_modified_time > logged_modified_time:
+                                    self.info(f"File has been modified, queuing for upload: {full_path}")
+                                    files_to_upload.append(full_path)
                     elif is_directory:
                         try:
                             scan_directory(full_path, depth + 1)
@@ -190,9 +196,9 @@ class FileCheckerMixin(BaseChecker):
         try:
             log_entry['last_modified_time'] = os.path.getmtime(entry_data['filename'])
         except FileNotFoundError:
-            # Handle edge case where file might be gone before logging.
+            # Keep the event if its source vanished, so the batch can still be saved.
             log_entry['last_modified_time'] = None
-            self.warn(f"Could not find {entry_data['filename']} to log its modification time.")
+            self.warning(f"Could not find {entry_data['filename']} to log its modification time.")
 
         return log_entry
 
@@ -213,7 +219,7 @@ class FileCheckerMixin(BaseChecker):
         # Make sure all the completed states will be saved
         for key in completed.keys():
             if key not in logged_data:
-                self.warn(f'Saved state was missing key "{key}". Will be added')
+                self.warning(f'Saved state was missing key "{key}". Will be added')
                 logged_data[key] = []
 
         # For all logged categories, make sure all the data is neatly formatted
