@@ -140,13 +140,19 @@ class FileCheckerMixin(BaseChecker):
                         continue
 
                     if is_file:
+                        # Apply include/exclude rules to both new files and re-uploads.
                         if not self.check_regex_filter(full_path) or self.check_regex_exclude(full_path):
                             continue
+
+                        # New or previously failed files remain eligible for upload.
                         if full_path not in uploaded_modification_times:
                             files_to_upload.append(full_path)
+
+                        # Revisit successful/skipped files only when modification checks are enabled.
                         elif check_modified:
                             logged_modified_time = uploaded_modification_times[full_path]
                             if logged_modified_time is None:
+                                # Without a saved modification time, we cannot tell whether it changed.
                                 files_to_upload.append(full_path)
                             else:
                                 try:
