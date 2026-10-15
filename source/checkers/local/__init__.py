@@ -100,6 +100,7 @@ class FileCheckerMixin(BaseChecker):
         enabled and their modification time has increased (or was not recorded).
         Directory entries supply file types and cache metadata where available.
         Results are accumulated directly, avoiding repeated copying through parents.
+        Subdirectory scan errors are logged while other directories are still scanned.
 
         :param source_dir: The directory from which to start the search. Must be provided via the config file
         :type source_dir: str
@@ -107,7 +108,7 @@ class FileCheckerMixin(BaseChecker):
         :type level: int
         :return: A dictionary containing two keys:
                  - 'to do': A list of files to be uploaded.
-                 - 'failure': list of directories that could not be processed due to an error.
+                 - 'failure': An empty list retained for the checker pipeline.
         :rtype: dict
         """
         source_dir = self.source_location['path'] if source_dir is None else source_dir
@@ -125,10 +126,9 @@ class FileCheckerMixin(BaseChecker):
         # Retain only paths and timestamps while walking, not full event metadata.
         del upload_state
         files_to_upload = []
-        failures = []
 
         def scan_directory(directory, depth):
-            """Visit one directory, sharing the history lookup and result lists."""
+            """Visit one directory, sharing the history lookup and upload list."""
             with os.scandir(directory) as directory_entries:
                 for entry in directory_entries:
                     full_path = entry.path
@@ -161,22 +161,14 @@ class FileCheckerMixin(BaseChecker):
                         try:
                             scan_directory(full_path, depth + 1)
                         except Exception as error:
-                            # Keep earlier discoveries and report errors at any depth.
-                            # Each failed subtree contributes its own failure event.
-                            failures.append({
-                                'type': 'file',
-                                'checked': full_path,
-                                'filename': full_path,  # save() also requires this for directory failures.
-                                'status': 'checker error',
-                                'error': str(error),
-                                'timestamp': datetime.now().timestamp()
-                            })
+                            # Continue with other directories; the next run retries this one.
+                            self.warning(f"Could not scan directory {full_path}: {error}")
 
             if depth and depth < self.verbose_level:
                 self.info(f'Checked everything in {directory}')
 
         scan_directory(source_dir, level)
-        return {'to do': files_to_upload, 'failure': failures}
+        return {'to do': files_to_upload, 'failure': []}
 
     def build_log_entry(self, entry_data):
         """Format a saved event while retaining its status and error details."""
@@ -188,8 +180,7 @@ class FileCheckerMixin(BaseChecker):
             'parser': self.describe_parser(),
             'timestamp': datetime.now().timestamp()
         }
-        # Scanner failures supply an explicit status; uploader events use their type.
-        # Keep diagnostics when present without adding error fields to normal events.
+        # Preserve explicit failure statuses and diagnostics when provided.
         if 'error' in entry_data:
             log_entry['error'] = entry_data['error']
         # Adding the file's last modification time to the log entry..
