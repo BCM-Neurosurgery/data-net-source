@@ -68,7 +68,12 @@ class StreamedFileCheckerMixin(FileCheckerMixin):
 
             # Streamed files should only be included if they're old enough
             if self.is_streamed_file(filepath):
-                last_modified = os.path.getmtime(filepath)
+                try:
+                    last_modified = os.path.getmtime(filepath)
+                except FileNotFoundError:
+                    # A file can be removed after scanning; continue checking the others.
+                    self.debug(f'Skipping file removed before readiness check: {filepath}')
+                    continue
                 secs_since_mod = datetime.now().timestamp() - last_modified
                 if secs_since_mod > min_time_unmodified:
                     matching.append(filepath)
