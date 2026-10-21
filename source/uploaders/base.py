@@ -66,7 +66,74 @@ class BaseUploader(ABC):
             json.dump(metadata, meta_file)
 
 
-class FileSystemUploader(BaseUploader, ABC):
+class FileSystemPathsMixin:
+    """Destination path mapping shared by per-file and batched filesystem uploaders."""
+
+    def ready_relative_filepath(self, filename):
+        """Return the final path to this file, relative to the source directory and rebuilt as needed"""
+        return self.rebuild_filepath(self.raw_relative_filepath(filename))
+
+    def destination_filepath(self, filename):
+        """Return the absolute path to the file in the planned destination location"""
+        return Path(self.target_location['path']) / self.ready_relative_filepath(filename)
+
+    def destination_dirpath(self, filename):
+        """Return the deepest level directory of the file in the planned destination location"""
+        return self.destination_filepath(filename).parent
+
+    def rebuild_filepath(self, old_file_path):
+        """
+        Restructure the path of a file before upload
+
+        For this to work the target location config must have an element named 'rebuild_filepath' of the form:
+        {
+            'source_regex': 'string',
+            'path_elements': ['string', ...]
+            'new_format': 'string'
+        }
+        source_regex: This must be a regex pattern that matches the source filepath. It should contain capturing groups
+            for all the path elements that should be included in the output filepath. The filepath here will always
+            appear as the string representation of a UNIX-style path
+        path_elements: list of strings, the names of the path element in each capturing group in the order that they
+            appear in the regex/source filepath.
+        new_path: the new output path as a python f-string, where the variable names in `{}` correspond to the path
+            element names listed in path_elements
+
+        Example:
+            old_path: '/source/patientDATAFILE/modality/date.json'
+            source_regex: '.*/([a-zA-Z]*)DATAFILE/([a-zA-Z]*)/([0-9-]*).json'
+            path_elements: ['patient', 'modality', 'date']
+            new_format: 'output/{patient}/{date}/{modality}.json'
+
+        :param old_file_path:
+        :return: Path representing the new file name and destination
+        """
+
+        # First check if there is any path rebuild information supplied
+        if 'rebuild_filepath' not in self.target_location:
+            return old_file_path
+
+        rebuild_info = self.target_location['rebuild_filepath']
+
+        old_path_unix = Path(old_file_path).as_posix()
+        old_re = rebuild_info['source_regex']
+
+        old_match = re.search(old_re, old_path_unix)
+        if old_match is None:
+            detail = (f"File path did not match regex!"
+                       f"Expected path with elements {rebuild_info['path_elements']} "
+                       f"and matching {old_re}")
+
+            self.error(detail)
+            raise ValueError(detail)
+
+        old_elements = {name: old_match.group(i+1) for i, name in enumerate(rebuild_info['path_elements'])}
+        new_path = rebuild_info['new_format'].format(**old_elements)
+
+        return Path(new_path)
+
+
+class FileSystemUploader(FileSystemPathsMixin, BaseUploader, ABC):
     """
     Parent class for all uploaders that are transferring files to a filesystem
 
@@ -113,18 +180,6 @@ class FileSystemUploader(BaseUploader, ABC):
         :param destination: absolute path in the destination filesystem of where the file should be stored
         :returns: (optional) tuple of the file size in MB and transfer rate in MB/s
         """
-
-    def ready_relative_filepath(self, filename):
-        """Return the final path to this file, relative to the source directory and rebuilt as needed"""
-        return self.rebuild_filepath(self.raw_relative_filepath(filename))
-
-    def destination_filepath(self, filename):
-        """Return the absolute path to the file in the planned destination location"""
-        return Path(self.target_location['path']) / self.ready_relative_filepath(filename)
-
-    def destination_dirpath(self, filename):
-        """Return the deepest level directory of the file in the planned destination location"""
-        return self.destination_filepath(filename).parent
 
     @staticmethod
     def time_upload(upload_func, filename, *args, **kwargs):
@@ -230,57 +285,6 @@ class FileSystemUploader(BaseUploader, ABC):
             self.info(f"No files transferred.")
 
         return {"success": successes, "failure": errors, "skipped": skipped}
-
-    def rebuild_filepath(self, old_file_path):
-        """
-        Restructure the path of a file before upload
-
-        For this to work the target location config must have an element named 'rebuild_filepath' of the form:
-        {
-            'source_regex': 'string',
-            'path_elements': ['string', ...]
-            'new_format': 'string'
-        }
-        source_regex: This must be a regex pattern that matches the source filepath. It should contain capturing groups
-            for all the path elements that should be included in the output filepath. The filepath here will always
-            appear as the string representation of a UNIX-style path
-        path_elements: list of strings, the names of the path element in each capturing group in the order that they
-            appear in the regex/source filepath.
-        new_path: the new output path as a python f-string, where the variable names in `{}` correspond to the path
-            element names listed in path_elements
-
-        Example:
-            old_path: '/source/patientDATAFILE/modality/date.json'
-            source_regex: '.*/([a-zA-Z]*)DATAFILE/([a-zA-Z]*)/([0-9-]*).json'
-            path_elements: ['patient', 'modality', 'date']
-            new_format: 'output/{patient}/{date}/{modality}.json'
-
-        :param old_file_path:
-        :return: Path representing the new file name and destination
-        """
-
-        # First check if there is any path rebuild information supplied
-        if 'rebuild_filepath' not in self.target_location:
-            return old_file_path
-
-        rebuild_info = self.target_location['rebuild_filepath']
-
-        old_path_unix = Path(old_file_path).as_posix()
-        old_re = rebuild_info['source_regex']
-
-        old_match = re.search(old_re, old_path_unix)
-        if old_match is None:
-            detail = (f"File path did not match regex!"
-                       f"Expected path with elements {rebuild_info['path_elements']} "
-                       f"and matching {old_re}")
-
-            self.error(detail)
-            raise ValueError(detail)
-
-        old_elements = {name: old_match.group(i+1) for i, name in enumerate(rebuild_info['path_elements'])}
-        new_path = rebuild_info['new_format'].format(**old_elements)
-
-        return Path(new_path)
 
 
 class RemoteFilesystemUploader(FileSystemUploader, ABC):
