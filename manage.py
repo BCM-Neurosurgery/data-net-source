@@ -23,6 +23,7 @@ import pandas as pd
 
 from run import load_config, load_parser
 
+regex_fields = ['uploaded']
 
 def get_input(options, instructions=None):
     """Recursive function to stubbornly force user to enter one of the possible options"""
@@ -51,15 +52,15 @@ def event_tuples(event_category, state_data):
     return list(zip(labels, state_data[event_category]))
 
 
-def match_event(event, after=0, before=float('inf'), upload_match=None):
+def match_event(event, after=0, before=float('inf'), match=None):
     """Check if an event matches all the given conditions"""
     in_time = after < event['timestamp'] < before
-    if upload_match:
-        upload = bool(re.search(upload_match, event['uploaded']))
+    if match:
+        matching = bool(re.search(match, json.dumps(event)))
     else:
-        upload = True
+        matching = True
 
-    return in_time and upload
+    return in_time and matching
 
 
 def iter_saved(config, success=True, failure=True, skipped=True, **kwargs):
@@ -109,8 +110,6 @@ def list_events(config, **kwargs):
         print(f'{i:<5}  {category:<10} {t:<20}   {event["uploaded"]}')
     if i is None:
         print('###                    No matching saved events found.                     ###')
-
-
 
 
 def get_time_range(config, **kwargs):
