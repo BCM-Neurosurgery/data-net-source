@@ -92,6 +92,14 @@ class FileSystemUploader(BaseUploader, ABC):
         :returns: True if this file already exists in the destination filesystem
         """
 
+    def check_complete(self, filename, destination):
+        """Check whether an existing destination can safely be skipped.
+
+        Subclasses can validate the destination against the source before returning True.
+        The default retains the existence check for existing filesystem uploaders.
+        """
+        return self.check_exists(destination)
+
     @abstractmethod
     def make_folders(self, target_directory):
         """
@@ -156,7 +164,7 @@ class FileSystemUploader(BaseUploader, ABC):
             - check_exists: check whether this file already exists in the destination filesystem
             - make_folders: make sure that all parent directories exist in the destination filesystem
             - do_move: actually move the file to the destination filesystem.
-        Note that check_exists will only be called if 'allow-overwrite' is False (default behaviour).
+        Note that check_complete will only be called if 'allow-overwrite' is False (default behaviour).
 
         :param ready: dict with a list of filepaths to upload and a list of dicts describing failures
         :return: dict with a list of dicts describing successful uploads and a list of dicts describing failures
@@ -175,7 +183,7 @@ class FileSystemUploader(BaseUploader, ABC):
                 if "allow-overwrite" in self.target_location and self.target_location['allow-overwrite']:
                     self.debug('Overwrite allowed. Skipping existence check')
                 else:
-                    if self.check_exists(destination):
+                    if self.check_complete(filename, destination):
                         skip_dict = {
                             "type": "RemoteFileExists",
                             "filename": filename,
