@@ -9,6 +9,9 @@ Currently implemented sub-commands:
   - count: count the total number of matching events
   - time-range: return the earliest and latest timestamp of the matching events
   - forget: remove the matching events from the state file
+  - move: move the matching events to a new category (aka re-label)
+  - list: print out high-level summary data for all matching events
+  - clean: Run the cleaning functions defined on a particular source parser
 
 If the sub-command makes changes to the state file, this tool will ask for confirmation before over-writing
 """
@@ -19,8 +22,11 @@ import os.path
 import re
 import shutil
 
+import pandas as pd
+
 from run import load_config, load_parser
 
+regex_fields = ['uploaded']
 
 def get_input(options, instructions=None):
     """Recursive function to stubbornly force user to enter one of the possible options"""
@@ -49,15 +55,15 @@ def event_tuples(event_category, state_data):
     return list(zip(labels, state_data[event_category]))
 
 
-def match_event(event, after=0, before=float('inf'), upload_match=None):
+def match_event(event, after=0, before=float('inf'), match=None):
     """Check if an event matches all the given conditions"""
     in_time = after < event['timestamp'] < before
-    if upload_match:
-        upload = bool(re.search(upload_match, event['uploaded']))
+    if match:
+        matching = bool(re.search(match, json.dumps(event)))
     else:
-        upload = True
+        matching = True
 
-    return in_time and upload
+    return in_time and matching
 
 
 def iter_saved(config, success=True, failure=True, skipped=True, **kwargs):
@@ -96,6 +102,24 @@ def count(config, **kwargs):
     for i in iter_saved(config, **kwargs):
         num += 1
     print(f'Found {num} saved events')
+
+
+def list_events(config, **kwargs):
+    print(f'       Status     Timestamp (UTC)        Source Path (uploaded)')
+    print('==============================================================================')
+    i = None
+    for i, (category, event) in enumerate(iter_saved(config, **kwargs)):
+        t = pd.Timestamp(event["timestamp"], unit='s').strftime("%Y-%m-%d %H:%M:%S")
+        for path_key in ["uploaded", "filename", "filepath"]:
+            if path_key in event.keys():
+                source_path = event[path_key]
+                break
+        else:
+            source_path = "N/A"
+
+        print(f'{i:<5}  {category:<10} {t:<20}   {source_path}')
+    if i is None:
+        print('###                    No matching saved events found.                     ###')
 
 
 def get_time_range(config, **kwargs):
@@ -156,9 +180,9 @@ def move(config, success=False, failure=False, skipped=False, **kwargs):
         exit(0)
     target = get_input(
         {
-            'success': 'Show the new state without saving',
-            'skipped': 'Save these changes directly to the primary state file',
-            'failure': 'Save changes to primary file, but cache the old state file'
+            'success': 'Files marked as having been successfully uploaded',
+            'skipped': 'Files that conflicted with files in the destination and have been skipped',
+            'failure': 'These files experienced an upload failure and should be retried'
         },
         'Where would you like to move these ?\n'
     )
@@ -277,7 +301,7 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         'command',
         type=str,
-        choices=['count', 'forget', 'time-range', 'move', 'clean'],
+        choices=['count', 'forget', 'time-range', 'move', 'clean', 'list'],
         help='The management sub command to run for this parser'
     )
     arg_parser.add_argument(
@@ -315,11 +339,11 @@ if __name__ == '__main__':
         help='Include all events in the search'
     )
     arg_parser.add_argument(
-        '--upload-match',
+        '--regex',
         action='store',
         type=str,
         metavar='REGEX',
-        help='Filter events by upload path based on the given regex'
+        help='Filter events by based on the given regex against the whole event json string'
     )
     args = arg_parser.parse_args()
 
@@ -331,8 +355,8 @@ if __name__ == '__main__':
         filter_kwargs['after'] = args.after
     if args.before is not None:
         filter_kwargs['before'] = args.before
-    if args.upload_match is not None:
-        filter_kwargs['upload_match'] = args.upload_match
+    if args.regex is not None:
+        filter_kwargs['regex'] = args.regex
 
     # Only include successes/failures if all-events or the relevant flag is set to true
     filter_kwargs['success'] = args.success
@@ -354,5 +378,7 @@ if __name__ == '__main__':
         move(config_json, **filter_kwargs)
     elif args.command == 'clean':
         clean(config_json, **filter_kwargs)
+    elif args.command == 'list':
+        list_events(config_json, **filter_kwargs)
     else:
         raise KeyError(f'Unrecognized command: {args.command}')
