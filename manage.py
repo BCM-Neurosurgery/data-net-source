@@ -9,6 +9,9 @@ Currently implemented sub-commands:
   - count: count the total number of matching events
   - time-range: return the earliest and latest timestamp of the matching events
   - forget: remove the matching events from the state file
+  - move: move the matching events to a new category (aka re-label)
+  - list: print out high-level summary data for all matching events
+  - clean: Run the cleaning functions defined on a particular source parser
 
 If the sub-command makes changes to the state file, this tool will ask for confirmation before over-writing
 """
@@ -177,9 +180,9 @@ def move(config, success=False, failure=False, skipped=False, **kwargs):
         exit(0)
     target = get_input(
         {
-            'success': 'Show the new state without saving',
-            'skipped': 'Save these changes directly to the primary state file',
-            'failure': 'Save changes to primary file, but cache the old state file'
+            'success': 'Files marked as having been successfully uploaded',
+            'skipped': 'Files that conflicted with files in the destination and have been skipped',
+            'failure': 'These files experienced an upload failure and should be retried'
         },
         'Where would you like to move these ?\n'
     )
