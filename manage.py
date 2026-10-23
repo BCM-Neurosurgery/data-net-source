@@ -336,11 +336,11 @@ if __name__ == '__main__':
         help='Include all events in the search'
     )
     arg_parser.add_argument(
-        '--upload-match',
+        '--regex',
         action='store',
         type=str,
         metavar='REGEX',
-        help='Filter events by upload path based on the given regex'
+        help='Filter events by based on the given regex against the whole event json string'
     )
     args = arg_parser.parse_args()
 
@@ -352,8 +352,8 @@ if __name__ == '__main__':
         filter_kwargs['after'] = args.after
     if args.before is not None:
         filter_kwargs['before'] = args.before
-    if args.upload_match is not None:
-        filter_kwargs['upload_match'] = args.upload_match
+    if args.regex is not None:
+        filter_kwargs['regex'] = args.regex
 
     # Only include successes/failures if all-events or the relevant flag is set to true
     filter_kwargs['success'] = args.success
