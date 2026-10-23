@@ -107,7 +107,14 @@ def list_events(config, **kwargs):
     i = None
     for i, (category, event) in enumerate(iter_saved(config, **kwargs)):
         t = pd.Timestamp(event["timestamp"], unit='s').strftime("%Y-%m-%d %H:%M:%S")
-        print(f'{i:<5}  {category:<10} {t:<20}   {event["uploaded"]}')
+        for path_key in ["uploaded", "filename", "filepath"]:
+            if path_key in event.keys():
+                source_path = event[path_key]
+                break
+        else:
+            source_path = "N/A"
+
+        print(f'{i:<5}  {category:<10} {t:<20}   {source_path}')
     if i is None:
         print('###                    No matching saved events found.                     ###')
 
