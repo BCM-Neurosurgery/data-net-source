@@ -55,11 +55,11 @@ def event_tuples(event_category, state_data):
     return list(zip(labels, state_data[event_category]))
 
 
-def match_event(event, after=0, before=float('inf'), match=None):
+def match_event(event, after=0, before=float('inf'), regex=None):
     """Check if an event matches all the given conditions"""
     in_time = after < event['timestamp'] < before
-    if match:
-        matching = bool(re.search(match, json.dumps(event)))
+    if regex:
+        matching = bool(re.search(regex, json.dumps(event)))
     else:
         matching = True
 
