@@ -52,17 +52,44 @@ class FileCheckerMixin(BaseChecker):
     :ivar verbose_level: Controls the verbosity of the output during recursive file searches. Specifically, determines
         how many levels of directories will be printed during the recursive search.
     :type verbose_level: int
-    :ivar checker_name: Name of the checker mixin. Used to identify the checker in the upload log.
-    :type checker_name: str
     :ivar delete_age_hours: (default -1) Time in hours to retain local copies of files post-upload before deletion. The
         default value of -1 disables deletion of local copies.
     :type delete_age_hours: int
     """
     verbose_level = 2
-    checker_name = "FileChecker"
 
     #: Time to wait after upload before deleting the source version of a file
     delete_age_hours = -1  # Do not delete ever by default
+
+    @property
+    def checker_name(self):
+        """The name of this checker mixin (used by config generator)."""
+        return "FileCheckerMixin"
+    
+    @property
+    def mixin_module_path(self):
+        """Module path for this mixin."""
+        return "checkers.local.__init__"
+    
+    @property
+    def mixin_description(self):
+        """Human-readable description."""
+        return "Check local directory for new files"
+    
+    @property
+    def required_dependencies(self):
+        """Required Python packages for this checker."""
+        return []
+    
+    @property
+    def config_with_comments(self):
+        """Configuration template with inline comments - (value, comment) tuples."""
+        return {
+            'path': ('path/to/local/directory', 'Local directory path to monitor for new files'),
+            'check_for_modifications': (False, 'Whether to re-upload files that have been modified'),
+            'regex_filter': ('.*', 'Optional regex pattern to include only matching files'),
+            'regex_exclude': ('', 'Optional regex pattern to exclude matching files'),
+        }
 
     def check(self):
         """Recursively search the entire file tree for un-uploaded files"""

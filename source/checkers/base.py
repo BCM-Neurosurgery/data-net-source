@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime
 from abc import ABC, abstractmethod
+from typing import List, Dict
 
 from source.common import EMPTY_LOG
 
@@ -11,6 +12,74 @@ class BaseChecker(ABC):
     """Base class for all checkers that defines the interface"""
     state_filename = 'upload_state.json'
     state_path = "path/to/state/save/dir"
+
+    # -------------------------------------------------------------------------
+    # --- Abstract properties for metadata (required for config generator) ---
+    # -------------------------------------------------------------------------
+
+    @property
+    @abstractmethod
+    def checker_name(self) -> str:
+        """
+        The name of this checker mixin class.
+        
+        :return: Class name (e.g., 'FileCheckerMixin')
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def mixin_module_path(self) -> str:
+        """
+        The module path where this mixin is defined.
+        
+        :return: Module path relative to 'source' (e.g., 'checkers.local.__init__')
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def mixin_description(self) -> str:
+        """
+        Human-readable description of what this checker does.
+        
+        :return: Description string for config generator
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def required_dependencies(self) -> List[str]:
+        """
+        List of Python packages required by this checker.
+        
+        :return: List of package names (e.g., ['boto3', 'requests'])
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def config_with_comments(self) -> Dict[str, tuple]:
+        """
+        Configuration template with inline comments.
+        
+        Each key maps to a tuple of (value, comment) where:
+        - value: The default/example value for this config field
+        - comment: Human-readable description of what the field does
+        
+        Example:
+            {
+                'path': ('path/to/directory', 'Directory to check for files'),
+                'check_for_modifications': (False, 'Whether to check for modified files')
+            }
+        
+        :return: Dictionary mapping config keys to (value, comment) tuples
+        """
+        pass
+
+    # -------------------------------------------------------------------------
+    # --- Concrete helper methods ---
+    # -------------------------------------------------------------------------
 
     def load_state(self):
         """
@@ -53,11 +122,9 @@ class BaseChecker(ABC):
         with open(os.path.join(self.state_path, self.state_filename), 'w') as log:
             json.dump(state_data, log, indent=2)
 
-    @property
-    @abstractmethod
-    def checker_name(self):
-        """Replace with a simple attribute naming the mixin class for later reference"""
-        return "BaseChecker"
+    # -------------------------------------------------------------------------
+    # --- Abstract methods to be implemented by concrete checkers ---
+    # -------------------------------------------------------------------------
 
     @abstractmethod
     def check(self):
