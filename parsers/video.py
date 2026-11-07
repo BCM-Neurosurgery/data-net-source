@@ -2,6 +2,7 @@ from source.common import ParserCommon
 from source.checkers.local.stream import StreamedFileCheckerMixin
 from source.uploaders.simple import CopyUploaderMixin
 from source.uploaders.ssh import SCPUploaderMixin
+from source.uploaders.rsync import RsyncUploaderMixin
 
 
 class StreamedVideoCheckerMixin(StreamedFileCheckerMixin):
@@ -18,3 +19,7 @@ class VideoParser(StreamedVideoCheckerMixin, CopyUploaderMixin, ParserCommon):
 
 class VideoSCPParser(StreamedVideoCheckerMixin, SCPUploaderMixin, ParserCommon):
     """"""
+
+
+class VideoRsyncParser(StreamedVideoCheckerMixin, RsyncUploaderMixin, ParserCommon):
+    """Upload queued recording files with rsync over SSH."""
