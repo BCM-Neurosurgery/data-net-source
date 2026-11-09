@@ -1,0 +1,31 @@
+[parser.class]
+type = "dynamic"
+name = "EmpaticaParser"
+parts = [
+  ["checkers.api.empatica", "EmpaticaAPICheckerMixin"],
+  ["uploaders.simple", "CopyUploaderMixin"]
+]
+
+[parser.init]
+state_path = "/home/wearables-lead/.local/state/data-net-source/empatica"
+
+[parser.init.source]
+s3_uri = "s3://empatica-bucket/v2/ORG/STUDY/SITE/"
+aws_profile = "empatica"
+region = "us-east-1"
+path = "/home/wearables-lead/.cache/data-net-source/empatica"
+# Optional first recording day, inclusive. Omit to import the entire S3 history.
+# start_date = 2026-11-01
+
+[parser.init.target]
+# Set this to a pre-existing destination on the approved study filesystem.
+path = "/path/to/approved/study/empatica"
+allow-overwrite = true
+
+[logging.file]
+level = 20
+max_size = 10485760
+max_files = 5
+
+[dependencies]
+pip = ["boto3", "numpy"]
