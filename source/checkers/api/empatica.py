@@ -1,6 +1,7 @@
 """Fetch daily EmbracePlus exports from the Empatica S3 data bucket."""
 
 import fcntl
+import hashlib
 import json
 import logging
 import shutil
@@ -40,7 +41,7 @@ class EmpaticaAPICheckerMixin(BaseChecker):
         if not self.target_location.get("allow-overwrite"):
             raise ValueError("Empatica needs target allow-overwrite to refresh revised exports.")
         if self.target_location.get("rebuild_filepath"):
-            raise ValueError("Empatica preserves the export paths relative to the S3 prefix.")
+            raise ValueError("Empatica sets the destination layout to patient/empatica/date/filename.")
 
         staging_root.mkdir(parents=True, exist_ok=True)
         state_root.mkdir(parents=True, exist_ok=True)
@@ -85,7 +86,7 @@ class EmpaticaAPICheckerMixin(BaseChecker):
 
     @staticmethod
     def export_path(key, prefix, start_date):
-        """Return a safe prefix-relative path for a supported daily export."""
+        """Map a TRBD export to its patient and recording day."""
         if not key.startswith(prefix):
             return None
         parts = key[len(prefix):].split("/")
@@ -96,14 +97,15 @@ class EmpaticaAPICheckerMixin(BaseChecker):
         tail = parts[parts.index("participant_data") + 1:]
         if len(tail) != 5:
             return None
-        day, device, category, subdivision, filename = tail
+        day, patient_device, category, subdivision, filename = tail
+        patient_id, _, device = patient_device.partition("-")
+        if not patient_id.startswith("TRBD") or not device:
+            return None
         try:
             recording_date = date.fromisoformat(day)
         except ValueError:
             return None
         if recording_date.isoformat() != day or (start_date and recording_date < start_date):
-            return None
-        if "-" not in device:
             return None
         is_raw = category == "raw_data" and filename.lower().endswith(".avro")
         is_biomarker = (
@@ -112,7 +114,7 @@ class EmpaticaAPICheckerMixin(BaseChecker):
             and filename.lower().endswith(".csv")
         )
         if is_raw or is_biomarker:
-            return Path(*parts)
+            return Path(patient_id, "empatica", day, filename)
         return None
 
     def check(self):
@@ -132,18 +134,33 @@ class EmpaticaAPICheckerMixin(BaseChecker):
         saved = {
             (item["s3_bucket"], item["s3_key"]): item for item in self._state["success"]
         }
+        owners = {
+            Path(item["destination"]): (item["s3_bucket"], item["s3_key"])
+            for item in self._state["failure"] + self._state["success"]
+        }
         staging = Path(self.middle_location["path"])
         target = Path(self.target_location["path"]).resolve()
         tasks, failures = [], []
+        scanned = unchanged = 0
+        date_range = f" from {start_date} onward" if start_date else " across all dates"
+        self.info(f"Scanning Empatica S3 for TRBD exports{date_range}.")
         with closing(self.make_s3_client()) as client:
             pages = client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix)
-            for page in pages:
-                for obj in page.get("Contents", []):
+            for page_number, page in enumerate(pages, start=1):
+                objects = page.get("Contents", [])
+                scanned += len(objects)
+                self.info(f"Empatica S3 page {page_number}: checking {len(objects)} objects.")
+                for obj in objects:
                     key = obj["Key"]
                     relative = self.export_path(key, prefix, start_date)
                     if relative is None:
                         continue
 
+                    identity = (bucket, key)
+                    if owners.get(target / relative, identity) != identity:
+                        # A device change can produce two exports with the same daily filename.
+                        suffix = hashlib.sha256(f"{bucket}/{key}".encode()).hexdigest()[:12]
+                        relative = relative.with_stem(f"{relative.stem}__{suffix}")
                     destination = target / relative
                     record = {
                         "s3_bucket": bucket,
@@ -154,12 +171,20 @@ class EmpaticaAPICheckerMixin(BaseChecker):
                     }
                     local_file = staging / relative
                     try:
+                        if owners.setdefault(destination, identity) != identity:
+                            raise ValueError("Empatica exports map to the same destination.")
                         if not destination.resolve().is_relative_to(target):
                             raise ValueError("Destination resolves outside the Empatica target directory.")
-                        previous = saved.get((bucket, key), {})
+                        previous = saved.get(identity, {})
                         same_revision = all(previous.get(name) == value for name, value in record.items())
                         if same_revision and self.matches_destination(destination, previous):
+                            unchanged += 1
                             continue
+                        if (len(tasks) + len(failures)) % 25 == 0:
+                            self.info(
+                                f"Empatica downloads: {len(tasks)} staged, {len(failures)} failed. "
+                                f"Downloading {relative}."
+                            )
                         self.download_object(client, record, local_file)
                     except (BotoCoreError, ClientError, OSError, ValueError) as error:
                         failures.append({
@@ -173,6 +198,11 @@ class EmpaticaAPICheckerMixin(BaseChecker):
                         filename = str(local_file)
                         self._staged[filename] = record
                         tasks.append(filename)
+        filtered = scanned - len(tasks) - len(failures) - unchanged
+        self.info(
+            f"Empatica scan complete: {scanned} checked, {filtered} filtered out, "
+            f"{unchanged} unchanged, {len(tasks)} staged, {len(failures)} failed."
+        )
         if failures:
             self.warning(f"Empatica failed to download {len(failures)} object(s). See upload state.")
         return {"to do": tasks, "failure": failures}
@@ -239,6 +269,7 @@ class EmpaticaAPICheckerMixin(BaseChecker):
         self._state["success"] = list(successes.values())
         self._state["failure"] = list(failures.values())
         self.write_state(self._state)
+        self.info(f"Saved Empatica transfer state to {Path(self.state_path) / self.state_filename}.")
 
     def clean(self):
         """The process context removes only its own staging directory."""

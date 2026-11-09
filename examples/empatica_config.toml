@@ -19,8 +19,9 @@ path = "/home/wearables-lead/.cache/data-net-source/empatica"
 # start_date = 2026-11-01
 
 [parser.init.target]
-# Set this to a pre-existing destination on the approved study filesystem.
-path = "/path/to/approved/study/empatica"
+# Set this to the existing root for TRBD patient folders.
+# Exports go to <path>/TRBD005/empatica/YYYY-MM-DD/<filename>.
+path = "/path/to/approved/study"
 allow-overwrite = true
 
 [logging.file]
