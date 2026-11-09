@@ -61,8 +61,24 @@ class EmpaticaAPICheckerMixin(BaseChecker):
         # ParserCommon enables root DEBUG logging. Keep SDK request details out of the logs.
         for name in ("boto3", "botocore", "urllib3"):
             logging.getLogger(name).setLevel(logging.WARNING)
+        config_path = Path(self.source_location["empatica_config"]).expanduser()
+        with config_path.open(encoding="utf-8") as file:
+            credentials = json.load(file)
+        if not isinstance(credentials, dict):
+            raise ValueError("Empatica credentials must be a JSON object.")
+
+        for field in ("aws_access_key_id", "aws_secret_access_key"):
+            value = credentials.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Empatica credentials require a nonempty {field}.")
+        token = credentials.get("aws_session_token")
+        if token is not None and (not isinstance(token, str) or not token.strip()):
+            raise ValueError("aws_session_token must be a nonempty string or omitted.")
+
         session = boto3.Session(
-            profile_name=self.source_location.get("aws_profile"),
+            aws_access_key_id=credentials["aws_access_key_id"],
+            aws_secret_access_key=credentials["aws_secret_access_key"],
+            aws_session_token=token,
             region_name=self.source_location.get("region"),
         )
         return session.client("s3", config=Config(retries={"mode": "standard", "total_max_attempts": 5}))

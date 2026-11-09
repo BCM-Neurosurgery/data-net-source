@@ -11,7 +11,8 @@ state_path = "/home/wearables-lead/.local/state/data-net-source/empatica"
 
 [parser.init.source]
 s3_uri = "s3://empatica-bucket/v2/ORG/STUDY/SITE/"
-aws_profile = "empatica"
+# Private JSON containing aws_access_key_id and aws_secret_access_key.
+empatica_config = "/home/settings/TRBD-53761/empatica_config.json"
 region = "us-east-1"
 path = "/home/wearables-lead/.cache/data-net-source/empatica"
 # Optional first recording day, inclusive. Omit to import the entire S3 history.
