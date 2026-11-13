@@ -1,12 +1,15 @@
 import os
 import json
+import re
 import time
 from asyncio.staggered import staggered_race
+from logging import ERROR, FileHandler
 
 import pandas as pd
 import requests
 
-from datetime import datetime
+from datetime import date, datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -35,8 +38,6 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
     look_back_duration = '1D'
     today = None
 
-    _time_parameter_name = None
-
     def format_today(self):
         if self.today is None:
             self.today = pd.Timestamp.now(tz="UTC").normalize()
@@ -49,39 +50,105 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
             self.today = self.today.normalize()
 
     @abstractmethod
-    def fetch_collection_data(self, collection, headers):
+    def fetch_collection_data(self, collection, headers, *, patient=None):
         """Perform the requests to the OuraAPI to get all the available data for a particular collection"""
+
+    def _log_collection_error(self, patient, collection, reason):
+        """Keep the study ID in the local file, out of monitoring and root handlers."""
+        message = f"collection={collection}: {reason}"
+        for logger in self.loggers:
+            if logger.name != "file" or patient is None:
+                logger.error(f"Oura {message}")
+            elif logger.isEnabledFor(ERROR):
+                record = logger.makeRecord(
+                    logger.name, ERROR, __file__, 0, f"Oura patient={patient} {message}", (), None
+                )
+                for handler in logger.handlers:
+                    if isinstance(handler, FileHandler) and handler.level <= ERROR:
+                        handler.handle(record)
+
+    def _log_http_error(self, patient, collection, response):
+        """Extract a missing scope without logging the API response body."""
+        reason = f"HTTP {response.status_code}"
+        if response.status_code in (401, 403):
+            try:
+                detail = response.json()["detail"]
+            except (ValueError, KeyError, TypeError):
+                detail = None
+            if isinstance(detail, str):
+                match = re.fullmatch(r"Token is not authorized access ([a-z][a-z0-9_]{0,31}) scope\.?", detail)
+                if match:
+                    reason += f" missing_scope={match[1]}"
+        self._log_collection_error(patient, collection, reason)
+
+    def _fetch_pages(self, collection, headers, params, patient):
+        """Return a complete result or None; never stage a partial response."""
+        url = f"{self.api_url}/{collection}"
+        params = dict(params)
+        rows, seen = [], set()
+        while True:
+            try:
+                response = requests.request("GET", url, headers=headers, params=params, timeout=30)
+                if response.status_code != 200:
+                    self._log_http_error(patient, collection, response)
+                    return None
+                body = response.json()
+            except (requests.RequestException, ValueError) as exc:
+                self._log_collection_error(patient, collection, f"request failed ({type(exc).__name__})")
+                return None
+
+            page = body.get("data") if isinstance(body, dict) else None
+            if not isinstance(page, list):
+                self._log_collection_error(patient, collection, "expected a data list")
+                return None
+            rows.extend(page)
+            cursor = body.get("next_token")
+            if cursor is None or cursor == "":
+                return rows
+            if not isinstance(cursor, str) or cursor in seen:
+                self._log_collection_error(patient, collection, "invalid or repeated pagination token")
+                return None
+            seen.add(cursor)
+            params["next_token"] = cursor
 
     def cross_check(self, patient, collection, found_data):
         """Check the found data against the saved log of data to find any newly uploaded data"""
 
-        with open(
-            os.path.join(self.state_path, 'upload_state.json')
-        ) as state_file:
-            upload_state = json.load(state_file)
-
-        # Organize the documents for this collection by day
+        # Events have a start day; ring configuration is an undated snapshot.
+        metadata = collection == "ring_configuration"
+        date_key = "start_day" if collection in {"enhanced_tag", "rest_mode_period"} else "day"
         date_organized = {}
         for doc in found_data:
-            doc_date = doc['day']
-            if doc_date not in date_organized:
-                date_organized[doc_date] = [doc]
-            else:
-                date_organized[doc_date].append(doc)
+            doc_id = doc.get("id") if isinstance(doc, dict) else None
+            doc_date = doc.get(date_key) if isinstance(doc, dict) else None
+            try:
+                valid_date = metadata or date.fromisoformat(doc_date).isoformat() == doc_date
+            except (TypeError, ValueError):
+                valid_date = False
+            if not isinstance(doc_id, str) or not doc_id or not valid_date:
+                fields = "id" if metadata else f"{date_key} and id"
+                self._log_collection_error(patient, collection, f"expected {fields}; skipping this batch")
+                return {}
+            date_organized.setdefault(None if metadata else doc_date, []).append(doc)
+
+        if metadata or not date_organized:
+            return date_organized
+        with open(os.path.join(self.state_path, 'upload_state.json')) as state_file:
+            upload_state = json.load(state_file)
 
         # Compare document ids with the list of saved document ids, day by day
         new_data = {}
-        for date, day_data in date_organized.items():
+        for doc_date, day_data in date_organized.items():
             uploaded = [
                 upload
                 for upload in upload_state['success']
                 if upload['patient'] == patient
                 and upload['collection'] == collection
-                and upload['date'] == date
+                and upload['date'] == doc_date
             ]
             # We found no matching data for this day, so upload by default
             if not uploaded:
-                new_data[date] = day_data
+                new_data[doc_date] = day_data
                 continue
 
             # Get all the previously uploaded document ids for this day
@@ -91,21 +158,21 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
 
             # There are more documents for this day than we uploaded before
             if len(uploaded_docs) < len(day_data):
-                new_data[date] = day_data
+                new_data[doc_date] = day_data
                 continue
 
             # Check all the doc ids individually
             found_new = False
             for doc in day_data:
                 if doc['id'] not in uploaded_docs:
-                    new_data[date] = day_data
+                    new_data[doc_date] = day_data
                     found_new = True
                     break
             if found_new:
                 continue
 
             # We only reach this point if there is nothing new to upload
-            self.notify(f'No new data to upload for {date}')
+            self.debug(f'No new data to upload for {doc_date}')
 
         return new_data
 
@@ -117,16 +184,19 @@ class OuraAPIBaseChecker(BaseAPIChecker, ABC):
 
         all_paths = []
         for patient, token in self.patients.items():
-            headers = {'Authorization': f'Bearer {token}'}
+            headers = {'Authorization': f'Bearer {token}', 'User-Agent': 'data-net-source'}
 
             for collection in self.source_location['collections']:
-                all_oura_data = self.fetch_collection_data(collection, headers)
+                all_oura_data = self.fetch_collection_data(collection, headers, patient=patient)
+                if not all_oura_data:
+                    continue
                 new_data = self.cross_check(patient, collection, all_oura_data)
 
                 for day, day_data in new_data.items():
                     out_dir = os.path.join(self.source_location['path'], patient)
                     os.makedirs(out_dir, exist_ok=True)
-                    filepath = os.path.join(out_dir, f'{collection}_{day}.json')
+                    name = f'{collection}_{day}.json' if day else f'{collection}.json'
+                    filepath = os.path.join(out_dir, name)
                     with open(filepath, 'w') as day_json:
                         json.dump(day_data, day_json)
                     all_paths.append(filepath)
@@ -476,29 +546,16 @@ class OuraAPIDocumentChecker(OuraAPIBaseChecker):
     """
 
     checker_name = "OuraAPIDocumentChecker"
-    _time_parameter_name = 'date'
 
-    def fetch_collection_data(self, collection, headers):
-        """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f'{self.api_url}/{collection}'
-
-        # Get all documents for this collection between now and the look back duration
-        start_date = self.today - pd.Timedelta(self.look_back_duration)
-        today = self.today.strftime('%Y-%m-%d')
-        params = {
-            f'start_{self._time_parameter_name}': start_date.strftime('%Y-%m-%d'),
-            f'end_{self._time_parameter_name}': today,
-        }
-        response = requests.request(
-            'GET', collection_url, headers=headers, params=params
-        )
-
-        if response.status_code != 200:
-            # Per Oura ring docs any response code besides 200 should be an error
-            self.error(f'Oura returned an error code ({response.status_code}): {response.text}')
-            return {}
-
-        return response.json()['data']
+    def fetch_collection_data(self, collection, headers, *, patient=None):
+        """Fetch a complete date range, or an undated ring configuration snapshot."""
+        params = {}
+        if collection != "ring_configuration":
+            params = {
+                "start_date": (self.today - pd.Timedelta(self.look_back_duration)).strftime("%Y-%m-%d"),
+                "end_date": self.today.strftime("%Y-%m-%d"),
+            }
+        return self._fetch_pages(collection, headers, params, patient)
 
 
 class OuraAPIStreamChecker(OuraAPIBaseChecker):
@@ -509,93 +566,48 @@ class OuraAPIStreamChecker(OuraAPIBaseChecker):
     Only compatible with legacy (pre-OAuth2) versions od the Oura API
     """
     checker_name = "OuraAPIDocumentChecker"
-    _time_parameter_name = "datetime"
 
-    def fetch_collection_data(self, collection, headers):
-        """Find and download all the JSON data for a single collection of a single patient"""
-        collection_url = f"{self.api_url}/{collection}"
+    def fetch_collection_data(self, collection, headers, *, patient=None):
+        """Fetch every chunk before producing UTC-day files."""
         time_fmt = "%Y-%m-%dT%H:%M:%SZ"
-
-        start_date = self.today - pd.Timedelta(self.look_back_duration)
-        end_date = self.today + pd.Timedelta(days=1)  # include all of today
-
-        chunk_days = 28
-
-        all_points = []
-
-        # iterate in 28-day chunks instead of by day: [chunk_start, chunk_end)
-        chunk_start = start_date
-        while chunk_start < end_date:
-            chunk_end = min(chunk_start + pd.Timedelta(days=chunk_days), end_date)
-            chunk_start.tz_convert("UTC")
-            chunk_end.tz_convert("UTC")
-
-            params = {
-                f"start_{self._time_parameter_name}": chunk_start.strftime(time_fmt),
-                f"end_{self._time_parameter_name}": chunk_end.strftime(time_fmt),
-            }
-
-            response = requests.request("GET", collection_url, headers=headers, params=params)
-
-            if response.status_code != 200:
-                self.error(
-                    f"Oura returned an error {response.status_code} for {collection} "
-                    f"for interval {chunk_start.date()} -> {chunk_end.date()}: {response.text}"
-                )
-                # choose behavior: either continue to next chunk or bail out
-                # continuing is usually safer so you still get partial data
-                chunk_start = chunk_end
-                continue
-
-            payload = response.json()
-            points = payload.get("data", [])
-            # self.debug(f"{collection} {chunk_start} -> {chunk_end}: {len(points)} points, payload keys={list(payload.keys())}")
-            if not points:
-                # not necessarily an error; often just no data in that interval
-                chunk_start = chunk_end
-                continue
-
-            all_points.extend(points)
-            chunk_start = chunk_end
-
-        if not all_points:
-            self.error("Oura returned an empty dataset across all chunks")
-            return []
-
-        # Group by date extracted from each datapoint timestamp
-        ts_key = "timestamp"
-
-        # 1) Pull timestamps once (same filtering behavior: missing -> skip)
-        pts = [pt for pt in all_points if pt.get(ts_key)]
-        ts_vals = [pt[ts_key] for pt in pts]
-
-        # 2) Vectorized parse (WAY faster than per-row)
-        ts = pd.to_datetime(ts_vals, utc=True, errors="coerce")
-
-        # 3) Drop NaT (same behavior as your pd.isna(ts) continue)
-        mask = ts.notna()
-        pts = [p for p, ok in zip(pts, mask) if ok]
-        ts = ts[mask]
-
-        # 4) Day strings in one shot (also faster than per-row strftime)
-        day_strs = ts.strftime("%Y-%m-%d")
-
+        start = (self.today - pd.Timedelta(self.look_back_duration)).normalize()
+        end = self.today + pd.Timedelta(days=1)
         by_day = {}
-        for pt, day_str in zip(pts, day_strs):
-            by_day.setdefault(day_str, []).append(pt)
+        while start < end:
+            stop = min(start + pd.Timedelta(days=28), end)
+            params = {
+                "start_datetime": start.strftime(time_fmt),
+                "end_datetime": stop.strftime(time_fmt),
+            }
+            points = self._fetch_pages(collection, headers, params, patient)
+            if points is None:
+                return []
+            for point in points:
+                try:
+                    timestamp = datetime.fromisoformat(point["timestamp"].replace("Z", "+00:00"))
+                    if timestamp.utcoffset() is None:
+                        raise ValueError("missing timezone")
+                    timestamp = timestamp.astimezone(timezone.utc)
+                except (KeyError, TypeError, AttributeError, ValueError):
+                    self._log_collection_error(patient, collection, "invalid sample timestamp; skipping this batch")
+                    return []
+                if start <= timestamp < stop:
+                    # Keep distinct samples and ignore exact repeats from the API.
+                    encoded = json.dumps(point, sort_keys=True)
+                    by_day.setdefault(timestamp.date().isoformat(), {})[timestamp, encoded] = point
+            start = stop
 
-        # Build day-shaped docs
-        all_data = []
-        for day_str in sorted(by_day.keys()):
-            pts_for_day = by_day[day_str]
-            all_data.append({
-                "day": day_str,
-                "id": f"{day_str}:n-points:{len(pts_for_day)}",
-                "data": pts_for_day,
-            })
-
-        self.log(f"all data len {len(all_data)}")
-        return all_data
+        documents = []
+        for day, points in sorted(by_day.items()):
+            keys = sorted(points)
+            # Battery values can change without changing the sample count.
+            if collection == "ring_battery_level":
+                digest = sha256("\n".join(encoded for _, encoded in keys).encode()).hexdigest()
+                doc_id = f"{day}:{digest}"
+            else:
+                doc_id = f"{day}:n-points:{len(keys)}"
+            documents.append({"day": day, "id": doc_id, "data": [points[key] for key in keys]})
+        return documents
 
 
 class OuraOAuthDocumentChecker(OuraOAuthBaseChecker, OuraAPIDocumentChecker):
@@ -673,13 +685,13 @@ class OuraOAuthAllChecker(OuraOAuthBaseChecker, OuraAPIBaseChecker):
     """
     Unified OAuth checker:
       - uses OAuth tokens (like OuraOAuthDocumentChecker / OuraOAuthStreamChecker)
-      - uses stream logic for heartrate
+      - uses stream logic for timestamped heart rate and battery samples
       - uses document logic for everything else
     """
     checker_name = "OuraOAuthAllChecker"
 
     # Which collections should use stream logic
-    stream_collections = {"heartrate"}
+    stream_collections = {"heartrate", "ring_battery_level"}
 
     # Reuse the existing implementations without modifying them
     _doc_impl = OuraOAuthDocumentChecker()
@@ -706,7 +718,7 @@ class OuraOAuthAllChecker(OuraOAuthBaseChecker, OuraAPIBaseChecker):
         self.close_connection()
         return {patient: data["access_token"] for patient, data in patient_tokens.items()}
 
-    def fetch_collection_data(self, collection, headers):
+    def fetch_collection_data(self, collection, headers, *, patient=None):
         """
         Dispatch to existing fetch logic depending on collection.
         """
@@ -715,9 +727,9 @@ class OuraOAuthAllChecker(OuraOAuthBaseChecker, OuraAPIBaseChecker):
         self._sync_impl(self._stream_impl)
 
         if collection in self.stream_collections:
-            return self._stream_impl.fetch_collection_data(collection, headers)
+            return self._stream_impl.fetch_collection_data(collection, headers, patient=patient)
         else:
-            return self._doc_impl.fetch_collection_data(collection, headers)
+            return self._doc_impl.fetch_collection_data(collection, headers, patient=patient)
 
     def _sync_impl(self, impl):
         """
@@ -729,6 +741,7 @@ class OuraOAuthAllChecker(OuraOAuthBaseChecker, OuraAPIBaseChecker):
         impl.look_back_duration = self.look_back_duration
         impl.state_path = self.state_path
         impl.source_location = self.source_location
+        impl.loggers = self.loggers
         # If your framework logger methods are instance methods on BaseChecker:
         impl.debug = self.debug
         impl.info = self.info
